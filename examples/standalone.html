@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Listening — 音乐搜索</title>
+<style>
+  :root {
+    --bg: #0d0f18; --panel: rgba(18,20,40,0.85); --accent: #f5c84c;
+    --text: #e0e2f4; --sub: #8a8db8;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 40px 16px; }
+  .app { width: 100%; max-width: 720px; }
+  /* header */
+  .header { text-align: center; margin-bottom: 20px; }
+  .header h1 { font-size: 24px; margin-bottom: 4px; }
+  .header p { color: var(--sub); font-size: 13px; }
+  /* search */
+  .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .search-bar input { flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: var(--panel); color: var(--text); font-size: 15px; outline: none; }
+  .search-bar input:focus { border-color: var(--accent); }
+  .search-bar button { padding: 10px 20px; border-radius: 10px; border: none; background: var(--accent); color: #1a1508; font-weight: 600; font-size: 14px; cursor: pointer; }
+  .search-bar button:hover { opacity: 0.9; }
+  .search-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* source chips */
+  .sources { display: flex; gap: 10px; margin-bottom: 12px; font-size: 13px; }
+  .sources label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--sub); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .d-netease { background: #ff6b6b; }
+  .d-qq { background: #4dd0e1; }
+  .d-kuwo { background: #ba68c8; }
+  .d-joox { background: #65f7c4; }
+  .d-soundcloud { background: #ff8800; }
+  .s-soundcloud { background: rgba(255,136,0,0.18); color: #ff8800; }
+  /* status */
+  .status { font-size: 13px; color: var(--sub); margin-bottom: 12px; min-height: 18px; }
+  .status.err { color: #ff6b6b; }
+  /* results */
+  .results { list-style: none; }
+  .results li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .results li:hover { background: rgba(255,255,255,0.06); }
+  .results li.playing { background: rgba(245,200,76,0.10); border-left: 3px solid var(--accent); }
+  .s-tag { font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+  .s-netease { background: rgba(255,107,107,0.18); color: #ff6b6b; }
+  .s-qq { background: rgba(77,208,225,0.18); color: #4dd0e1; }
+  .s-kuwo { background: rgba(186,104,200,0.18); color: #ba68c8; }
+  .s-joox { background: rgba(101,247,196,0.18); color: #65f7c4; }
+  .track-info { flex: 1; min-width: 0; }
+  .track-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track-artist { font-size: 12px; color: var(--sub); }
+  .track-quality { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--sub); }
+  /* player */
+  .player { margin-top: 20px; padding: 16px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(255,255,255,0.10); }
+  .now-playing { font-weight: 600; margin-bottom: 8px; }
+  .now-playing .by { color: var(--sub); font-weight: 400; font-size: 13px; }
+  .player audio { width: 100%; margin-bottom: 10px; }
+  .lyrics { max-height: 260px; overflow-y: auto; font-size: 13px; color: var(--sub); line-height: 1.8; }
+  .lyrics .l-cur { color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>🎵 Listening</h1>
+    <p>网易云 · QQ · 酷我 · SoundCloud — 聚合音乐搜索</p>
+  </div>
+
+  <div class="search-bar">
+    <input id="kw" type="text" placeholder="输入歌名 / 歌手，回车搜索…" value="周杰伦">
+    <button id="btn">搜索</button>
+  </div>
+
+  <div class="sources">
+    <label><input type="checkbox" data-s="netease" checked><span class="dot d-netease"></span> 网易云</label>
+    <label><input type="checkbox" data-s="qq" checked><span class="dot d-qq"></span> QQ</label>
+    <label><input type="checkbox" data-s="kuwo" checked><span class="dot d-kuwo"></span> 酷我</label>
+    <label><input type="checkbox" data-s="joox"><span class="dot d-joox"></span> JOOX</label>
+    <label><input type="checkbox" data-s="soundcloud"><span class="dot d-soundcloud"></span> SoundCloud</label>
+  </div>
+
+  <div class="status" id="status">输入关键词，点搜索</div>
+
+  <ol class="results" id="results"></ol>
+
+  <div class="player" id="player" style="display:none">
+    <div class="now-playing" id="now"></div>
+    <audio id="audio" controls></audio>
+    <div class="lyrics" id="lyrics"></div>
+  </div>
+</div>
+
+<script>
+// ====================== 工具函数 ======================
+
+function parseLRC(txt) {
+  if (!txt) return [];
+  const out = [];
+  const reg = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/g;
+  for (const line of txt.split(/\r?\n/)) {
+    reg.lastIndex = 0;
+    const m = reg.exec(line);
+    if (!m) continue;
+    const min = parseInt(m[1], 10) || 0;
+    const sec = parseInt(m[2], 10) || 0;
+    const ms = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) : 0;
+    const time = min * 60 + sec + ms / 1000;
+    const text = line.replace(reg, '').trim();
+    if (text) out.push({ time, text });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
+function formatTime(sec) {
+  if (!isFinite(sec) || sec < 0) sec = 0;
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function inferQuality(url) {
+  if (!url) return { tag: null, label: '' };
+  const base = url.split('?')[0].toLowerCase();
+  const m = base.match(/\.([a-z0-9]+)$/);
+  const ext = m ? m[1] : '';
+  if (['flac', 'wav', 'ape', 'alac', 'aiff'].includes(ext)) return { tag: 'lossless', label: 'LOSSLESS' };
+  return { tag: '320k', label: '320K' };
+}
+
+// ====================== 网易云 ======================
+
+async function searchNetease(kw, page, num) {
+  const limit = Math.max(1, page) * Math.max(1, num);
+  const url = `https://api.qijieya.cn/meting/?type=search&id=${encodeURIComponent(kw)}&limit=${limit}&server=netease`;
+  const results = [];
+  try {
+    const json = await (await fetch(url)).json();
+    if (!Array.isArray(json)) return results;
+    json.forEach((it, idx) => {
+      const id = (it.url || '').match(/[?&]id=([^&]+)/);
+      const songId = id ? decodeURIComponent(id[1]) : `${kw}-${idx + 1}`;
+      results.push({
+        uid: `ne-${songId}`, source: 'netease', di: idx + 1, kw,
+        songid: songId, title: it.name || '', artist: it.artist || '', album: '',
+        cover: it.pic || null, audioUrl: null, lrc: null, lrcUrl: it.lrc || null,
+        detailsLoaded: false, quality: null, qualityLabel: null
+      });
+    });
+  } catch (e) { console.error('netease search:', e); }
+  return results;
+}
+
+async function fetchNeteaseDetails(t) {
+  if (t.songid) {
+    if (!t.audioUrl) t.audioUrl = `https://api.qijieya.cn/meting/?server=netease&type=url&id=${t.songid}`;
+    if (!t.lrcUrl) t.lrcUrl = `https://api.qijieya.cn/meting/?server=netease&type=lrc&id=${t.songid}`;
+  }
+  if (t.audioUrl) { const q = inferQuality(t.audioUrl); t.quality = q.tag; t.qualityLabel = q.label; }
+  if (!t.lrc && t.lrcUrl) {
+    try {
+      const r = await fetch(t.lrcUrl);
+      const ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (ct.includes('json')) {
+        const j = await r.json();
+        t.lrc = (typeof j === 'string' ? j : null) || j?.lrc || j?.lyric || j?.data?.lrc || j?.data?.lyric || (typeof j?.data === 'string' ? j.data : null) || null;
+      } else { t.lrc = await r.text(); }
+    } catch (e) { console.warn('netease lyric:', e); }
+  }
+  t.detailsLoaded = true; return t;
+}
+
+// ====================== QQ ======================
+
+async function searchQQ(kw, limit) {
+  const url = `https://tang.api.s01s.cn/music_open_api.php?msg=${encodeURIComponent(kw)}&type=json`;
+  const results = [];
+  try {
+    const json = await (await fetch(url)).json();
+    const data = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
+    if (!data.length) return results;
+    data.slice(0, limit).forEach((it, idx) => {
+      if (!it.song_mid) return;
+      results.push({
+        uid: `qq-${it.song_mid}`, source: 'qq', di: idx + 1, kw, qqSearchKey: kw, qqIndex: idx + 1,
+        qqId: it.song_mid, songid: it.song_mid, songMid: it.song_mid,
+        title: it.song_title || '', artist: it.singer_name || '', album: '',
+        cover: null, audioUrl: null, lrc: null, lrcUrl: null,
+        detailsLoaded: false, quality: null, qualityLabel: null, qqQualityText: it.pay || null, pay: it.pay || null
+      });
+    });
+  } catch (e) { console.error('qq search:', e); }
+  return results;
+}
+
+function pickBestQQUrl(d) {
+  if (d.song_play_url_sq) return { url: d.song_play_url_sq, tag: 'lossless', label: 'LOSSLESS' };
+  if (d.song_play_url_pq) return { url: d.song_play_url_pq, tag: 'lossless', label: 'LOSSLESS' };
+  if (d.song_play_url_accom) return { url: d.song_play_url_accom, tag: 'hq', label: 'HQ' };
+  if (d.song_play_url_hq) return { url: d.song_play_url_hq, tag: 'hq', label: 'HQ' };
+  if (d.song_play_url_standard) return { url: d.song_play_url_standard, tag: 'standard', label: 'STD' };
+  if (d.song_play_url_fq) return { url: d.song_play_url_fq, tag: 'low', label: 'LOW' };
+  if (d.song_play_url) return { url: d.song_play_url, tag: null, label: null };
+  return { url: null, tag: null, label: null };
+}
+
+async function fetchQQDetails(t) {
+  const msg = (t.qqSearchKey || t.kw || '').trim() || `${t.title || ''} ${t.artist || ''}`.trim();
+  const mid = (t.qqId || t.songMid || t.songid || '').toString().trim();
+  if (!mid) return t;
+  try {
+    const d = await (await fetch(`https://tang.api.s01s.cn/music_open_api.php?msg=${encodeURIComponent(msg)}&type=json&mid=${mid}`)).json();
+    if (!d || !d.song_mid) throw new Error('invalid');
+    t.title = d.song_title || d.song_name || t.title;
+    t.artist = d.singer_name || t.artist;
+    t.album = d.album_name || d.album_title || t.album || '';
+    t.cover = d.album_pic || d.singer_pic || t.cover;
+    const best = pickBestQQUrl(d);
+    t.audioUrl = best.url || t.audioUrl;
+    t.lrc = d.song_lyric || d.lyric || t.lrc;
+    if (best.tag && best.label) { t.quality = best.tag; t.qualityLabel = best.label; }
+    if (t.audioUrl) { const q = inferQuality(t.audioUrl); if (q.tag) { t.quality = q.tag; t.qualityLabel = q.label; } }
+    t.detailsLoaded = true;
+  } catch (e) { console.error('qq detail:', e); }
+  return t;
+}
+
+// ====================== 酷我 ======================
+
+async function searchKuwo(kw, limit) {
+  const url = `https://kw-api.cenguigui.cn/?name=${encodeURIComponent(kw)}&page=1&limit=${limit}`;
+  const results = [];
+  try {
+    const json = await (await fetch(url)).json();
+    if (json.code !== 200 || !Array.isArray(json.data)) return results;
+    json.data.forEach((it, idx) => {
+      results.push({
+        uid: `kw-${it.rid}`, source: 'kuwo', di: idx + 1, kw,
+        songid: it.rid, title: it.name || '', artist: it.artist || '', album: it.album || '',
+        cover: it.pic || null, audioUrl: null, lrc: null, lrcUrl: null,
+        detailsLoaded: false, quality: null, qualityLabel: null
+      });
+    });
+  } catch (e) { console.error('kuwo search:', e); }
+  return results;
+}
+
+async function fetchKuwoDetails(t) {
+  try {
+    const j = await (await fetch(`https://kw-api.cenguigui.cn/?id=${t.songid}&type=song&level=zp&format=json`)).json();
+    if (!j || j.code !== 200 || !j.data) throw new Error('fail');
+    const d = j.data;
+    t.title = d.name || t.title; t.artist = d.artist || t.artist; t.album = d.album || t.album;
+    t.cover = d.pic || t.cover; t.audioUrl = d.url || t.audioUrl; t.lrc = d.lyric || t.lrc || null;
+    t.lrcUrl = null; t.detailsLoaded = true;
+    if (t.audioUrl) { const q = inferQuality(t.audioUrl); t.quality = q.tag; t.qualityLabel = q.label; }
+  } catch (e) { console.error('kuwo detail:', e); }
+  return t;
+}
+
+// ====================== JOOX ======================
+
+const JX_TOKEN = 'f84ao9lMF_q7husBWRfgUw', JX_BR = 4;
+
+async function searchJoox(kw, limit) {
+  const url = `https://apicx.asia/api/joox_music?msg=${encodeURIComponent(kw)}&token=${JX_TOKEN}&br=${JX_BR}`;
+  const results = [];
+  try {
+    const json = await (await fetch(url)).json();
+    const songs = (json?.code === 200 && json?.data?.songs) ? json.data.songs : [];
+    songs.slice(0, limit).forEach((it, idx) => {
+      results.push({
+        uid: `jx-${it.songmid || it['歌曲ID'] || idx + 1}`, source: 'joox', di: idx + 1, kw,
+        jooxIndex: idx + 1, songid: it['歌曲ID'] || it.songmid || (idx + 1), songMid: it.songmid || '',
+        title: it['歌曲名称'] || '', artist: it['歌手'] || '', album: it['专辑'] || '',
+        cover: null, audioUrl: null, lrc: it['歌词内容'] || null, lrcUrl: null,
+        detailsLoaded: false, quality: null, qualityLabel: null
+      });
+    });
+  } catch (e) { console.error('joox search:', e); }
+  return results;
+}
+
+async function probeUrl(u) {
+  if (!u) return false;
+  const ctrl = new AbortController();
+  const tmr = setTimeout(() => ctrl.abort(), 3000);
+  try {
+    const r = await fetch(u, { method: 'HEAD', signal: ctrl.signal, cache: 'no-store' });
+    if (r.ok || r.status === 206) return true;
+  } catch (e) { /* HEAD may fail */ }
+  try {
+    const r = await fetch(u, { headers: { Range: 'bytes=0-0' }, signal: ctrl.signal });
+    return r.ok || r.status === 206;
+  } catch (e) { return false; } finally { clearTimeout(tmr); }
+}
+
+async function pickJooxUrl(links) {
+  const order = ['Atmos全景声','无损FLAC','Hi-Res无损','母带无损','OGG 320','MP3 320','AAC 192','OGG 192','MP3 128','AAC 96','AAC 48'];
+  for (const name of order) {
+    const u = links[name]; if (!u) continue;
+    if (!(await probeUrl(u))) continue;
+    if (/母带|无损|flac|hi-res|atmos/i.test(name) || /\.flac(?:\?|$)/i.test(u)) return { url: u, tag: 'lossless', label: 'LOSSLESS' };
+    const m = name.match(/(\d+)$/);
+    if (m) return { url: u, tag: m[1] + 'k', label: m[1] + 'K' };
+    return { url: u, tag: null, label: null };
+  }
+  return { url: null, tag: null, label: null };
+}
+
+async function fetchJooxDetails(t) {
+  const n = t.jooxIndex || t.di || 1;
+  try {
+    const j = await (await fetch(`https://apicx.asia/api/joox_music?msg=${encodeURIComponent(t.kw)}&n=${n}&token=${JX_TOKEN}&br=${JX_BR}`)).json();
+    if (!j || j.code !== 200 || !j.data) throw new Error('fail');
+    const d = j.data;
+    const best = await pickJooxUrl(d['播放链接'] || {});
+    t.title = d['歌曲名称'] || t.title; t.artist = d['歌手'] || t.artist; t.album = d['专辑'] || t.album;
+    t.songid = d['歌曲ID'] || t.songid; t.songMid = d.songmid || t.songMid;
+    t.audioUrl = best.url || t.audioUrl; t.lrc = d['歌词内容'] || t.lrc || null; t.lrcUrl = null;
+    if (best.tag && best.label) { t.quality = best.tag; t.qualityLabel = best.label; }
+    t.detailsLoaded = true;
+  } catch (e) { console.error('joox detail:', e); }
+  return t;
+}
+
+// ====================== SoundCloud ======================
+
+// SoundCloud 已停止发放新 API key，但社区通过逆向网页拿到了可用的 client_id
+// 下面这几个是 GitHub 开源项目广泛使用的，会轮换尝试
+const SC_CLIENT_IDS = [
+  'a3e059563d7fd3372b49b37f00a00bcf',
+  '2t9loNQH90kzJcsFCODdigxfp325aq4z',
+  'cUa40O3Jg3Emvp6Tv4jWLAV3sVKiF6N4',
+  'W7ci61pH9tE1FjEpqJo4iKOTYOgsYRMH',
+  'a3e059563d7fd3372b49b37f00a00bcf',
+];
+let scClientId = null;
+
+async function getSCClientId() {
+  if (scClientId) return scClientId;
+  // 并行探测可用的 client_id
+  const results = await Promise.all(SC_CLIENT_IDS.map(async id => {
+    try {
+      const r = await fetch(`https://api-v2.soundcloud.com/tracks/1?client_id=${id}`, { signal: AbortSignal.timeout(5000) });
+      if (r.ok) return id;
+    } catch (e) { /* skip */ }
+    return null;
+  }));
+  scClientId = results.find(Boolean) || SC_CLIENT_IDS[0];
+  return scClientId;
+}
+
+async function searchSoundCloud(kw, limit) {
+  const cid = await getSCClientId();
+  const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}&linked_partitioning=1`;
+  const results = [];
+  try {
+    const json = await (await fetch(url, { signal: AbortSignal.timeout(10000) })).json();
+    const tracks = json.collection || [];
+    tracks.forEach((it, idx) => {
+      const username = it.user?.username || 'Unknown';
+      const hasDownload = it.downloadable && it.download_url;
+      results.push({
+        uid: `sc-${it.id}`, source: 'soundcloud', di: idx + 1, kw,
+        songid: it.id,
+        title: it.title || '',
+        artist: username,
+        album: '',
+        cover: it.artwork_url || it.user?.avatar_url || null,
+        audioUrl: null,
+        lrc: null,
+        lrcUrl: null,
+        detailsLoaded: false,
+        quality: null,
+        qualityLabel: null,
+        scStreamUrl: it.stream_url || null,
+        scDuration: it.duration || 0,
+        scGenre: it.genre || '',
+        scPermalink: it.permalink_url || '',
+        scPlayCount: it.playback_count || 0,
+      });
+    });
+  } catch (e) { console.error('soundcloud search:', e); }
+  return results;
+}
+
+async function fetchSoundCloudDetails(t) {
+  try {
+    const cid = await getSCClientId();
+    // SoundCloud 的流媒体链接需要拼接 client_id
+    if (t.scStreamUrl) {
+      t.audioUrl = `${t.scStreamUrl}?client_id=${cid}`;
+    } else {
+      // 回退：通过 track id 重新获取详情
+      const r = await fetch(`https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`, { signal: AbortSignal.timeout(10000) });
+      const d = await r.json();
+      if (d.stream_url) {
+        t.audioUrl = `${d.stream_url}?client_id=${cid}`;
+      }
+      t.cover = d.artwork_url || d.user?.avatar_url || t.cover;
+      t.title = d.title || t.title;
+      t.artist = d.user?.username || t.artist;
+    }
+    // SoundCloud 流一般是 128k MP3（HLS）或原始格式
+    if (t.audioUrl) {
+      t.quality = '128k';
+      t.qualityLabel = '128K';
+    }
+    t.detailsLoaded = true;
+  } catch (e) { console.error('soundcloud detail:', e); }
+  return t;
+}
+
+// ====================== 聚合 ======================
+
+async function searchAll(kw, sources, limit) {
+  const tasks = [];
+  if (sources.includes('netease')) tasks.push(searchNetease(kw, 1, limit).then(r => ({ s: 'netease', r })));
+  if (sources.includes('qq')) tasks.push(searchQQ(kw, limit).then(r => ({ s: 'qq', r })));
+  if (sources.includes('kuwo')) tasks.push(searchKuwo(kw, limit).then(r => ({ s: 'kuwo', r })));
+  if (sources.includes('joox')) tasks.push(searchJoox(kw, limit).then(r => ({ s: 'joox', r })));
+  const all = await Promise.all(tasks);
+
+  // 交错排列
+  const grouped = {}, order = [];
+  for (const x of all) { grouped[x.s] = x.r; order.push(x.s); }
+  const idx = {}; for (const s of order) idx[s] = 0;
+  const out = []; let more = true;
+  while (more) {
+    more = false;
+    for (const s of order) {
+      if (grouped[s] && idx[s] < grouped[s].length) { out.push(grouped[s][idx[s]++]); more = true; }
+    }
+  }
+  return out;
+}
+
+async function ensureDetails(t) {
+  if (t.detailsLoaded && t.audioUrl && (t.lrc || !t.lrcUrl)) return t;
+  if (t.source === 'netease') return fetchNeteaseDetails(t);
+  if (t.source === 'qq') return fetchQQDetails(t);
+  if (t.source === 'kuwo') return fetchKuwoDetails(t);
+  if (t.source === 'joox') return fetchJooxDetails(t);
+  return t;
+}
+
+// ====================== UI ======================
+
+const $ = id => document.getElementById(id);
+const audio = $('audio');
+let currentTrack = null;
+
+function renderLyrics(track) {
+  const lines = parseLRC(track.lrc);
+  const el = $('lyrics');
+  el.innerHTML = lines.length
+    ? lines.map(l => `<div data-t="${l.time}">${esc(l.text)}</div>`).join('')
+    : '(暂无歌词)';
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+audio.addEventListener('timeupdate', () => {
+  const t = audio.currentTime;
+  const lines = $('lyrics').querySelectorAll('[data-t]');
+  let cur = null;
+  lines.forEach(el => {
+    const tt = parseFloat(el.dataset.t);
+    el.classList.toggle('l-cur', tt <= t && (!cur || tt > parseFloat(cur.dataset.t)));
+    if (tt <= t) cur = el;
+  });
+  if (cur) cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+});
+
+async function doSearch() {
+  const kw = $('kw').value.trim();
+  if (!kw) return;
+
+  const sources = [];
+  document.querySelectorAll('[data-s]:checked').forEach(cb => sources.push(cb.dataset.s));
+  if (!sources.length) { $('status').textContent = '请至少选一个音乐源'; $('status').className = 'status err'; return; }
+
+  $('btn').disabled = true;
+  $('status').textContent = '搜索中...';
+  $('status').className = 'status';
+  $('results').innerHTML = '';
+
+  let tracks = [];
+  try {
+    tracks = await searchAll(kw, sources, 10);
+  } catch (e) {
+    $('status').textContent = '请求失败: ' + e.message;
+    $('status').className = 'status err';
+    $('btn').disabled = false;
+    return;
+  }
+
+  if (!tracks.length) {
+    $('status').textContent = '没有结果，换关键词试试？';
+    $('btn').disabled = false;
+    return;
+  }
+
+  $('status').textContent = `找到 ${tracks.length} 首（点击播放）`;
+  $('btn').disabled = false;
+
+  const ol = $('results');
+  tracks.forEach(t => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span class="s-tag s-${t.source}">${t.source}</span>
+      <span class="track-info"><span class="track-title">${esc(t.title)}</span> <span class="track-artist">${esc(t.artist)}</span></span>`;
+    li.addEventListener('click', () => play(t, li));
+    ol.appendChild(li);
+  });
+}
+
+async function play(track, li) {
+  $('now').innerHTML = `加载中: ${esc(track.title)}...`;
+  $('player').style.display = 'block';
+  try {
+    await ensureDetails(track);
+    if (!track.audioUrl) { $('now').textContent = '获取播放链接失败'; return; }
+    audio.src = track.audioUrl;
+    await audio.play();
+    currentTrack = track;
+    $('now').innerHTML = `${esc(track.title)} <span class="by">— ${esc(track.artist)}</span> <span class="track-quality">${track.qualityLabel || ''}</span>`;
+    renderLyrics(track);
+    document.querySelectorAll('.results li').forEach(el => el.classList.remove('playing'));
+    if (li) li.classList.add('playing');
+  } catch (e) {
+    $('now').innerHTML = `播放失败: ${esc(e.message)}`;
+    console.error(e);
+  }
+}
+
+$('btn').addEventListener('click', doSearch);
+$('kw').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+</script>
+</body>
+</html>

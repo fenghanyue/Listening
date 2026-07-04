@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Listening API Demo</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    input { padding: 8px; width: 240px; font-size: 14px; }
+    button { padding: 8px 16px; font-size: 14px; cursor: pointer; }
+    .status { color: #666; font-size: 13px; margin-left: 8px; }
+    .error { color: #c00; }
+    li { padding: 6px 0; cursor: pointer; border-bottom: 1px solid #eee; }
+    li:hover { background: #f0f0f0; }
+    .source-tag { font-size: 11px; padding: 1px 5px; border-radius: 3px; margin-right: 6px; }
+    .netease { background: #ff6b6b; color: #fff; }
+    .qq { background: #4dd0e1; color: #fff; }
+    .kuwo { background: #ba68c8; color: #fff; }
+    .joox { background: #65f7c4; color: #000; }
+    #player { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>🎵 Listening — 音乐搜索 Demo</h1>
+
+  <div>
+    <input id="keyword" type="text" placeholder="输入歌名/歌手..." value="周杰伦" />
+    <button id="search">搜索</button>
+    <span id="status" class="status"></span>
+  </div>
+
+  <h2>搜索结果</h2>
+  <ol id="results"></ol>
+
+  <div id="player">
+    <h2>播放中</h2>
+    <p id="now-playing" style="color:#666;"></p>
+    <audio id="audio" controls style="width:100%;"></audio>
+    <pre id="lyrics" style="max-height:300px;overflow-y:auto;background:#fafafa;padding:10px;border-radius:6px;"></pre>
+  </div>
+
+  <script type="module">
+    import { searchAll, ensureTrackDetails } from '../src/api/index.js';
+    import { parseLRC } from '../src/api/utils.js';
+
+    const audio = document.getElementById('audio');
+    const lyrics = document.getElementById('lyrics');
+    const status = document.getElementById('status');
+    const nowPlaying = document.getElementById('now-playing');
+
+    document.getElementById('search').addEventListener('click', async () => {
+      const kw = document.getElementById('keyword').value.trim();
+      if (!kw) return;
+
+      status.textContent = '搜索中...';
+      const ol = document.getElementById('results');
+      ol.innerHTML = '';
+
+      let results = [];
+      try {
+        results = await searchAll({ keyword: kw, sources: ['netease', 'qq', 'kuwo'], limit: 5 });
+      } catch (e) {
+        status.innerHTML = `<span class="error">请求失败: ${e.message}</span>`;
+        console.error(e);
+        return;
+      }
+
+      if (!results.length) {
+        status.textContent = '没有结果，试试其他关键词？';
+        return;
+      }
+
+      status.textContent = `找到 ${results.length} 首（点击可播放）`;
+
+      results.forEach((track, i) => {
+        const li = document.createElement('li');
+        const tag = document.createElement('span');
+        tag.className = `source-tag ${track.source}`;
+        tag.textContent = track.source;
+        li.appendChild(tag);
+        li.appendChild(document.createTextNode(`${track.title} — ${track.artist}`));
+
+        li.addEventListener('click', async () => {
+          nowPlaying.textContent = `加载中: ${track.title}...`;
+          try {
+            await ensureTrackDetails(track);
+            audio.src = track.audioUrl;
+            audio.play().catch(e => console.error('play failed:', e));
+            nowPlaying.textContent = `${track.title} — ${track.artist} (${track.qualityLabel || '?'})`;
+
+            const lrcLines = parseLRC(track.lrc);
+            lyrics.textContent = lrcLines.length
+              ? lrcLines.map(l => `[${formatTime(l.time)}] ${l.text}`).join('\n')
+              : '(暂无歌词)';
+          } catch (e) {
+            nowPlaying.innerHTML = `<span class="error">加载失败: ${e.message}</span>`;
+          }
+        });
+        ol.appendChild(li);
+      });
+    });
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+      return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    }
+  </script>
+</body>
+</html>
