@@ -13,18 +13,15 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); min-height: 100vh; display: flex; justify-content: center; align-items: flex-start; padding: 40px 16px; }
   .app { width: 100%; max-width: 720px; }
-  /* header */
   .header { text-align: center; margin-bottom: 20px; }
   .header h1 { font-size: 24px; margin-bottom: 4px; }
   .header p { color: var(--sub); font-size: 13px; }
-  /* search */
   .search-bar { display: flex; gap: 8px; margin-bottom: 16px; }
   .search-bar input { flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: var(--panel); color: var(--text); font-size: 15px; outline: none; }
   .search-bar input:focus { border-color: var(--accent); }
   .search-bar button { padding: 10px 20px; border-radius: 10px; border: none; background: var(--accent); color: #1a1508; font-weight: 600; font-size: 14px; cursor: pointer; }
   .search-bar button:hover { opacity: 0.9; }
   .search-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
-  /* source chips */
   .sources { display: flex; gap: 10px; margin-bottom: 12px; font-size: 13px; }
   .sources label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--sub); }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -34,10 +31,8 @@
   .d-joox { background: #65f7c4; }
   .d-soundcloud { background: #ff8800; }
   .s-soundcloud { background: rgba(255,136,0,0.18); color: #ff8800; }
-  /* status */
   .status { font-size: 13px; color: var(--sub); margin-bottom: 12px; min-height: 18px; }
   .status.err { color: #ff6b6b; }
-  /* results */
   .results { list-style: none; }
   .results li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05); }
   .results li:hover { background: rgba(255,255,255,0.06); }
@@ -51,7 +46,6 @@
   .track-title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .track-artist { font-size: 12px; color: var(--sub); }
   .track-quality { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--sub); }
-  /* player */
   .player { margin-top: 20px; padding: 16px; border-radius: 14px; background: var(--panel); border: 1px solid rgba(255,255,255,0.10); }
   .now-playing { font-weight: 600; margin-bottom: 8px; }
   .now-playing .by { color: var(--sub); font-weight: 400; font-size: 13px; }
@@ -135,7 +129,7 @@ async function searchNetease(kw, page, num) {
   const url = `https://api.qijieya.cn/meting/?type=search&id=${encodeURIComponent(kw)}&limit=${limit}&server=netease`;
   const results = [];
   try {
-    const json = await (await fetch(url)).json();
+    const json = await (await fetch(url, { signal: AbortSignal.timeout(10000) })).json();
     if (!Array.isArray(json)) return results;
     json.forEach((it, idx) => {
       const id = (it.url || '').match(/[?&]id=([^&]+)/);
@@ -176,7 +170,7 @@ async function searchQQ(kw, limit) {
   const url = `https://tang.api.s01s.cn/music_open_api.php?msg=${encodeURIComponent(kw)}&type=json`;
   const results = [];
   try {
-    const json = await (await fetch(url)).json();
+    const json = await (await fetch(url, { signal: AbortSignal.timeout(10000) })).json();
     const data = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
     if (!data.length) return results;
     data.slice(0, limit).forEach((it, idx) => {
@@ -209,7 +203,7 @@ async function fetchQQDetails(t) {
   const mid = (t.qqId || t.songMid || t.songid || '').toString().trim();
   if (!mid) return t;
   try {
-    const d = await (await fetch(`https://tang.api.s01s.cn/music_open_api.php?msg=${encodeURIComponent(msg)}&type=json&mid=${mid}`)).json();
+    const d = await (await fetch(`https://tang.api.s01s.cn/music_open_api.php?msg=${encodeURIComponent(msg)}&type=json&mid=${mid}`, { signal: AbortSignal.timeout(10000) })).json();
     if (!d || !d.song_mid) throw new Error('invalid');
     t.title = d.song_title || d.song_name || t.title;
     t.artist = d.singer_name || t.artist;
@@ -231,7 +225,7 @@ async function searchKuwo(kw, limit) {
   const url = `https://kw-api.cenguigui.cn/?name=${encodeURIComponent(kw)}&page=1&limit=${limit}`;
   const results = [];
   try {
-    const json = await (await fetch(url)).json();
+    const json = await (await fetch(url, { signal: AbortSignal.timeout(10000) })).json();
     if (json.code !== 200 || !Array.isArray(json.data)) return results;
     json.data.forEach((it, idx) => {
       results.push({
@@ -247,7 +241,7 @@ async function searchKuwo(kw, limit) {
 
 async function fetchKuwoDetails(t) {
   try {
-    const j = await (await fetch(`https://kw-api.cenguigui.cn/?id=${t.songid}&type=song&level=zp&format=json`)).json();
+    const j = await (await fetch(`https://kw-api.cenguigui.cn/?id=${t.songid}&type=song&level=zp&format=json`, { signal: AbortSignal.timeout(10000) })).json();
     if (!j || j.code !== 200 || !j.data) throw new Error('fail');
     const d = j.data;
     t.title = d.name || t.title; t.artist = d.artist || t.artist; t.album = d.album || t.album;
@@ -266,7 +260,7 @@ async function searchJoox(kw, limit) {
   const url = `https://apicx.asia/api/joox_music?msg=${encodeURIComponent(kw)}&token=${JX_TOKEN}&br=${JX_BR}`;
   const results = [];
   try {
-    const json = await (await fetch(url)).json();
+    const json = await (await fetch(url, { signal: AbortSignal.timeout(10000) })).json();
     const songs = (json?.code === 200 && json?.data?.songs) ? json.data.songs : [];
     songs.slice(0, limit).forEach((it, idx) => {
       results.push({
@@ -311,7 +305,7 @@ async function pickJooxUrl(links) {
 async function fetchJooxDetails(t) {
   const n = t.jooxIndex || t.di || 1;
   try {
-    const j = await (await fetch(`https://apicx.asia/api/joox_music?msg=${encodeURIComponent(t.kw)}&n=${n}&token=${JX_TOKEN}&br=${JX_BR}`)).json();
+    const j = await (await fetch(`https://apicx.asia/api/joox_music?msg=${encodeURIComponent(t.kw)}&n=${n}&token=${JX_TOKEN}&br=${JX_BR}`, { signal: AbortSignal.timeout(10000) })).json();
     if (!j || j.code !== 200 || !j.data) throw new Error('fail');
     const d = j.data;
     const best = await pickJooxUrl(d['播放链接'] || {});
@@ -326,29 +320,44 @@ async function fetchJooxDetails(t) {
 
 // ====================== SoundCloud ======================
 
-// SoundCloud 已停止发放新 API key，但社区通过逆向网页拿到了可用的 client_id
-// 下面这几个是 GitHub 开源项目广泛使用的，会轮换尝试
-const SC_CLIENT_IDS = [
-  'a3e059563d7fd3372b49b37f00a00bcf',
-  '2t9loNQH90kzJcsFCODdigxfp325aq4z',
-  'cUa40O3Jg3Emvp6Tv4jWLAV3sVKiF6N4',
-  'W7ci61pH9tE1FjEpqJo4iKOTYOgsYRMH',
-  'a3e059563d7fd3372b49b37f00a00bcf',
-];
-let scClientId = null;
+// SoundCloud API 不支持 CORS，浏览器直接 fetch 会被拦截
+// 需要启动本地代理: node proxy-server.mjs 8765
+const SC_PROXY = 'http://localhost:8765';
+let SC_PROXY_AVAILABLE = null;
+
+async function scProxyAvailable() {
+  if (SC_PROXY_AVAILABLE !== null) return SC_PROXY_AVAILABLE;
+  try {
+    const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(3000) });
+    if (r.ok) { SC_PROXY_AVAILABLE = true; return true; }
+  } catch (e) { /* skip */ }
+  SC_PROXY_AVAILABLE = false;
+  return false;
+}
 
 async function getSCClientId() {
-  if (scClientId) return scClientId;
-  // 并行探测可用的 client_id
-  const results = await Promise.all(SC_CLIENT_IDS.map(async id => {
+  // 通过代理获取（代理从 SoundCloud 网页抓取最新 key）
+  if (await scProxyAvailable()) {
     try {
-      const r = await fetch(`https://api-v2.soundcloud.com/tracks/1?client_id=${id}`, { signal: AbortSignal.timeout(5000) });
-      if (r.ok) return id;
+      const r = await fetch(`${SC_PROXY}/sc-client-id`);
+      const j = await r.json();
+      if (j.client_id) return j.client_id;
     } catch (e) { /* skip */ }
-    return null;
-  }));
-  scClientId = results.find(Boolean) || SC_CLIENT_IDS[0];
-  return scClientId;
+  }
+  return 'O7atZypwLvuWSY9hWnnQ3vrLTHH7wqMe';
+}
+
+async function scFetch(url) {
+  if (await scProxyAvailable()) {
+    const proxyUrl = `${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`;
+    const r = await fetch(proxyUrl);
+    if (!r.ok) throw new Error(`proxy ${r.status}`);
+    return r.json();
+  }
+  // 直连 fallback（需要系统开了翻墙代理）
+  const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error(`direct ${r.status}`);
+  return r.json();
 }
 
 async function searchSoundCloud(kw, limit) {
@@ -356,11 +365,11 @@ async function searchSoundCloud(kw, limit) {
   const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}&linked_partitioning=1`;
   const results = [];
   try {
-    const json = await (await fetch(url, { signal: AbortSignal.timeout(10000) })).json();
+    const json = await scFetch(url);
     const tracks = json.collection || [];
     tracks.forEach((it, idx) => {
+      // 搜索时也保存完整 transcodings 数据
       const username = it.user?.username || 'Unknown';
-      const hasDownload = it.downloadable && it.download_url;
       results.push({
         uid: `sc-${it.id}`, source: 'soundcloud', di: idx + 1, kw,
         songid: it.id,
@@ -375,6 +384,8 @@ async function searchSoundCloud(kw, limit) {
         quality: null,
         qualityLabel: null,
         scStreamUrl: it.stream_url || null,
+        scTranscodings: it.media?.transcodings || null,
+        scTrackAuth: it.track_authorization || null,
         scDuration: it.duration || 0,
         scGenre: it.genre || '',
         scPermalink: it.permalink_url || '',
@@ -388,24 +399,79 @@ async function searchSoundCloud(kw, limit) {
 async function fetchSoundCloudDetails(t) {
   try {
     const cid = await getSCClientId();
-    // SoundCloud 的流媒体链接需要拼接 client_id
-    if (t.scStreamUrl) {
-      t.audioUrl = `${t.scStreamUrl}?client_id=${cid}`;
-    } else {
-      // 回退：通过 track id 重新获取详情
-      const r = await fetch(`https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`, { signal: AbortSignal.timeout(10000) });
-      const d = await r.json();
-      if (d.stream_url) {
-        t.audioUrl = `${d.stream_url}?client_id=${cid}`;
-      }
+    const useProxy = await scProxyAvailable();
+    let d = null;
+
+    // 1. 优先用搜索时已返回的 transcodings and track_authorization
+    let transcodings = t.scTranscodings || null;
+    const trackAuth = t.scTrackAuth || null;
+
+    // 2. 否则重新请求 track 详情
+    if (!transcodings) {
+      const url = `https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`;
+      d = await (useProxy ? scFetch(url) : (await fetch(url, { signal: AbortSignal.timeout(10000) })).json());
+      transcodings = d.media?.transcodings || [];
+      t.scTrackAuth = d.track_authorization || null;
       t.cover = d.artwork_url || d.user?.avatar_url || t.cover;
       t.title = d.title || t.title;
       t.artist = d.user?.username || t.artist;
     }
-    // SoundCloud 流一般是 128k MP3（HLS）或原始格式
+
+    // 3. 从 transcodings 选最佳流: progressive mp3 > hls mp3 > hls aac
+    if (transcodings && transcodings.length > 0) {
+      const scored = transcodings.map(tr => {
+        let score = 0;
+        const proto = tr.format?.protocol || '';
+        const mime = tr.format?.mime_type || '';
+        if (proto === 'progressive') score += 100;
+        if (mime.includes('mpeg')) score += 50;
+        if (tr.preset?.startsWith('mp3')) score += 20;
+        if (tr.preset?.includes('160')) score += 10;
+        return { ...tr, score };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+
+      // SoundCloud 媒体 API 返回 JSON {"url": "https://cf-media.sndcdn.com/xxx.mp3?Policy=..."}
+      // 需要 track_authorization JWT 作为 Authorization header
+      const mediaUrl = `${best.url}?client_id=${cid}`;
+      try {
+        let resolved;
+        if (useProxy) {
+          // 走本地代理（有 Authorization header 和公司代理链路）
+          const authParam = trackAuth ? `&auth=${encodeURIComponent(trackAuth)}` : '';
+          const proxyMediaUrl = `${SC_PROXY}/proxy-auth?url=${encodeURIComponent(mediaUrl)}${authParam}`;
+          resolved = await (await fetch(proxyMediaUrl)).json();
+        } else {
+          resolved = await (await fetch(mediaUrl, {
+            headers: trackAuth ? { Authorization: trackAuth } : {},
+            signal: AbortSignal.timeout(10000)
+          })).json();
+        }
+        // 最终拿到 CDN 直链 — 走本地代理流式转发（绕过 CDN 地域限制）
+        if (resolved.url) {
+          t.audioUrl = `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}`;
+        }
+      } catch (e) {
+        console.error('sc media resolve:', e);
+        // 备选: 直接用 HLS m3u8 链接给 audio 元素（可能不行因为 CORS）
+        t.audioUrl = mediaUrl;
+      }
+
+      if (t.audioUrl && best.preset) {
+        const m = best.preset.match(/(\d+)/);
+        t.quality = m ? m[1] + 'k' : '128k';
+        t.qualityLabel = best.preset.replace(/_/g, ' ').toUpperCase();
+      }
+    }
+
+    // 4. fallback: 旧格式 stream_url
+    if (!t.audioUrl && t.scStreamUrl) {
+      t.audioUrl = `${t.scStreamUrl}?client_id=${cid}`;
+    }
+
     if (t.audioUrl) {
-      t.quality = '128k';
-      t.qualityLabel = '128K';
+      if (!t.quality) { t.quality = '128k'; t.qualityLabel = '128K'; }
     }
     t.detailsLoaded = true;
   } catch (e) { console.error('soundcloud detail:', e); }
@@ -420,9 +486,9 @@ async function searchAll(kw, sources, limit) {
   if (sources.includes('qq')) tasks.push(searchQQ(kw, limit).then(r => ({ s: 'qq', r })));
   if (sources.includes('kuwo')) tasks.push(searchKuwo(kw, limit).then(r => ({ s: 'kuwo', r })));
   if (sources.includes('joox')) tasks.push(searchJoox(kw, limit).then(r => ({ s: 'joox', r })));
+  if (sources.includes('soundcloud')) tasks.push(searchSoundCloud(kw, limit).then(r => ({ s: 'soundcloud', r })));
   const all = await Promise.all(tasks);
 
-  // 交错排列
   const grouped = {}, order = [];
   for (const x of all) { grouped[x.s] = x.r; order.push(x.s); }
   const idx = {}; for (const s of order) idx[s] = 0;
@@ -442,6 +508,7 @@ async function ensureDetails(t) {
   if (t.source === 'qq') return fetchQQDetails(t);
   if (t.source === 'kuwo') return fetchKuwoDetails(t);
   if (t.source === 'joox') return fetchJooxDetails(t);
+  if (t.source === 'soundcloud') return fetchSoundCloudDetails(t);
   return t;
 }
 

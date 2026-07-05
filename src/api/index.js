@@ -7,6 +7,7 @@ import { searchNetease, fetchNeteaseDetails } from './netease.js';
 import { searchQQ, fetchQQDetails } from './qq.js';
 import { searchKuwo, fetchKuwoDetails } from './kuwo.js';
 import { searchJoox, fetchJooxDetails } from './joox.js';
+import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
 
 /**
  * 聚合搜索（多源并行）
@@ -43,6 +44,12 @@ export async function searchAll({ keyword, sources = ['netease', 'qq', 'kuwo'], 
   if (sources.includes('joox')) {
     tasks.push(
       searchJoox(keyword, limit).then(tracks => ({ source: 'joox', tracks }))
+    );
+  }
+  // SoundCloud
+  if (sources.includes('soundcloud')) {
+    tasks.push(
+      searchSoundCloud(keyword, limit).then(tracks => ({ source: 'soundcloud', tracks }))
     );
   }
 
@@ -103,6 +110,8 @@ export async function ensureTrackDetails(track) {
       return fetchKuwoDetails(track);
     case 'joox':
       return fetchJooxDetails(track);
+    case 'soundcloud':
+      return fetchSoundCloudDetails(track);
     default:
       return track;
   }
@@ -115,3 +124,4 @@ export { searchNetease, fetchNeteaseDetails } from './netease.js';
 export { searchQQ, fetchQQDetails } from './qq.js';
 export { searchKuwo, fetchKuwoDetails } from './kuwo.js';
 export { searchJoox, fetchJooxDetails } from './joox.js';
+export { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
