@@ -85,6 +85,7 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
 <script>
 // ====================== 工具函数 ======================
 
@@ -417,45 +418,55 @@ async function fetchSoundCloudDetails(t) {
       t.artist = d.user?.username || t.artist;
     }
 
-    // 3. 从 transcodings 选最佳流: progressive mp3 > hls mp3 > hls aac
+    // 3. 从 transcodings 选最佳流
+    // SoundCloud CDN: CloudFront (cf-media/cf-hls-media) → 部分区域 403
+    //                soundcloud.cloud (playback.media-streaming)    → 可访问 ✅
+    // 优先 AAC HLS (soundcloud.cloud)，media resolve 只需 ?client_id= 无需 JWT
     if (transcodings && transcodings.length > 0) {
       const scored = transcodings.map(tr => {
         let score = 0;
         const proto = tr.format?.protocol || '';
         const mime = tr.format?.mime_type || '';
-        if (proto === 'progressive') score += 100;
-        if (mime.includes('mpeg')) score += 50;
-        if (tr.preset?.startsWith('mp3')) score += 20;
+        if (proto === 'hls' && mime.includes('mp4')) score += 100;
+        if (proto === 'progressive' && mime.includes('mpeg')) score += 60;
+        if (proto === 'hls' && !mime.includes('mp4')) score += 40;
         if (tr.preset?.includes('160')) score += 10;
+        if (tr.preset?.includes('sq')) score += 5;
         return { ...tr, score };
       });
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
+      const isHLS = best.format?.protocol === 'hls';
 
-      // SoundCloud 媒体 API 返回 JSON {"url": "https://cf-media.sndcdn.com/xxx.mp3?Policy=..."}
-      // 需要 track_authorization JWT 作为 Authorization header
+      // media resolve: 只需要 ?client_id= 参数
       const mediaUrl = `${best.url}?client_id=${cid}`;
       try {
         let resolved;
         if (useProxy) {
-          // 走本地代理（有 Authorization header 和公司代理链路）
-          const authParam = trackAuth ? `&auth=${encodeURIComponent(trackAuth)}` : '';
-          const proxyMediaUrl = `${SC_PROXY}/proxy-auth?url=${encodeURIComponent(mediaUrl)}${authParam}`;
+          const proxyMediaUrl = `${SC_PROXY}/proxy?url=${encodeURIComponent(mediaUrl)}`;
           resolved = await (await fetch(proxyMediaUrl)).json();
         } else {
           resolved = await (await fetch(mediaUrl, {
-            headers: trackAuth ? { Authorization: trackAuth } : {},
             signal: AbortSignal.timeout(10000)
           })).json();
         }
-        // 最终拿到 CDN 直链 — 走本地代理流式转发（绕过 CDN 地域限制）
         if (resolved.url) {
-          t.audioUrl = `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}`;
+          if (isHLS) {
+            // HLS: 直接用 m3u8 URL（带签名有时效），由 hls.js 处理
+            t.audioUrl = resolved.url;
+            t.scIsHLS = true;
+          } else {
+            // Progressive mp3: 走本地代理流式转发
+            t.audioUrl = useProxy
+              ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}`
+              : resolved.url;
+            t.scIsHLS = false;
+          }
         }
       } catch (e) {
         console.error('sc media resolve:', e);
-        // 备选: 直接用 HLS m3u8 链接给 audio 元素（可能不行因为 CORS）
         t.audioUrl = mediaUrl;
+        t.scIsHLS = isHLS;
       }
 
       if (t.audioUrl && best.preset) {
@@ -516,6 +527,7 @@ async function ensureDetails(t) {
 
 const $ = id => document.getElementById(id);
 const audio = $('audio');
+let hls = null;
 let currentTrack = null;
 
 function renderLyrics(track) {
@@ -588,8 +600,26 @@ async function play(track, li) {
   try {
     await ensureDetails(track);
     if (!track.audioUrl) { $('now').textContent = '获取播放链接失败'; return; }
-    audio.src = track.audioUrl;
-    await audio.play();
+
+    // 销毁旧的 HLS 实例
+    if (hls) { hls.destroy(); hls = null; }
+
+    const isHLS = track.scIsHLS || track.audioUrl.endsWith('.m3u8') || track.audioUrl.includes('playback.media-streaming');
+
+    if (isHLS && window.Hls && Hls.isSupported()) {
+      // SoundCloud AAC HLS: 用 hls.js 播放（原生 <audio> 不支持 HLS 在非 Safari 浏览器）
+      hls = new Hls({ enableWorker: false });
+      hls.loadSource(track.audioUrl);
+      hls.attachMedia(audio);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        audio.play().catch(e => console.warn('autoplay:', e));
+      });
+    } else {
+      // Progressive MP3 或 HLS fallback
+      audio.src = track.audioUrl;
+      await audio.play();
+    }
+
     currentTrack = track;
     $('now').innerHTML = `${esc(track.title)} <span class="by">— ${esc(track.artist)}</span> <span class="track-quality">${track.qualityLabel || ''}</span>`;
     renderLyrics(track);

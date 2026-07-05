@@ -135,20 +135,33 @@ export async function fetchSoundCloudDetails(t) {
       t.artist = d.user?.username || t.artist;
     }
 
-    // 3. 从 transcodings 选最佳可播放链接（优先 progressive > hls，优先 mp3）
+    // 3. 从 transcodings 选最佳可播放链接
+    // SoundCloud 有三套 CDN：
+    //   - cf-media.sndcdn.com (CloudFront progressive mp3)    → 部分区域 403
+    //   - cf-hls-media.sndcdn.com (CloudFront HLS mp3)        → 部分区域 403
+    //   - playback.media-streaming.soundcloud.cloud (AAC HLS) → 可访问 ✅
+    // 优先选 AAC HLS（soundcloud.cloud CDN），其次选 mp3 progressive，
+    // 因为 media resolve 只需要 ?client_id= 不需要 JWT
     if (transcodings && transcodings.length > 0) {
       const scored = transcodings.map(tr => {
         let score = 0;
         const proto = tr.format?.protocol || '';
         const mime = tr.format?.mime_type || '';
-        if (proto === 'progressive') score += 100;
-        if (mime.includes('mpeg')) score += 50;
-        if (tr.preset?.startsWith('mp3')) score += 20;
+        // 最高优先级：AAC HLS（soundcloud.cloud CDN 可访问）
+        if (proto === 'hls' && mime.includes('mp4')) score += 100;
+        // 其次：progressive mp3（CloudFront CDN 可能被墙）
+        if (proto === 'progressive' && mime.includes('mpeg')) score += 60;
+        // 再次：其他 HLS
+        if (proto === 'hls' && !mime.includes('mp4')) score += 40;
+        // 加分项
         if (tr.preset?.includes('160')) score += 10;
+        if (tr.preset?.includes('sq')) score += 5;
         return { ...tr, score };
       });
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
+      // 标记是否为 HLS（浏览器需要 hls.js 播放）
+      t.scIsHLS = (best.format?.protocol === 'hls');
       t.audioUrl = `${best.url}?client_id=${cid}`;
       if (best.preset) {
         const m = best.preset.match(/(\d+)/);
