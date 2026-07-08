@@ -34,6 +34,18 @@ var ListeningAPI = (() => {
 
   // src/api/netease.js
   var BASE_URL = "https://api.qijieya.cn/meting/";
+  var NETEASE_PROXY = "http://localhost:8765";
+  async function fetchNeteaseAlbum(songid) {
+    const target = `https://interface3.music.163.com/api/v3/song/detail?c=${encodeURIComponent(JSON.stringify([{ id: Number(songid) }]))}`;
+    try {
+      const r = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(target)}`, { signal: AbortSignal.timeout(5e3) });
+      if (!r.ok) return "";
+      const json = await r.json();
+      return json?.songs?.[0]?.al?.name || "";
+    } catch (e) {
+      return "";
+    }
+  }
   function pickQueryParam(rawUrl, key) {
     if (!rawUrl) return "";
     try {
@@ -98,20 +110,29 @@ var ListeningAPI = (() => {
         track.qualityLabel = "320K";
       }
     }
+    const jobs = [];
     if (!track.lrc && track.lrcUrl) {
-      try {
-        const lr = await fetch(track.lrcUrl);
-        const contentType = (lr.headers.get("content-type") || "").toLowerCase();
-        if (contentType.includes("json")) {
-          const lj = await lr.json();
-          track.lrc = (typeof lj === "string" ? lj : null) || lj?.lrc || lj?.lyric || lj?.data?.lrc || lj?.data?.lyric || (typeof lj?.data === "string" ? lj.data : null) || null;
-        } else {
-          track.lrc = await lr.text();
+      jobs.push((async () => {
+        try {
+          const lr = await fetch(track.lrcUrl);
+          const contentType = (lr.headers.get("content-type") || "").toLowerCase();
+          if (contentType.includes("json")) {
+            const lj = await lr.json();
+            track.lrc = (typeof lj === "string" ? lj : null) || lj?.lrc || lj?.lyric || lj?.data?.lrc || lj?.data?.lyric || (typeof lj?.data === "string" ? lj.data : null) || null;
+          } else {
+            track.lrc = await lr.text();
+          }
+        } catch (e) {
+          console.warn("netease lyric fetch failed:", e);
         }
-      } catch (e) {
-        console.warn("netease lyric fetch failed:", e);
-      }
+      })());
     }
+    if (!track.album && track.songid) {
+      jobs.push((async () => {
+        track.album = await fetchNeteaseAlbum(track.songid);
+      })());
+    }
+    if (jobs.length) await Promise.all(jobs);
     track.detailsLoaded = true;
     return track;
   }

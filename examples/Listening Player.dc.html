@@ -107,7 +107,7 @@
               </div>
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
-                <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artist }} · {{ item.sourceLabel }}</div>
+                <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artistDisplay }} · {{ item.sourceLabel }}</div>
               </div>
               <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
               <button onclick="{{ item.onRemove }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
@@ -175,7 +175,7 @@
                   <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
                   <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
                     <span style="font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:600;background:{{ t.tagBg }};color:{{ t.tagColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
-                    <span style="font-size:11px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.artist }}</span>
+                    <span style="font-size:11px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.artistDisplay }}</span>
                   </div>
                 </div>
                 <button onclick="{{ t.onAdd }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">{{ t.primaryActionIcon }}</span></button>
@@ -216,7 +216,7 @@
 
       <div style="width:100%;text-align:center;margin-top:14px;flex-shrink:0;">
         <div style="font-size:17px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
-        <div style="font-size:13px;color:{{ v.c.onSurfaceVariant }};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artist }}</div>
+        <div style="font-size:13px;color:{{ v.c.onSurfaceVariant }};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artistDisplay }}</div>
       </div>
 
       <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:16px;flex-shrink:0;">
@@ -338,13 +338,13 @@ const GRADIENTS = {
 
 function makeQueue() {
   return [
-    { id: 1, title: '夜行灯塔', artist: '林间信号', source: 'netease', duration: 214 },
-    { id: 2, title: '低语电台', artist: '纸飞机乐队', source: 'qq', duration: 198 },
-    { id: 3, title: '第七个路口', artist: '雾岛先生', source: 'soundcloud', duration: 231 },
-    { id: 4, title: '折叠时区', artist: '半透明', source: 'netease', duration: 205 },
-    { id: 5, title: '慢速回放', artist: '纸飞机乐队', source: 'qq', duration: 222 },
-    { id: 6, title: '安静的光', artist: '雾岛先生', source: 'soundcloud', duration: 196 },
-    { id: 7, title: '纸间信件', artist: '林间信号', source: 'netease', duration: 209 },
+    { id: 1, title: '夜行灯塔', artist: '林间信号', album: '灯塔笔记', source: 'netease', duration: 214 },
+    { id: 2, title: '低语电台', artist: '纸飞机乐队', album: '频率', source: 'qq', duration: 198 },
+    { id: 3, title: '第七个路口', artist: '雾岛先生', album: '', source: 'soundcloud', duration: 231 },
+    { id: 4, title: '折叠时区', artist: '半透明', album: '折叠时区', source: 'netease', duration: 205 },
+    { id: 5, title: '慢速回放', artist: '纸飞机乐队', album: '频率', source: 'qq', duration: 222 },
+    { id: 6, title: '安静的光', artist: '雾岛先生', album: '', source: 'soundcloud', duration: 196 },
+    { id: 7, title: '纸间信件', artist: '林间信号', album: '灯塔笔记', source: 'netease', duration: 209 },
   ];
 }
 
@@ -366,6 +366,10 @@ function fmtTime(s) {
   s = Math.max(0, Math.floor(s));
   const m = Math.floor(s / 60), sec = s % 60;
   return m + ':' + String(sec).padStart(2, '0');
+}
+
+function fmtArtistAlbum(t) {
+  return t.album ? `${t.artist} - ${t.album}` : t.artist;
 }
 
 const TILE_PALETTES = [
@@ -819,7 +823,7 @@ class Component extends DCLogic {
     const s = this.state;
     const c = THEMES[s.theme];
     const rawTrack = s.queue.find(t => t.id === s.currentId) || s.queue[0] || { title: '未在播放', artist: '', duration: 200, source: 'netease' };
-    const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease };
+    const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack) };
     const duration = Math.max(track.duration || 0, 0.1);
     const progressPct = Math.min(100, (s.currentTime / duration) * 100);
 
@@ -845,6 +849,7 @@ class Component extends DCLogic {
       return {
         ...t, index: i + 1, isCurrent, coverGradient: GRADIENTS[t.source],
         sourceLabel: SOURCE_LABELS[t.source], durationStr: fmtTime(t.duration),
+        artistDisplay: fmtArtistAlbum(t),
         playingGlyph: isCurrent ? 'graphic_eq' : 'music_note',
         rowStyle: `display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:grab;background:${isCurrent ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
         titleColor: isCurrent ? c.onSecondaryContainer : c.onSurface,
@@ -876,6 +881,7 @@ class Component extends DCLogic {
       const liked = !!s.liked[t.id];
       return {
         ...t, coverGradient: GRADIENTS[t.source], sourceLabel: SOURCE_LABELS[t.source],
+        artistDisplay: fmtArtistAlbum(t),
         cardBg: isCurrent ? c.primaryContainer : c.surface,
         titleColor: isCurrent ? c.onPrimaryContainer : c.onSurface,
         artistColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,

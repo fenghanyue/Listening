@@ -95,7 +95,7 @@
 | toast | ✅ | `showToast`（2.2s 自动消失） |
 | 弹窗（加入/导入/新建） | ✅ | `openAddModal` / `openImportModal` / `openCreateModal` 及各自 close |
 | 专辑封面（真实图片） | ❌ 用户前端实测确认（含搜索结果列表，见待办第 9 条） | 黑胶大图（`mediaDiscStyle`，行920）、列表/队列缩略图（行104/170）和搜索结果列表（行879）**只用 `GRADIENTS[track.source]` 纯色渐变**，从未使用 `track.cover`；而各源 API 其实都已返回封面图 URL（`netease/qq/soundcloud.js` 均有 `cover` 字段），只是前端没接 |
-| 专辑名称显示 | ❌ 用户前端实测确认 | 全文 `grep "\.album"` 零匹配，`track.album` 字段（各 API 已提供）从未在任何位置渲染，播放器/队列/搜索结果都只显示歌名+歌手 |
+| 专辑名称显示 | ✅ 2026-07-08 已完成，渲染实测 | 播放器「正在播放」区、队列面板、歌单/搜索结果列表均已接入，格式「歌手 - 专辑名称」，`album` 为空时只显示歌手名，不出现多余的" - "。详见下方「J. 显示专辑名称」 |
 
 ### C. 与旧记录（2026-07-07）不符之处 —— 已按现代码更正
 
@@ -168,7 +168,7 @@ eval(c+';globalThis.A=ListeningAPI');(async()=>{
 7. ~~修复酷我播放失败~~ 🗑️ **2026-07-08 决定不修了，直接下线酷我音源**，见「I. 下线酷我音源」。
 8. ~~修复 SoundCloud 搜索~~ ✅ **2026-07-08 已完成**，见下方「H. SoundCloud 搜索/播放修复」。
 9. **接入真实专辑封面**：黑胶大图、队列列表缩略图**以及搜索结果列表**（用户 2026-07-08 前端实测确认搜索结果同样没有封面，根因相同：[Listening Player.dc.html:879](examples/Listening%20Player.dc.html:879) 的 `coverGradient: GRADIENTS[t.source]`）改为优先渲染 `track.cover`（图片），封面缺失时才回退现有的 `GRADIENTS[source]` 渐变。
-10. **显示专辑名称**：在播放器信息区 / 队列行补上 `track.album` 的渲染；注意目前网易云/SoundCloud 搜索结果的 `album` 字段是空字符串，需要看是否要在 `ensureTrackDetails` 阶段一并补齐。
+10. ~~显示专辑名称~~ ✅ **2026-07-08 已完成**，见下方「J. 显示专辑名称」。
 11. **【新增】搜索过程中显示"没搜到"而不是"搜索中"**：`doSearch()`（[:515](examples/Listening%20Player.dc.html:515)）在异步请求返回前就把 `hasSearched:true, searchResults:[]` 写进 state，导致请求进行中的这段时间会先显示空结果提示。需要加一个独立的 `isSearching` 状态区分"搜索中"与"搜索完但没结果"。
 12. **【高优先级】播放后"正在播放"标题不切换**：根因是 `_apiIdSeq`（[:386](examples/Listening%20Player.dc.html:386)）从 0 自增给每条新搜索结果分配 `id`，与 `makeQueue()`（[:340](examples/Listening%20Player.dc.html:340)）硬编码的 mock 种子数据 `id:1~7` 共用同一个 id 空间。用 node 模拟验证过（2026-07-08 下线酷我后按当前三源 netease/qq/soundcloud 重新算了一遍）：首次搜索、三源全开时，交错顺序是 netease→qq→soundcloud，前 7 条结果精确拿到 `id:1~7`，**每一条都会撞上 mock 队列里对应 id 的条目**（比如 SoundCloud 第一条结果分配到 `id:3`，撞上 mock 里的「第七个路口」——凑巧两者都标了 `source:'soundcloud'`，但标题/歌手对不上，仍然是错的）。`playTrackAt()` 里 `!s.queue.find(t => t.id === id)`（[:744](examples/Listening%20Player.dc.html:744)）误判为"已在队列"（其实是撞上了不相关的 mock 条目），真正点的曲目从未被写入 `state.queue`；音频本身能正常播放（`loadAndPlay` 用的是 `searchResults` 里正确的 track 对象），但界面"正在播放"信息来自 `s.queue.find(id===currentId)`，找到的是旧 mock 条目，标题/歌手就一直是错的。这个 bug 对三个源一视同仁，只是撞车的具体 mock 条目不同。修法：`normalizeTrack` 的 id 生成要避开 mock 种子已占用的 id 区间（比如 `_apiIdSeq` 初始值设成比 mock 最大 id 大，或者 mock 种子和搜索结果分别用不同前缀的 uid 而不是数字 id 做 key）。
 
@@ -217,6 +217,26 @@ eval(c+';globalThis.A=ListeningAPI');(async()=>{
 | `examples/api-bundle.js` | 重新 `npm run build` 生成，不再包含酷我模块 |
 
 顺带影响：F 节待办第 7 条（修复酷我播放失败）作废；第 12 条（播放标题不切换）的 id 碰撞位置从四源版本的 `id:4` 重算成了三源版本（每个源的首条结果都会撞车，见该条最新描述）。
+
+### J. 显示专辑名称（2026-07-08）
+
+在 `examples/Listening Player.dc.html` 里新增 `fmtArtistAlbum(t)` 辅助函数（`t.album` 非空时返回 `"歌手 - 专辑名称"`，为空时只返回歌手名，不拼多余的 " - "），接入三处渲染：
+
+| 位置 | 改动 |
+|------|------|
+| 播放器「正在播放」信息区 | `renderVals()` 里 `track` 对象新增 `artistDisplay` 字段；模板 `{{ v.track.artist }}` → `{{ v.track.artistDisplay }}` |
+| 队列面板 | `queueRender` 每项新增 `artistDisplay`；模板 `{{ item.artist }} · {{ item.sourceLabel }}` → `{{ item.artistDisplay }} · {{ item.sourceLabel }}` |
+| 歌单 / 搜索结果列表（`tracksRender`，两者共用同一渲染） | 每项新增 `artistDisplay`；模板 `{{ t.artist }}` → `{{ t.artistDisplay }}` |
+
+原始 `artist` 字段保留不变（搜索过滤逻辑 `filteredSearch` 仍用 `t.artist`），只是新增了展示专用字段。顺带给 `makeQueue()` 的 mock 种子数据补了几条 `album` 值，方便本地直接肉眼验证渲染效果。
+
+**验证方式**：headless Chromium 渲染实测 —— mock 队列/歌单里网易云「折叠时区」「纸间信件」「夜行灯塔」等显示为「半透明 - 折叠时区」「林间信号 - 灯塔笔记」；SoundCloud 的「第七个路口」「安静的光」（mock 数据未给 album）只显示歌手名，无多余符号。真实搜索实测（关键词"周杰伦"，经本地代理走通网易云/QQ/SoundCloud 三源）：QQ 音乐结果初始 `album` 为空，点击播放触发 `ensureTrackDetails` 后该行即时刷新为「周杰伦 - 叶惠美」，格式符合预期。
+
+**网易云专辑名补齐（2026-07-08 追加）**：搜索完当天又跟进查了一下网易云能不能拿到专辑名。结论：`api.qijieya.cn/meting/` 这个 meting 代理接口本身返回格式固定只有 `name/artist/url/pic/lrc` 5 个字段，没有专辑名，这条路走不通；但网易云官方接口 `interface3.music.163.com/api/v3/song/detail?c=[{"id":<songid>}]`（用搜索结果里已经拿到的 `songid`，无需登录/密钥）返回的 `songs[0].al.name` 就是专辑名，`curl` 直接实测可用。问题是这个官方接口不发 `Access-Control-Allow-Origin`，浏览器端直连会被 CORS 拦，所以在 `src/api/netease.js` 里新增了 `fetchNeteaseAlbum(songid)`，走本地代理 `:8765/proxy?url=`（复用 `proxy-server.mjs` 已有的通用转发端点，SoundCloud 也是这么用的）取数据；在 `fetchNeteaseDetails()` 里和歌词请求一起用 `Promise.all` 并行发起，代理不可用或请求失败时静默放弃（`album` 留空，不影响播放主流程）。**浏览器渲染实测**：搜索"周杰伦"，网易云结果「布拉格广场」点击播放后，搜索结果行从「蔡依林/周杰伦」刷新为「蔡依林/周杰伦 - 看我72变」，与 QQ 音乐链路验证方式一致。
+
+**SoundCloud 现状（未改动）**：SoundCloud 的搜索 / 详情接口本身就不带专辑概念（`album` 字段固定空字符串，`src/api/soundcloud.js` 未改），保持只显示歌手名，符合预期（用户确认「那个一般没有也正常」，不用额外处理）。
+
+**顺带修的环境问题**：本次用 preview 工具起静态服务器验证时发现，`python3 -m http.server`（`package.json` 里 `npm run serve` 用的也是这个）经 preview 工具的进程沙箱启动会在 `os.getcwd()` 处抛 `PermissionError` 起不来；同一个命令用普通 shell（Bash 工具/终端）直接跑不受影响（此前长期在跑的 `:4444`/`:8765` 两个服务就是证明），只是 preview 工具自己的启动路径命中了这条沙箱限制，与本次改动无关，是环境限制。临时写了一个等价的 Node 静态文件服务器 `examples/static-server.mjs`（只 serve `examples/` 目录下文件），并把 `.claude/launch.json` 里 `static` 配置的 `runtimeExecutable` 从 `python3` 换成了它，同样监听 4444。`package.json` 的 `npm run serve` 脚本本身未改动，仍是 `python3 -m http.server`，直接在终端跑不受影响。
 
 ---
 

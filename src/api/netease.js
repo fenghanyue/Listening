@@ -5,6 +5,25 @@
 
 const BASE_URL = 'https://api.qijieya.cn/meting/';
 
+// meting 的 search/url/lrc 接口本身不带专辑名（固定 name/artist/url/pic/lrc 5 字段），
+// 专辑名需要额外查网易云官方接口，且该接口不发 CORS 头，浏览器端必须经本地代理 :8765 转发
+const NETEASE_PROXY = 'http://localhost:8765';
+
+/**
+ * 查专辑名（走本地代理，代理不可用或请求失败时静默放弃，不影响播放主流程）
+ */
+async function fetchNeteaseAlbum(songid) {
+  const target = `https://interface3.music.163.com/api/v3/song/detail?c=${encodeURIComponent(JSON.stringify([{ id: Number(songid) }]))}`;
+  try {
+    const r = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(target)}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return '';
+    const json = await r.json();
+    return json?.songs?.[0]?.al?.name || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 /**
  * 从 URL 里提取 query param 的值（不依赖 window.location）
  */
@@ -94,28 +113,40 @@ export async function fetchNeteaseDetails(track) {
     }
   }
 
-  // 获取歌词
+  // 获取歌词 + 专辑名（并行，互不影响；专辑名查询失败静默放弃）
+  const jobs = [];
+
   if (!track.lrc && track.lrcUrl) {
-    try {
-      const lr = await fetch(track.lrcUrl);
-      const contentType = (lr.headers.get('content-type') || '').toLowerCase();
-      if (contentType.includes('json')) {
-        const lj = await lr.json();
-        track.lrc =
-          (typeof lj === 'string' ? lj : null) ||
-          lj?.lrc ||
-          lj?.lyric ||
-          lj?.data?.lrc ||
-          lj?.data?.lyric ||
-          (typeof lj?.data === 'string' ? lj.data : null) ||
-          null;
-      } else {
-        track.lrc = await lr.text();
+    jobs.push((async () => {
+      try {
+        const lr = await fetch(track.lrcUrl);
+        const contentType = (lr.headers.get('content-type') || '').toLowerCase();
+        if (contentType.includes('json')) {
+          const lj = await lr.json();
+          track.lrc =
+            (typeof lj === 'string' ? lj : null) ||
+            lj?.lrc ||
+            lj?.lyric ||
+            lj?.data?.lrc ||
+            lj?.data?.lyric ||
+            (typeof lj?.data === 'string' ? lj.data : null) ||
+            null;
+        } else {
+          track.lrc = await lr.text();
+        }
+      } catch (e) {
+        console.warn('netease lyric fetch failed:', e);
       }
-    } catch (e) {
-      console.warn('netease lyric fetch failed:', e);
-    }
+    })());
   }
+
+  if (!track.album && track.songid) {
+    jobs.push((async () => {
+      track.album = await fetchNeteaseAlbum(track.songid);
+    })());
+  }
+
+  if (jobs.length) await Promise.all(jobs);
 
   track.detailsLoaded = true;
   return track;
