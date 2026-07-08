@@ -409,32 +409,44 @@ var ListeningAPI = (() => {
     "O7atZypwLvuWSY9hWnnQ3vrLTHH7wqMe"
     // 2025-07 从 soundcloud.com 提取
   ];
+  var SC_PROXY = "http://localhost:8765";
+  var scProxyAvailable = null;
+  async function checkScProxy() {
+    if (scProxyAvailable !== null) return scProxyAvailable;
+    try {
+      const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(3e3) });
+      scProxyAvailable = r.ok;
+    } catch (e) {
+      scProxyAvailable = false;
+    }
+    return scProxyAvailable;
+  }
+  async function scFetchJson(url, timeoutMs = 1e4) {
+    if (await checkScProxy()) {
+      const r2 = await fetch(`${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeoutMs) });
+      if (!r2.ok) throw new Error(`proxy ${r2.status}`);
+      return r2.json();
+    }
+    const r = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!r.ok) throw new Error(`direct ${r.status}`);
+    return r.json();
+  }
   async function getSCClientId() {
     if (scClientId) return scClientId;
     const scraped = await scrapeClientIdFromPage();
     if (scraped) {
       try {
-        const r = await fetch(
-          `https://api-v2.soundcloud.com/tracks/1?client_id=${scraped}`,
-          { signal: AbortSignal.timeout(5e3) }
-        );
-        if (r.ok) {
-          scClientId = scraped;
-          return scClientId;
-        }
+        await scFetchJson(`https://api-v2.soundcloud.com/tracks/1?client_id=${scraped}`, 5e3);
+        scClientId = scraped;
+        return scClientId;
       } catch (e) {
       }
     }
     for (const id of SC_FALLBACK_IDS) {
       try {
-        const r = await fetch(
-          `https://api-v2.soundcloud.com/tracks/1?client_id=${id}`,
-          { signal: AbortSignal.timeout(5e3) }
-        );
-        if (r.ok) {
-          scClientId = id;
-          return scClientId;
-        }
+        await scFetchJson(`https://api-v2.soundcloud.com/tracks/1?client_id=${id}`, 5e3);
+        scClientId = id;
+        return scClientId;
       } catch (e) {
       }
     }
@@ -446,7 +458,7 @@ var ListeningAPI = (() => {
     const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}&linked_partitioning=1`;
     const results = [];
     try {
-      const json = await (await fetch(url, { signal: AbortSignal.timeout(1e4) })).json();
+      const json = await scFetchJson(url);
       const tracks = json.collection || [];
       tracks.forEach((it, idx) => {
         const username = it.user?.username || "Unknown";
@@ -486,11 +498,7 @@ var ListeningAPI = (() => {
       let d = null;
       let transcodings = t.scTranscodings || null;
       if (!transcodings) {
-        const r = await fetch(
-          `https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`,
-          { signal: AbortSignal.timeout(1e4) }
-        );
-        d = await r.json();
+        d = await scFetchJson(`https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`);
         transcodings = d.media?.transcodings || [];
         t.cover = d.artwork_url || d.user?.avatar_url || t.cover;
         t.title = d.title || t.title;
@@ -510,8 +518,23 @@ var ListeningAPI = (() => {
         });
         scored.sort((a, b) => b.score - a.score);
         const best = scored[0];
-        t.scIsHLS = best.format?.protocol === "hls";
-        t.audioUrl = `${best.url}?client_id=${cid}`;
+        const isHLS = best.format?.protocol === "hls";
+        const mediaUrl = `${best.url}?client_id=${cid}`;
+        try {
+          const resolved = await scFetchJson(mediaUrl);
+          if (resolved && resolved.url) {
+            if (isHLS) {
+              t.audioUrl = resolved.url;
+            } else {
+              t.audioUrl = await checkScProxy() ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
+            }
+          } else {
+            t.audioUrl = mediaUrl;
+          }
+        } catch (e) {
+          t.audioUrl = mediaUrl;
+        }
+        t.scIsHLS = isHLS;
         if (best.preset) {
           const m = best.preset.match(/(\d+)/);
           t.quality = m ? m[1] + "k" : "128k";

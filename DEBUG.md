@@ -50,7 +50,7 @@
 | 按需取播放链接 | ✅ 已联网实测 | `loadAndPlay` → `API.ensureTrackDetails(track)`；网易云/QQ 实测返回 `audioUrl` + `qualityLabel` |
 | 播完自动切歌 | ✅ | `ended` → `handleTrackEnd` |
 | 播放失败提示 | ✅ | `_onError` → toast「播放失败，请尝试其他音源」 |
-| SoundCloud 播放 | ❌ | DC 页 **未加载 hls.js**；`src/api/soundcloud.js` 会把流标记为 `scIsHLS`（注释亦写明「浏览器需要 hls.js」），普通 `<audio>` 播不了 HLS |
+| SoundCloud 播放 | ✅ 数据层实测 / ⚠️ 浏览器端到端受环境限制 | DC 页已加载 `hls.js`（jsDelivr CDN）；`loadAndPlay` 按 `track.scIsHLS` 分流到 `Hls` 实例播放（`MANIFEST_PARSED` 触发播放、`ERROR` 兜底提示）或原生 `<audio>`（Safari）；`stopHLS()` 在切歌/组件卸载时清理实例。同时修了 `src/api/soundcloud.js` 里的一个 bug：原来 `audioUrl` 是未解析的 transcoding resolve 端点（返回 JSON，不是 m3u8），现在补了第二次 resolve 请求拿到真实签名 CDN 地址；并补回本地代理 `:8765` 的探测/优雅降级（`scFetchJson`，代理不可用时直连）。Node 直连实测：`ensureTrackDetails` 返回的 `audioUrl` 可直接 `curl` 到 `#EXTM3U` 开头的真实 m3u8 清单。浏览器内「点击播放→真实出声」未能实测——本 sandbox 代理拦截 Chromium 发往外部 CDN 的请求（连 React 自身在本环境同样加载失败，见下方「E」节），是既有环境限制，非本次改动引入的缺陷 |
 
 **队列**
 
@@ -113,7 +113,7 @@
 |---|------|----------|--------|
 | 1 | localStorage 持久化 | `loadPlaylists`/`savePlaylists` | 高 |
 | 2 | 歌单 JSON 导入/导出 | `exportPlaylists`/`importPlaylists`/`doExport`/`doImport` | 高 |
-| 3 | SoundCloud HLS 播放 | 加载 `hls.js` + 走本地代理 :8765 + `stopHLS` | 中 |
+| 3 | SoundCloud HLS 播放 | 加载 `hls.js` + 走本地代理 :8765 + `stopHLS` | ✅ 已完成（2026-07-08，见上方「SoundCloud 播放」行） |
 | 4 | JOOX 音源 | 搜索/详情 + UI 芯片 | 中 |
 | 5 | 列表 / 网格视图切换 | `setTrackViewMode` | 中 |
 | 6 | 歌单链接解析导入（URL→曲目） | 两版都是桩，实为**从未实现** | 低 |
@@ -148,12 +148,17 @@ eval(c+';globalThis.A=ListeningAPI');(async()=>{
 - **搜索 + 详情**：node 加载真实 bundle 实测 —— 网易云/QQ 稳定返回 `audioUrl`/`lrc`/音质；酷我在本环境偶发代理 DNS 失败（间歇可用）。
 - **限制**：浏览器内「搜索→播放」端到端交互未跑通 —— 本环境代理对 Chromium 发往 localhost 的子资源请求返回 405（非 CONNECT），并会拦截外部 CDN；属环境限制，非页面缺陷。故 UI 交互以「渲染实测 + 接口实测 + 静态代码核对」三者交叉印证。
 
+**2026-07-08 SoundCloud HLS 播放实现，本次会话（sandbox）复测**：
+- `src/api/soundcloud.js` 的 resolve-URL 修复：node 直连 `searchSoundCloud` + `fetchSoundCloudDetails`，确认 `scIsHLS===true` 且 `audioUrl` 已是带 `Signature=` 的真实签名 CDN 地址；额外 `curl` 该地址返回 `#EXTM3U` 开头的合法 m3u8 —— 数据层实测通过。
+- 该验证同时天然覆盖了「本地代理未启动」的降级路径（本 sandbox 未起 `proxy-server.mjs`，`checkScProxy()` 探测失败后直连成功，未阻塞/未抛错）。
+- headless Chromium 复测（本次单独用 Playwright + `--proxy-server` 显式配置代理）：外部 CDN（`unpkg.com` 的 React、`cdn.jsdelivr.net` 的 `hls.js`）均 `ERR_CONNECTION_RESET`，页面因 React 加载失败而未渲染——与上一条「页面挂载/渲染」实测结论不一致，说明本环境对 Chromium 外部 CDN 请求的限制在本次会话中更严格（或环境状态已变化）；本地文件（`api-bundle.js`/`support.js`）和 `#player-audio` 元素本身加载正常，说明限制在「外部 CDN」而非页面结构。因此 `hls.js` 分支/`stopHLS()` 的正确性以「JS 语法校验通过 + 与旧版 `standalone.html`（git 历史 `c5a8a63`）已验证过的 hls.js 生命周期模式一致」佐证，未能做到真实点击播放出声的端到端验证。
+
 ### F. 后续待办
 
 1. `confirmImport` 落地：网易云/QQ 歌单链接 → 解析曲目 → 写入指定歌单 / 「喜欢的音乐」。
 2. 歌单/喜欢/队列 localStorage 持久化。
 3. 歌单 JSON 导入/导出。
-4. DC 页补 `hls.js`，打通 SoundCloud HLS 播放（配合 :8765 代理）。
+4. ~~DC 页补 `hls.js`，打通 SoundCloud HLS 播放（配合 :8765 代理）。~~ ✅ 已完成（2026-07-08），见上方「SoundCloud 播放」行；浏览器端到端出声受本 sandbox 网络限制未能实测。
 5. UI 暴露 JOOX 音源芯片。
 6. （可选）列表/网格视图切换。
 

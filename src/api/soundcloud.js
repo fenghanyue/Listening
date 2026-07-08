@@ -25,6 +25,33 @@ const SC_FALLBACK_IDS = [
   'O7atZypwLvuWSY9hWnnQ3vrLTHH7wqMe', // 2025-07 从 soundcloud.com 提取
 ];
 
+// SoundCloud api-v2 不带 CORS 头，浏览器直连会被拦截；本地代理可绕过。
+// 探测一次结果就缓存，代理不可用时优雅降级为直连（Node/无 CORS 限制环境下仍可用）。
+const SC_PROXY = 'http://localhost:8765';
+let scProxyAvailable = null;
+
+async function checkScProxy() {
+  if (scProxyAvailable !== null) return scProxyAvailable;
+  try {
+    const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(3000) });
+    scProxyAvailable = r.ok;
+  } catch (e) {
+    scProxyAvailable = false;
+  }
+  return scProxyAvailable;
+}
+
+async function scFetchJson(url, timeoutMs = 10000) {
+  if (await checkScProxy()) {
+    const r = await fetch(`${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!r.ok) throw new Error(`proxy ${r.status}`);
+    return r.json();
+  }
+  const r = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!r.ok) throw new Error(`direct ${r.status}`);
+  return r.json();
+}
+
 async function getSCClientId() {
   if (scClientId) return scClientId;
 
@@ -33,28 +60,18 @@ async function getSCClientId() {
   if (scraped) {
     // 验证是否能用于 API
     try {
-      const r = await fetch(
-        `https://api-v2.soundcloud.com/tracks/1?client_id=${scraped}`,
-        { signal: AbortSignal.timeout(5000) }
-      );
-      if (r.ok) {
-        scClientId = scraped;
-        return scClientId;
-      }
+      await scFetchJson(`https://api-v2.soundcloud.com/tracks/1?client_id=${scraped}`, 5000);
+      scClientId = scraped;
+      return scClientId;
     } catch (e) { /* skip */ }
   }
 
   // 2. 尝试备用硬编码 key
   for (const id of SC_FALLBACK_IDS) {
     try {
-      const r = await fetch(
-        `https://api-v2.soundcloud.com/tracks/1?client_id=${id}`,
-        { signal: AbortSignal.timeout(5000) }
-      );
-      if (r.ok) {
-        scClientId = id;
-        return scClientId;
-      }
+      await scFetchJson(`https://api-v2.soundcloud.com/tracks/1?client_id=${id}`, 5000);
+      scClientId = id;
+      return scClientId;
     } catch (e) { /* skip */ }
   }
 
@@ -74,7 +91,7 @@ export async function searchSoundCloud(kw, limit) {
   const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}&linked_partitioning=1`;
   const results = [];
   try {
-    const json = await (await fetch(url, { signal: AbortSignal.timeout(10000) })).json();
+    const json = await scFetchJson(url);
     const tracks = json.collection || [];
     tracks.forEach((it, idx) => {
       const username = it.user?.username || 'Unknown';
@@ -124,11 +141,7 @@ export async function fetchSoundCloudDetails(t) {
 
     // 2. 否则重新请求 track 详情
     if (!transcodings) {
-      const r = await fetch(
-        `https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`,
-        { signal: AbortSignal.timeout(10000) }
-      );
-      d = await r.json();
+      d = await scFetchJson(`https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`);
       transcodings = d.media?.transcodings || [];
       t.cover = d.artwork_url || d.user?.avatar_url || t.cover;
       t.title = d.title || t.title;
@@ -160,9 +173,30 @@ export async function fetchSoundCloudDetails(t) {
       });
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
+      const isHLS = (best.format?.protocol === 'hls');
+      // best.url 是 transcoding 的 "resolve" 端点，请求它返回的是 JSON
+      // {"url": "<真实签名 CDN 地址>"}，不是可直接播放的媒体地址，需要再请求一次。
+      const mediaUrl = `${best.url}?client_id=${cid}`;
+      try {
+        const resolved = await scFetchJson(mediaUrl);
+        if (resolved && resolved.url) {
+          if (isHLS) {
+            // AAC HLS CDN（playback.media-streaming.soundcloud.cloud）自带 CORS，直连即可
+            t.audioUrl = resolved.url;
+          } else {
+            // progressive mp3 的 CDN（CloudFront）部分区域无 CORS/被墙，代理可用时走二进制转发
+            t.audioUrl = (await checkScProxy())
+              ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}`
+              : resolved.url;
+          }
+        } else {
+          t.audioUrl = mediaUrl;
+        }
+      } catch (e) {
+        t.audioUrl = mediaUrl;
+      }
       // 标记是否为 HLS（浏览器需要 hls.js 播放）
-      t.scIsHLS = (best.format?.protocol === 'hls');
-      t.audioUrl = `${best.url}?client_id=${cid}`;
+      t.scIsHLS = isHLS;
       if (best.preset) {
         const m = best.preset.match(/(\d+)/);
         t.quality = m ? m[1] + 'k' : '128k';

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
 <script src="./support.js"></script>
 <script src="./api-bundle.js"></script>
 </head>
@@ -420,7 +421,12 @@ class Component extends DCLogic {
       this._audio.removeEventListener('error', this._onError);
       this._audio.removeEventListener('loadedmetadata', this._onMeta);
     }
+    this.stopHLS();
     clearTimeout(this._toastTimer);
+  }
+
+  stopHLS() {
+    if (this._hls) { this._hls.destroy(); this._hls = null; }
   }
 
   patch(p) { this.setState(s => (typeof p === 'function' ? p(s) : p)); }
@@ -657,10 +663,36 @@ class Component extends DCLogic {
     // 如果已有播放链接就直接播放，否则加载详情
     const go = () => {
       if (!track.audioUrl) { this.showToast('暂无可用播放链接'); return; }
-      a.src = track.audioUrl;
+      this.stopHLS();
       a.currentTime = 0;
       a.volume = this.state.volume / 100;
-      a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+
+      const isHLS = track.scIsHLS || track.audioUrl.includes('.m3u8');
+      if (isHLS && window.Hls && Hls.isSupported()) {
+        const hls = new Hls({ enableWorker: false });
+        this._hls = hls;
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+        });
+        hls.on(Hls.Events.ERROR, (_evt, data) => {
+          if (!data.fatal) return;
+          console.error('hls error:', data);
+          this.stopHLS();
+          this.showToast('播放失败，请尝试其他音源');
+          this.setState({ playing: false });
+        });
+        hls.loadSource(track.audioUrl);
+        hls.attachMedia(a);
+      } else if (isHLS && a.canPlayType('application/vnd.apple.mpegurl')) {
+        // Safari 原生支持 HLS
+        a.src = track.audioUrl;
+        a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+      } else if (isHLS) {
+        this.showToast('当前浏览器不支持该音源，请尝试其他音源');
+      } else {
+        a.src = track.audioUrl;
+        a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+      }
     };
 
     if (track.audioUrl) {
