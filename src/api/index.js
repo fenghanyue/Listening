@@ -1,11 +1,10 @@
 /**
  * 聚合跨平台音乐搜索
- * 并行调用网易云 / QQ / 酷我 / JOOX，按源交错排列结果
+ * 并行调用网易云 / QQ / SoundCloud / JOOX，按源交错排列结果
  */
 
 import { searchNetease, fetchNeteaseDetails } from './netease.js';
 import { searchQQ, fetchQQDetails } from './qq.js';
-import { searchKuwo, fetchKuwoDetails } from './kuwo.js';
 import { searchJoox, fetchJooxDetails } from './joox.js';
 import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
 
@@ -13,11 +12,11 @@ import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
  * 聚合搜索（多源并行）
  * @param {object} options
  * @param {string} options.keyword - 搜索关键词
- * @param {string[]} [options.sources=['netease','qq','kuwo']] - 启用的音乐源
+ * @param {string[]} [options.sources=['netease','qq','soundcloud']] - 启用的音乐源
  * @param {number} [options.limit=10] - 每源取多少首
  * @returns {Promise<Array>} 按源交错排列的 track 数组
  */
-export async function searchAll({ keyword, sources = ['netease', 'qq', 'kuwo'], limit = 10 } = {}) {
+export async function searchAll({ keyword, sources = ['netease', 'qq', 'soundcloud'], limit = 10 } = {}) {
   if (!keyword) throw new Error('keyword is required');
 
   const tasks = [];
@@ -32,12 +31,6 @@ export async function searchAll({ keyword, sources = ['netease', 'qq', 'kuwo'], 
   if (sources.includes('qq')) {
     tasks.push(
       searchQQ(keyword, limit).then(tracks => ({ source: 'qq', tracks }))
-    );
-  }
-  // 酷我
-  if (sources.includes('kuwo')) {
-    tasks.push(
-      searchKuwo(keyword, limit).then(tracks => ({ source: 'kuwo', tracks }))
     );
   }
   // JOOX
@@ -68,7 +61,7 @@ export async function searchAll({ keyword, sources = ['netease', 'qq', 'kuwo'], 
 
 /**
  * 按源交错排列结果（保持各源内部顺序）
- * 如 [netease1, qq1, kuwo1, netease2, qq2, kuwo2, ...]
+ * 如 [netease1, qq1, soundcloud1, netease2, qq2, soundcloud2, ...]
  */
 function interleave(grouped, order) {
   const idx = {};
@@ -106,8 +99,6 @@ export async function ensureTrackDetails(track) {
       return fetchNeteaseDetails(track);
     case 'qq':
       return fetchQQDetails(track);
-    case 'kuwo':
-      return fetchKuwoDetails(track);
     case 'joox':
       return fetchJooxDetails(track);
     case 'soundcloud':
@@ -122,6 +113,5 @@ export async function ensureTrackDetails(track) {
  */
 export { searchNetease, fetchNeteaseDetails } from './netease.js';
 export { searchQQ, fetchQQDetails } from './qq.js';
-export { searchKuwo, fetchKuwoDetails } from './kuwo.js';
 export { searchJoox, fetchJooxDetails } from './joox.js';
 export { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';

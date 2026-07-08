@@ -15,8 +15,8 @@
     .source-tag { font-size: 11px; padding: 1px 5px; border-radius: 3px; margin-right: 6px; }
     .netease { background: #ff6b6b; color: #fff; }
     .qq { background: #4dd0e1; color: #fff; }
-    .kuwo { background: #ba68c8; color: #fff; }
     .joox { background: #65f7c4; color: #000; }
+    .soundcloud { background: #ff8800; color: #fff; }
     #player { margin-top: 16px; }
   </style>
 </head>
@@ -58,7 +58,7 @@
 
       let results = [];
       try {
-        results = await searchAll({ keyword: kw, sources: ['netease', 'qq', 'kuwo'], limit: 5 });
+        results = await searchAll({ keyword: kw, sources: ['netease', 'qq', 'soundcloud'], limit: 5 });
       } catch (e) {
         status.innerHTML = `<span class="error">请求失败: ${e.message}</span>`;
         console.error(e);

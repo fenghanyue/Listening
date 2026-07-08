@@ -14,7 +14,7 @@ input { padding: 10px 16px; border-radius: 20px; border: 1px solid #49454F; back
 .track .src { font-size: 11px; padding: 2px 8px; border-radius: 5px; font-weight: 600; }
 .src-netease { background: rgba(255,107,107,.2); color: #ff6b6b; }
 .src-qq { background: rgba(77,208,225,.2); color: #4dd0e1; }
-.src-kuwo { background: rgba(186,104,200,.2); color: #ba68c8; }
+.src-soundcloud { background: rgba(255,136,0,.2); color: #ff8800; }
 .count { font-size: 13px; color: #CAC4D0; margin-bottom: 8px; }
 .err { color: #FFB4AB; }
 </style>
@@ -53,12 +53,35 @@ async function searchQQ(kw, limit) {
   }).filter(Boolean);
 }
 
-async function searchKuwo(kw, limit) {
-  const url = `https://kw-api.cenguigui.cn/?name=${encodeURIComponent(kw)}&page=1&limit=${encodeURIComponent(limit)}`;
-  const r = await fetch(url);
+// SoundCloud api-v2 不发 CORS 头，浏览器端要走本地代理 proxy-server.mjs（:8765），不可用时退回直连兜底
+const SC_PROXY = 'http://localhost:8765';
+let scProxyAvailable = null;
+async function checkScProxy() {
+  if (scProxyAvailable !== null) return scProxyAvailable;
+  try {
+    const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(3000) });
+    scProxyAvailable = r.ok;
+  } catch (e) { scProxyAvailable = false; }
+  return scProxyAvailable;
+}
+
+async function searchSoundCloud(kw, limit) {
+  let cid = 'O7atZypwLvuWSY9hWnnQ3vrLTHH7wqMe';
+  const useProxy = await checkScProxy();
+  if (useProxy) {
+    try {
+      const r = await fetch(`${SC_PROXY}/sc-client-id`);
+      const j = await r.json();
+      if (j.client_id) cid = j.client_id;
+    } catch (e) { /* 用兜底 cid */ }
+  }
+  const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}`;
+  const r = useProxy
+    ? await fetch(`${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`)
+    : await fetch(url);
   const json = await r.json();
-  if (json.code !== 200 || !Array.isArray(json.data)) return [];
-  return json.data.map(it => ({ id: ++_id, uid: `kuwo-${it.rid}`, source: 'kuwo', songid: it.rid, title: it.name || '', artist: it.artist || '', duration: 200 }));
+  const tracks = json.collection || [];
+  return tracks.map(it => ({ id: ++_id, uid: `sc-${it.id}`, source: 'soundcloud', songid: it.id, title: it.title || '', artist: it.user?.username || '', duration: 200 }));
 }
 
 async function doTest() {
@@ -69,27 +92,27 @@ async function doTest() {
   document.getElementById('count').textContent = '';
 
   const start = Date.now();
-  const [ne, qq, kwRes] = await Promise.all([
+  const [ne, qq, sc] = await Promise.all([
     searchNetease(kw, 6).catch(() => []),
     searchQQ(kw, 6).catch(() => []),
-    searchKuwo(kw, 6).catch(() => []),
+    searchSoundCloud(kw, 6).catch(() => []),
   ]);
 
   // 交错排列
   const tracks = [];
-  const maxLen = Math.max(ne.length, qq.length, kwRes.length);
+  const maxLen = Math.max(ne.length, qq.length, sc.length);
   for (let i = 0; i < maxLen; i++) {
     if (ne[i]) tracks.push(ne[i]);
     if (qq[i]) tracks.push(qq[i]);
-    if (kwRes[i]) tracks.push(kwRes[i]);
+    if (sc[i]) tracks.push(sc[i]);
   }
 
   const elapsed = Date.now() - start;
   document.getElementById('status').textContent = `耗时 ${elapsed}ms`;
-  document.getElementById('count').textContent = `共 ${tracks.length} 首（网易云 ${ne.length} · QQ ${qq.length} · 酷我 ${kwRes.length}）`;
+  document.getElementById('count').textContent = `共 ${tracks.length} 首（网易云 ${ne.length} · QQ ${qq.length} · SoundCloud ${sc.length}）`;
 
-  const srcClass = { netease: 'src-netease', qq: 'src-qq', kuwo: 'src-kuwo' };
-  const srcLabel = { netease: '网易云', qq: 'QQ', kuwo: '酷我' };
+  const srcClass = { netease: 'src-netease', qq: 'src-qq', soundcloud: 'src-soundcloud' };
+  const srcLabel = { netease: '网易云', qq: 'QQ', soundcloud: 'SoundCloud' };
   document.getElementById('results').innerHTML = tracks.map((t, i) =>
     `<div class="track"><span class="src ${srcClass[t.source] || ''}">${srcLabel[t.source] || t.source}</span> <strong>${(i+1)}.</strong> ${t.title} — ${t.artist}</div>`
   ).join('');

@@ -22,13 +22,11 @@ var ListeningAPI = (() => {
   __export(index_exports, {
     ensureTrackDetails: () => ensureTrackDetails,
     fetchJooxDetails: () => fetchJooxDetails,
-    fetchKuwoDetails: () => fetchKuwoDetails,
     fetchNeteaseDetails: () => fetchNeteaseDetails,
     fetchQQDetails: () => fetchQQDetails,
     fetchSoundCloudDetails: () => fetchSoundCloudDetails,
     searchAll: () => searchAll,
     searchJoox: () => searchJoox,
-    searchKuwo: () => searchKuwo,
     searchNetease: () => searchNetease,
     searchQQ: () => searchQQ,
     searchSoundCloud: () => searchSoundCloud
@@ -211,80 +209,12 @@ var ListeningAPI = (() => {
     return track;
   }
 
-  // src/api/kuwo.js
-  var SEARCH_URL2 = "https://kw-api.cenguigui.cn/";
-  async function searchKuwo(kw, limit = 10) {
-    const url = `${SEARCH_URL2}?name=${encodeURIComponent(kw)}&page=1&limit=${encodeURIComponent(limit)}`;
-    const results = [];
-    try {
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json.code !== 200 || !Array.isArray(json.data)) return results;
-      json.data.forEach((it, idx) => {
-        results.push({
-          uid: `kuwo-${it.rid}`,
-          source: "kuwo",
-          displayIndex: idx + 1,
-          keyword: kw,
-          songid: it.rid,
-          title: it.name || "",
-          artist: it.artist || "",
-          album: it.album || "",
-          cover: it.pic || null,
-          audioUrl: null,
-          lrc: null,
-          lrcUrl: null,
-          detailsLoaded: false,
-          quality: null,
-          qualityLabel: null
-        });
-      });
-    } catch (e) {
-      console.error("kuwo search error:", e);
-    }
-    return results;
-  }
-  async function fetchKuwoDetails(track) {
-    const api = `${SEARCH_URL2}?id=${encodeURIComponent(track.songid)}&type=song&level=zp&format=json`;
-    try {
-      const res = await fetch(api);
-      const j = await res.json();
-      if (!j || j.code !== 200 || !j.data) throw new Error("kuwo detail failed");
-      const d = j.data;
-      Object.assign(track, {
-        title: d.name || track.title,
-        artist: d.artist || track.artist,
-        album: d.album || track.album,
-        cover: d.pic || track.cover,
-        audioUrl: d.url || track.audioUrl,
-        lrc: d.lyric || track.lrc || null,
-        lrcUrl: null,
-        detailsLoaded: true
-      });
-      if (track.audioUrl) {
-        const base = track.audioUrl.split("?")[0].toLowerCase();
-        const extMatch = base.match(/\.([a-z0-9]+)$/);
-        const ext = extMatch ? extMatch[1] : "";
-        if (["flac", "wav", "ape", "alac", "aiff"].includes(ext)) {
-          track.quality = "lossless";
-          track.qualityLabel = "LOSSLESS";
-        } else {
-          track.quality = "320k";
-          track.qualityLabel = "320K";
-        }
-      }
-    } catch (e) {
-      console.error("kuwo detail error:", e);
-    }
-    return track;
-  }
-
   // src/api/joox.js
-  var SEARCH_URL3 = "https://apicx.asia/api/joox_music";
+  var SEARCH_URL2 = "https://apicx.asia/api/joox_music";
   var JOOX_TOKEN = "f84ao9lMF_q7husBWRfgUw";
   var JOOX_BR = 4;
   async function searchJoox(kw, limit = 10) {
-    const url = `${SEARCH_URL3}?msg=${encodeURIComponent(kw)}&token=${encodeURIComponent(JOOX_TOKEN)}&br=${encodeURIComponent(JOOX_BR)}`;
+    const url = `${SEARCH_URL2}?msg=${encodeURIComponent(kw)}&token=${encodeURIComponent(JOOX_TOKEN)}&br=${encodeURIComponent(JOOX_BR)}`;
     const results = [];
     try {
       const res = await fetch(url);
@@ -362,7 +292,7 @@ var ListeningAPI = (() => {
   }
   async function fetchJooxDetails(track) {
     const n = track.jooxIndex || track.displayIndex || 1;
-    const url = `${SEARCH_URL3}?msg=${encodeURIComponent(track.keyword)}&n=${n}&token=${encodeURIComponent(JOOX_TOKEN)}&br=${encodeURIComponent(JOOX_BR)}`;
+    const url = `${SEARCH_URL2}?msg=${encodeURIComponent(track.keyword)}&n=${n}&token=${encodeURIComponent(JOOX_TOKEN)}&br=${encodeURIComponent(JOOX_BR)}`;
     try {
       const res = await fetch(url);
       const j = await res.json();
@@ -393,6 +323,28 @@ var ListeningAPI = (() => {
   }
 
   // src/api/soundcloud.js
+  var SC_PROXY = "http://localhost:8765";
+  var scProxyAvailable = null;
+  async function checkScProxy() {
+    if (scProxyAvailable !== null) return scProxyAvailable;
+    try {
+      const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(3e3) });
+      scProxyAvailable = r.ok;
+    } catch (e) {
+      scProxyAvailable = false;
+    }
+    return scProxyAvailable;
+  }
+  async function scFetchJson(url, timeout = 1e4) {
+    if (await checkScProxy()) {
+      const r2 = await fetch(`${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
+      if (!r2.ok) throw new Error(`proxy ${r2.status}`);
+      return r2.json();
+    }
+    const r = await fetch(url, { signal: AbortSignal.timeout(timeout) });
+    if (!r.ok) throw new Error(`direct ${r.status}`);
+    return r.json();
+  }
   var scClientId = null;
   async function scrapeClientIdFromPage() {
     try {
@@ -411,6 +363,17 @@ var ListeningAPI = (() => {
   ];
   async function getSCClientId() {
     if (scClientId) return scClientId;
+    if (await checkScProxy()) {
+      try {
+        const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(5e3) });
+        const j = await r.json();
+        if (j.client_id) {
+          scClientId = j.client_id;
+          return scClientId;
+        }
+      } catch (e) {
+      }
+    }
     const scraped = await scrapeClientIdFromPage();
     if (scraped) {
       try {
@@ -446,7 +409,7 @@ var ListeningAPI = (() => {
     const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}&linked_partitioning=1`;
     const results = [];
     try {
-      const json = await (await fetch(url, { signal: AbortSignal.timeout(1e4) })).json();
+      const json = await scFetchJson(url);
       const tracks = json.collection || [];
       tracks.forEach((it, idx) => {
         const username = it.user?.username || "Unknown";
@@ -483,14 +446,10 @@ var ListeningAPI = (() => {
   async function fetchSoundCloudDetails(t) {
     try {
       const cid = await getSCClientId();
-      let d = null;
+      const useProxy = await checkScProxy();
       let transcodings = t.scTranscodings || null;
       if (!transcodings) {
-        const r = await fetch(
-          `https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`,
-          { signal: AbortSignal.timeout(1e4) }
-        );
-        d = await r.json();
+        const d = await scFetchJson(`https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`);
         transcodings = d.media?.transcodings || [];
         t.cover = d.artwork_url || d.user?.avatar_url || t.cover;
         t.title = d.title || t.title;
@@ -510,9 +469,25 @@ var ListeningAPI = (() => {
         });
         scored.sort((a, b) => b.score - a.score);
         const best = scored[0];
-        t.scIsHLS = best.format?.protocol === "hls";
-        t.audioUrl = `${best.url}?client_id=${cid}`;
-        if (best.preset) {
+        const isHLS = best.format?.protocol === "hls";
+        const mediaUrl = `${best.url}?client_id=${cid}`;
+        try {
+          const resolved = await scFetchJson(mediaUrl);
+          if (resolved.url) {
+            if (isHLS) {
+              t.audioUrl = resolved.url;
+              t.scIsHLS = true;
+            } else {
+              t.audioUrl = useProxy ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
+              t.scIsHLS = false;
+            }
+          }
+        } catch (e) {
+          console.error("soundcloud media resolve:", e);
+          t.audioUrl = mediaUrl;
+          t.scIsHLS = isHLS;
+        }
+        if (t.audioUrl && best.preset) {
           const m = best.preset.match(/(\d+)/);
           t.quality = m ? m[1] + "k" : "128k";
           t.qualityLabel = best.preset.replace(/_/g, " ").toUpperCase();
@@ -521,11 +496,9 @@ var ListeningAPI = (() => {
       if (!t.audioUrl && t.scStreamUrl) {
         t.audioUrl = `${t.scStreamUrl}?client_id=${cid}`;
       }
-      if (t.audioUrl) {
-        if (!t.quality) {
-          t.quality = "128k";
-          t.qualityLabel = "128K";
-        }
+      if (t.audioUrl && !t.quality) {
+        t.quality = "128k";
+        t.qualityLabel = "128K";
       }
       t.detailsLoaded = true;
     } catch (e) {
@@ -535,7 +508,7 @@ var ListeningAPI = (() => {
   }
 
   // src/api/index.js
-  async function searchAll({ keyword, sources = ["netease", "qq", "kuwo"], limit = 10 } = {}) {
+  async function searchAll({ keyword, sources = ["netease", "qq", "soundcloud"], limit = 10 } = {}) {
     if (!keyword) throw new Error("keyword is required");
     const tasks = [];
     if (sources.includes("netease")) {
@@ -546,11 +519,6 @@ var ListeningAPI = (() => {
     if (sources.includes("qq")) {
       tasks.push(
         searchQQ(keyword, limit).then((tracks) => ({ source: "qq", tracks }))
-      );
-    }
-    if (sources.includes("kuwo")) {
-      tasks.push(
-        searchKuwo(keyword, limit).then((tracks) => ({ source: "kuwo", tracks }))
       );
     }
     if (sources.includes("joox")) {
@@ -600,8 +568,6 @@ var ListeningAPI = (() => {
         return fetchNeteaseDetails(track);
       case "qq":
         return fetchQQDetails(track);
-      case "kuwo":
-        return fetchKuwoDetails(track);
       case "joox":
         return fetchJooxDetails(track);
       case "soundcloud":

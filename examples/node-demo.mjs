@@ -15,7 +15,7 @@ async function main() {
 
   const results = await searchAll({
     keyword,
-    sources: ['netease', 'qq', 'kuwo'],
+    sources: ['netease', 'qq', 'soundcloud'],
     limit: 3,
   });
 

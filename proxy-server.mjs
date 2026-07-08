@@ -10,7 +10,7 @@
  * 为什么需要这个？
  * SoundCloud api-v2 不支持 CORS，浏览器直接 fetch 会被拦截。
  * SoundCloud 媒体 API 需要 track_authorization JWT 作为 Authorization header。
- * 其他源（网易云/QQ/酷我）在浏览器端可以直连，不需要代理。
+ * 其他源（网易云/QQ）在浏览器端可以直连，不需要代理。
  */
 
 import http from 'http';

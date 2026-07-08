@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
 <script src="./support.js"></script>
 <script src="./api-bundle.js"></script>
 </head>
@@ -327,12 +328,11 @@ const THEMES = {
   },
 };
 
-const SOURCE_COLORS = { netease: '#ff6b6b', qq: '#4dd0e1', kuwo: '#ba68c8', soundcloud: '#ff8800' };
-const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', kuwo: '酷我', soundcloud: 'SoundCloud' };
+const SOURCE_COLORS = { netease: '#ff6b6b', qq: '#4dd0e1', soundcloud: '#ff8800' };
+const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', soundcloud: 'SoundCloud' };
 const GRADIENTS = {
   netease: 'linear-gradient(135deg, rgba(255,107,107,.55), rgba(255,107,107,.14))',
   qq: 'linear-gradient(135deg, rgba(77,208,225,.55), rgba(77,208,225,.14))',
-  kuwo: 'linear-gradient(135deg, rgba(186,104,200,.55), rgba(186,104,200,.14))',
   soundcloud: 'linear-gradient(135deg, rgba(255,136,0,.55), rgba(255,136,0,.16))',
 };
 
@@ -340,10 +340,10 @@ function makeQueue() {
   return [
     { id: 1, title: '夜行灯塔', artist: '林间信号', source: 'netease', duration: 214 },
     { id: 2, title: '低语电台', artist: '纸飞机乐队', source: 'qq', duration: 198 },
-    { id: 3, title: '第七个路口', artist: '雾岛先生', source: 'kuwo', duration: 231 },
+    { id: 3, title: '第七个路口', artist: '雾岛先生', source: 'soundcloud', duration: 231 },
     { id: 4, title: '折叠时区', artist: '半透明', source: 'netease', duration: 205 },
     { id: 5, title: '慢速回放', artist: '纸飞机乐队', source: 'qq', duration: 222 },
-    { id: 6, title: '安静的光', artist: '雾岛先生', source: 'kuwo', duration: 196 },
+    { id: 6, title: '安静的光', artist: '雾岛先生', source: 'soundcloud', duration: 196 },
     { id: 7, title: '纸间信件', artist: '林间信号', source: 'netease', duration: 209 },
   ];
 }
@@ -394,7 +394,7 @@ class Component extends DCLogic {
   state = {
     theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, viewingPlaylistId: null,
     searchResults: [],
-    sources: { netease: true, qq: true, kuwo: true, soundcloud: true },
+    sources: { netease: true, qq: true, soundcloud: true },
     liked: { 3: true },
     // 歌词解析结果，搜索播放时动态填充
     lyrics: [],
@@ -420,7 +420,15 @@ class Component extends DCLogic {
       this._audio.removeEventListener('error', this._onError);
       this._audio.removeEventListener('loadedmetadata', this._onMeta);
     }
+    this.stopHLS();
     clearTimeout(this._toastTimer);
+  }
+
+  stopHLS() {
+    if (this._hls) {
+      this._hls.destroy();
+      this._hls = null;
+    }
   }
 
   patch(p) { this.setState(s => (typeof p === 'function' ? p(s) : p)); }
@@ -657,10 +665,32 @@ class Component extends DCLogic {
     // 如果已有播放链接就直接播放，否则加载详情
     const go = () => {
       if (!track.audioUrl) { this.showToast('暂无可用播放链接'); return; }
-      a.src = track.audioUrl;
-      a.currentTime = 0;
-      a.volume = this.state.volume / 100;
-      a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+      this.stopHLS();
+
+      const startPlayback = () => {
+        a.currentTime = 0;
+        a.volume = this.state.volume / 100;
+        a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+      };
+
+      if (track.scIsHLS && window.Hls && window.Hls.isSupported()) {
+        // SoundCloud AAC HLS 流：manifest + 分片都在 CDN 上，交给 hls.js 直接拉取解封装
+        const hls = new window.Hls({ enableWorker: false });
+        this._hls = hls;
+        hls.loadSource(track.audioUrl);
+        hls.attachMedia(a);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, startPlayback);
+        hls.on(window.Hls.Events.ERROR, (_evt, data) => {
+          if (data.fatal) {
+            console.error('hls fatal error:', data);
+            this.showToast('播放失败，请尝试其他音源');
+          }
+        });
+      } else {
+        // 非 HLS，或浏览器原生支持 HLS（如 Safari）时直接设 src
+        a.src = track.audioUrl;
+        startPlayback();
+      }
     };
 
     if (track.audioUrl) {
@@ -859,7 +889,7 @@ class Component extends DCLogic {
       };
     });
 
-    const sourcesRender = ['netease', 'qq', 'kuwo', 'soundcloud'].map(key => {
+    const sourcesRender = ['netease', 'qq', 'soundcloud'].map(key => {
       const checked = s.sources[key];
       return {
         key, label: SOURCE_LABELS[key], dot: SOURCE_COLORS[key], checked,

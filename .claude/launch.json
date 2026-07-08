@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "4444", "--directory", "examples"],
+      "port": 4444
+    },
+    {
+      "name": "proxy",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["proxy-server.mjs"],
+      "port": 8765
+    }
+  ]
+}

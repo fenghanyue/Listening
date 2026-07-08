@@ -1,37 +1,7 @@
 /**
  * 🔧 工具函数
- * 从 MusicSquare 提取的音质推断 / 时间格式化 / LRC 解析
+ * 从 MusicSquare 提取的 LRC 解析
  */
-
-/**
- * 根据音频链接后缀推断音质
- * @param {string} url - 音频直链
- * @returns {{tag: string|null, label: string}}
- */
-export function inferQualityFromUrl(url) {
-  if (!url) return { tag: null, label: '' };
-  let base = url.split('?')[0].toLowerCase();
-  const m = base.match(/\.([a-z0-9]+)$/);
-  const ext = m ? m[1] : '';
-  const losslessExts = ['flac', 'wav', 'ape', 'alac', 'aiff'];
-  if (losslessExts.includes(ext)) {
-    return { tag: 'lossless', label: 'LOSSLESS' };
-  }
-  // 其他一律当作 320K
-  return { tag: '320k', label: '320K' };
-}
-
-/**
- * 格式化秒数为 mm:ss
- * @param {number} sec
- * @returns {string}
- */
-export function formatTime(sec) {
-  if (!isFinite(sec) || sec < 0) sec = 0;
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-}
 
 /**
  * 解析 LRC 歌词
