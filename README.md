@@ -12,7 +12,6 @@ Listening/
 │       ├── netease.js    # 网易云音乐 (qijieya meting)
 │       ├── qq.js         # QQ音乐 (tang api)
 │       ├── soundcloud.js # SoundCloud (api-v2，浏览器端需配合 proxy-server.mjs)
-│       ├── joox.js       # JOOX (apicx，暂未在 UI 里暴露)
 │       └── utils.js      # LRC 解析
 ├── examples/
 │   ├── browser-demo.html # 浏览器 Demo（可直接打开）
@@ -54,7 +53,6 @@ const lrcLines = parseLRC(track.lrc);
 import { searchNetease, fetchNeteaseDetails } from './src/api/netease.js';
 import { searchQQ, fetchQQDetails } from './src/api/qq.js';
 import { searchSoundCloud, fetchSoundCloudDetails } from './src/api/soundcloud.js';
-import { searchJoox, fetchJooxDetails } from './src/api/joox.js';
 
 const tracks = await searchNetease('关键词', 1, 10);
 await fetchNeteaseDetails(tracks[0]);
@@ -65,7 +63,7 @@ await fetchNeteaseDetails(tracks[0]);
 ```js
 {
   uid: 'netease-123456',      // 全局唯一标识
-  source: 'netease',           // netease | qq | soundcloud | joox
+  source: 'netease',           // netease | qq | soundcloud
   // 基础信息
   title: '晴天',
   artist: '周杰伦',
@@ -87,7 +85,6 @@ await fetchNeteaseDetails(tracks[0]);
 | 网易云 | meting proxy | api.qijieya.cn |
 | QQ音乐 | tang proxy | tang.api.s01s.cn |
 | SoundCloud | api-v2（浏览器端需走本地 `proxy-server.mjs` :8765 代理，见下方限制说明） | api-v2.soundcloud.com |
-| JOOX | apicx proxy（暂未在 UI 里暴露） | apicx.asia |
 
 > ⚠️ 以上均为第三方反向代理，非官方 API，不可控且无版权授权。仅供学习参考。
 

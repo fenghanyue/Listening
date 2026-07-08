@@ -7,7 +7,7 @@
 
 ## 2026-07-08 — 播放器功能规划 + 进展核对（权威）
 
-**一句话现状**：正式前端页面 `examples/Listening Player.dc.html` 已从「假计时器 + 内联搜索函数」的中间实现，切换为 **真实 `<audio>` 元素播放 + `api-bundle.js`（`window.ListeningAPI`）搜索/详情** 的架构。搜索与播放主链路可用（含 SoundCloud，2026-07-08 已修复，见 H 节）；**酷我音源已于 2026-07-08 整体下线（见 I 节），当前音源固定为网易云 + QQ + SoundCloud**；歌单/喜欢/队列/播放进度已于 2026-07-08 接入 localStorage 持久化（见 K 节）；歌单链接导入、JSON 导入导出等尚缺。**旧文档（2026-07-07）与现代码多处不符，本节据实重写。**
+**一句话现状**：正式前端页面 `examples/Listening Player.dc.html` 已从「假计时器 + 内联搜索函数」的中间实现，切换为 **真实 `<audio>` 元素播放 + `api-bundle.js`（`window.ListeningAPI`）搜索/详情** 的架构。搜索与播放主链路可用（含 SoundCloud，2026-07-08 已修复，见 H 节）；**酷我音源已于 2026-07-08 整体下线（见 I 节），JOOX 音源也已于同日下线（见 P 节），当前音源固定为网易云 + QQ + SoundCloud**；歌单/喜欢/队列/播放进度已于 2026-07-08 接入 localStorage 持久化（见 K 节）；歌单链接导入、JSON 导入导出等尚缺。**旧文档（2026-07-07）与现代码多处不符，本节据实重写。**
 
 图例：✅ 已实现（已验证） · ⚠️ 部分/受限 · ❌ 缺失
 
@@ -15,7 +15,7 @@
 
 | 模块 | 目标行为 |
 |------|----------|
-| 搜索 | 多源聚合（网易云 / QQ / SoundCloud；JOOX 代码留着但未在 UI 暴露）；音源筛选芯片；回车或按钮触发 |
+| 搜索 | 多源聚合（网易云 / QQ / SoundCloud）；音源筛选芯片；回车或按钮触发 |
 | 播放 | 真实音频；播放/暂停、上一首/下一首、进度拖动、音量；三种播放模式；按需取播放链接；播完自动切歌；失败提示 |
 | 队列 | 查看、拖拽排序、移除、点击播放、当前曲高亮、数量角标 |
 | 歌单 | 新建/删除、加入/移出、喜欢（内置「喜欢的音乐」）、播放全部、**持久化**、**JSON 导入导出**、**从歌单链接导入** |
@@ -33,9 +33,9 @@
 | 多源聚合搜索（网易云/QQ/SoundCloud） | ✅ 已联网实测 | `doSearch` → `window.ListeningAPI.searchAll({keyword,sources,limit})`；结果写入 `state.searchResults`（**不入 queue、不自动播放**）。酷我已于 2026-07-08 下线，见 I 节 |
 | 音源筛选芯片 | ✅ | `toggleSource` / `sourcesRender`；实际参与 `doSearch` 的 `sources` 过滤 |
 | 回车 / 按钮触发 | ✅ | `searchKeyDown`（Enter）/ `doSearch` |
-| 空结果与状态提示 | ❌ 用户前端实测确认，缺"搜索中"状态 | `doSearch()`（[Listening Player.dc.html:515](examples/Listening%20Player.dc.html:515)）在发起异步 `API.searchAll()` **之前**就同步把 `hasSearched:true, searchResults:[]` patch 进 state；`renderVals` 里 `hasNoResults = !showPrompt && displayTracks.length===0`（[:940](examples/Listening%20Player.dc.html:940)）在请求返回前就已经为真，所以搜索请求进行中的这段时间（多源并行请求，可能有明显延迟）主内容区会先显示「没有找到相关歌曲，换个关键词试试」，直到结果回来才刷新成真实列表。虽然有一个 `showToast('正在搜索...')`，但那是 2.2s 自动消失的悬浮提示，不是搜索区域的常驻状态，用户观感上就是"搜索栏显示没搜到"。需要新增一个独立的 `isSearching` 状态，加载中单独展示"搜索中…"而不是空结果态 |
+| 空结果与状态提示 | ✅ 2026-07-08 已修复，渲染实测 | 见下方「Q. 修复：搜索中显示"没搜到"」 |
 | SoundCloud 搜索 | ✅ 已修复，已联网实测 | 参照 git 历史 `f11a16b` 的旧实现，重写了 `src/api/soundcloud.js`：新增 `checkScProxy`/`scFetchJson`，`searchSoundCloud`/`fetchSoundCloudDetails` 现在都经本地代理 `:8765/proxy?url=` 转发（代理不可用时退回直连，仅适用于无 CORS 限制的环境）；`getSCClientId` 优先调代理的 `/sc-client-id`。本次通过活跃的本地代理+静态服务器实测：搜索、详情、HLS 播放链接解析全部走通 |
-| JOOX 搜索 | ⚠️ 未暴露 | `api-bundle.js` 含 `searchJoox`，但 DC 页 UI 只有网易云/QQ/SoundCloud 三个芯片，无 JOOX |
+| JOOX 搜索 | 🗑️ 音源已下线，见 P 节 | `src/api/joox.js` 已删除，`api-bundle.js` 不再含 `searchJoox`/`fetchJooxDetails` |
 
 **播放**
 
@@ -52,7 +52,7 @@
 | 播放失败提示 | ⚠️ 2026-07-08 起静默 | `_onError` → 调用 `showToast(...)`，但 `showToast` 已改为空函数（见 O 节），实际不再有任何用户可见提示；仅 `console.error` 留痕 |
 | SoundCloud 播放 | ✅ 已修复，已联网实测（HLS 分支）；progressive 分支机制验证通过、CDN 侧偶发 403 | DC 页头部加了 `<script src=".../hls.js@1.5">`；`loadAndPlay` 里 `track.scIsHLS` 为真时用 `new Hls()` + `loadSource`/`attachMedia`，`MANIFEST_PARSED` 后才 `a.play()`，并新增 `stopHLS()` 在切歌/卸载时 `hls.destroy()`。实测：AAC HLS（`playback.media-streaming.soundcloud.cloud`）的 manifest + 分片本次通过本地代理拿到手后确认**自带 CORS**（真实 `Origin` 头请求会返回 `access-control-allow-origin: *`），hls.js 可直接从 CDN 拉流，不需要额外代理；顺带发现两个上游限制（非本次引入的 bug，属第三方 API 固有约束）：① 部分曲目的 progressive mp3 走 CloudFront（`cf-media.sndcdn.com`）在本环境网络出口会 403（`src/api/soundcloud.js` 的打分逻辑已优先选 HLS，规避了大部分这种情况）；② 部分曲目的播放走 `track_authorization` JWT 里编码了 `geo` 限制（如 `"geo":"US"`），出口 IP 不在允许地区时 resolve 会 404/401，任何客户端都一样，不是代理或本项目代码的问题 |
 | 酷我播放 | 🗑️ 音源已下线，见 I 节 | 原因是 `fetchKuwoDetails` 硬编码 `level=zp`（无损 FLAC，实测单曲 50MB+，`Content-Type: audio/x-flac` 不在浏览器标准 MIME 支持列表），2026-07-08 决定直接砍掉酷我音源而不是修，`src/api/kuwo.js` 已删除 |
-| 播放后"正在播放"标题切换 | ❌ 用户前端实测确认 | 根因是 `id` 分配机制的通用缺陷，三个源都会中招（不是 SoundCloud 专属）：`_apiIdSeq`（[:386](examples/Listening%20Player.dc.html:386)）从 0 自增给搜索结果分配 `id`，与 `makeQueue()` 硬编码的 mock 种子 `id:1~7` 共用同一空间。已用 node 模拟验证（按当前网易云/QQ/SoundCloud 三源重算）：首次搜索时前 7 条结果精确落在 `id:1~7`，每条都会撞上 mock 队列里对应 id 的条目。`playTrackAt()`（[:744](examples/Listening%20Player.dc.html:744)）的"是否已在队列"判断因此误判为真，真正点的曲目从未写入 `state.queue`；音频照样能播（`loadAndPlay` 用的是 `searchResults` 里对的 track），但界面标题从 `s.queue.find(id===currentId)` 读到的是撞车的旧 mock 条目，显示就一直是错的/不对的。detail 见「F. 后续待办」第 12 条 |
+| 播放后"正在播放"标题切换 | ✅ 2026-07-08 已修复，渲染实测 | 见下方「R. 修复：播放后"正在播放"标题不切换（id 撞车）」 |
 
 **队列**
 
@@ -163,14 +163,14 @@ eval(c+';globalThis.A=ListeningAPI');(async()=>{
 2. ~~歌单/喜欢/队列 localStorage 持久化。~~ ✅ **2026-07-08 已完成**，见下方「K. 本地持久化（歌单/喜欢/队列/播放进度）」。
 3. 歌单 JSON 导入/导出。
 4. ~~DC 页补 `hls.js`，打通 SoundCloud HLS 播放（配合 :8765 代理）。~~ ✅ **2026-07-08 已完成**，见下方「H. SoundCloud 搜索/播放修复」。
-5. UI 暴露 JOOX 音源芯片。
+5. ~~UI 暴露 JOOX 音源芯片~~ 🗑️ **2026-07-08 用户决定不需要 JOOX，直接下线**，见「P. 下线 JOOX 音源」。
 6. ~~（可选）列表/网格视图切换~~ 🗑️ **2026-07-08 用户决定不做**，从待办移除。
 7. ~~修复酷我播放失败~~ 🗑️ **2026-07-08 决定不修了，直接下线酷我音源**，见「I. 下线酷我音源」。
 8. ~~修复 SoundCloud 搜索~~ ✅ **2026-07-08 已完成**，见下方「H. SoundCloud 搜索/播放修复」。
 9. **接入真实专辑封面**：黑胶大图、队列列表缩略图**以及搜索结果列表**（用户 2026-07-08 前端实测确认搜索结果同样没有封面，根因相同：[Listening Player.dc.html:879](examples/Listening%20Player.dc.html:879) 的 `coverGradient: GRADIENTS[t.source]`）改为优先渲染 `track.cover`（图片），封面缺失时才回退现有的 `GRADIENTS[source]` 渐变。
 10. ~~显示专辑名称~~ ✅ **2026-07-08 已完成**，见下方「J. 显示专辑名称」。
-11. **【新增】搜索过程中显示"没搜到"而不是"搜索中"**：`doSearch()`（[:515](examples/Listening%20Player.dc.html:515)）在异步请求返回前就把 `hasSearched:true, searchResults:[]` 写进 state，导致请求进行中的这段时间会先显示空结果提示。需要加一个独立的 `isSearching` 状态区分"搜索中"与"搜索完但没结果"。
-12. **【高优先级】播放后"正在播放"标题不切换**：根因是 `_apiIdSeq`（[:386](examples/Listening%20Player.dc.html:386)）从 0 自增给每条新搜索结果分配 `id`，与 `makeQueue()`（[:340](examples/Listening%20Player.dc.html:340)）硬编码的 mock 种子数据 `id:1~7` 共用同一个 id 空间。用 node 模拟验证过（2026-07-08 下线酷我后按当前三源 netease/qq/soundcloud 重新算了一遍）：首次搜索、三源全开时，交错顺序是 netease→qq→soundcloud，前 7 条结果精确拿到 `id:1~7`，**每一条都会撞上 mock 队列里对应 id 的条目**（比如 SoundCloud 第一条结果分配到 `id:3`，撞上 mock 里的「第七个路口」——凑巧两者都标了 `source:'soundcloud'`，但标题/歌手对不上，仍然是错的）。`playTrackAt()` 里 `!s.queue.find(t => t.id === id)`（[:744](examples/Listening%20Player.dc.html:744)）误判为"已在队列"（其实是撞上了不相关的 mock 条目），真正点的曲目从未被写入 `state.queue`；音频本身能正常播放（`loadAndPlay` 用的是 `searchResults` 里正确的 track 对象），但界面"正在播放"信息来自 `s.queue.find(id===currentId)`，找到的是旧 mock 条目，标题/歌手就一直是错的。这个 bug 对三个源一视同仁，只是撞车的具体 mock 条目不同。修法：`normalizeTrack` 的 id 生成要避开 mock 种子已占用的 id 区间（比如 `_apiIdSeq` 初始值设成比 mock 最大 id 大，或者 mock 种子和搜索结果分别用不同前缀的 uid 而不是数字 id 做 key）。
+11. ~~搜索过程中显示"没搜到"而不是"搜索中"~~ ✅ **2026-07-08 已完成**，见下方「Q. 修复：搜索中显示"没搜到"」。
+12. ~~播放后"正在播放"标题不切换（id 撞车）~~ ✅ **2026-07-08 已完成**，见下方「R. 修复：播放后"正在播放"标题不切换（id 撞车）」。
 13. ~~歌单外面显示的数量和点进去看到的数量对不上~~ ✅ **2026-07-08 已完成**，见下方「M. 修复歌单数量与详情不一致」。
 14. ~~搜索后进歌单再返回，搜索状态丢失~~ ✅ **2026-07-08 已完成**，见下方「N. 修复：从歌单详情返回会清空搜索状态」。
 
@@ -204,7 +204,7 @@ eval(c+';globalThis.A=ListeningAPI');(async()=>{
 
 ### I. 下线酷我音源（2026-07-08）
 
-酷我播放一直没修好（见「播放」表格，硬编码无损 FLAC 导致浏览器播不了），用户决定不修了，直接把酷我这个音源整个砍掉。以后固定只用**网易云 + QQ + SoundCloud** 三源（JOOX 代码还留着，但本来就没在 UI 里暴露，不受影响）。
+酷我播放一直没修好（见「播放」表格，硬编码无损 FLAC 导致浏览器播不了），用户决定不修了，直接把酷我这个音源整个砍掉。以后固定只用**网易云 + QQ + SoundCloud** 三源（JOOX 代码当时还留着，但本来就没在 UI 里暴露，不受影响；JOOX 后于同日也被下线，见「P. 下线 JOOX 音源」）。
 
 改动范围：
 
@@ -306,6 +306,44 @@ eval(c+';globalThis.A=ListeningAPI');(async()=>{
 
 **验证方式**：`node --check` 校验内联脚本语法通过；全仓 grep 确认 `hasToast`/`v.toast`/`state.toast`/`_toastTimer` 均无残留引用，20 个 `showToast(...)` 调用点均指向同一个空函数。**受限说明**：与 N 节同一批改动，浏览器端到端验证受当前环境限制未能完成（见 N 节说明），仅做了代码走查和语法校验。
 
+### P. 下线 JOOX 音源（2026-07-08）
+
+JOOX 从一开始就没在 DC 页 UI 里暴露过（`api-bundle.js` 含 `searchJoox`/`fetchJooxDetails`，但页面搜索芯片只有网易云/QQ/SoundCloud 三个），F 节待办第 5 条一直是"要不要把它接上"。用户明确表示不需要 JOOX，要求整个音源连代码一起删干净（不只是不接 UI）。
+
+改动范围：
+
+| 文件 | 改动 |
+|------|------|
+| `src/api/joox.js` | 整个文件删除 |
+| `src/api/index.js` | 去掉 `searchJoox`/`fetchJooxDetails` 的 import 和 re-export；`searchAll` 里去掉 JOOX 分支；`ensureTrackDetails` 的 switch 去掉 `case 'joox'` |
+| `examples/api-bundle.js` | 重新 `npm run build` 生成，不再包含 JOOX 模块 |
+| `README.md` | 目录结构、单源搜索示例代码、track 字段注释、第三方 API 源表格里的 JOOX 全部删除 |
+| `examples/browser-demo.html` | CSS 音源标签样式里去掉 `.joox` 这条从未被用到的规则 |
+
+**验证方式**：`npm run build` 重新打包后 `node --check` 语法校验通过；`node` 加载新 bundle 确认 `ListeningAPI.searchJoox`/`fetchJooxDetails` 均为 `undefined`，`Object.keys(ListeningAPI)` 里已无 JOOX 相关导出；全仓 grep `joox`/`JOOX` 确认零残留（`examples/Listening Player.dc.html`、`node-demo.mjs`、`search-test.html`、`package.json` 本来就不含 JOOX 引用，无需改动）。DC 页 UI 本来就没暴露 JOOX，因此本次改动对界面渲染无可观察影响，未额外做浏览器验证。
+
+### Q. 修复：搜索中显示"没搜到"（2026-07-08）
+
+**问题（F 节旧第 11 条）**：`doSearch()`（[Listening Player.dc.html:571](examples/Listening%20Player.dc.html:571) 附近）在发起异步 `API.searchAll()` **之前**就同步把 `hasSearched:true, searchResults:[]` patch 进 state；渲染逻辑里 `hasNoResults = !showPrompt && displayTracks.length===0` 在请求返回前就已经为真，所以多源并行搜索这段时间（尤其 SoundCloud 走本地代理，可能有明显延迟）主内容区会先显示「没有找到相关歌曲，换个关键词试试」，直到结果回来才刷新成真实列表，用户观感就是"搜索栏显示没搜到"。
+
+**修复**：新增独立的 `isSearching` 状态字段区分"搜索中"与"搜索完但没结果"：
+- 初始 state 新增 `isSearching: false`
+- `doSearch()` 发起请求前 patch `isSearching: true`；`.then()` 的成功分支（有结果/无结果两处）和 `.catch()` 的失败分支都会 patch `isSearching: false`，避免网络异常时卡死在"搜索中"
+- `renderVals()` 里 `hasNoResults` 和 `showStatusText` 都加上 `&& !s.isSearching` 的条件，新增 `v.isSearching` 派生值传给模板
+- 模板里在 `hasNoResults` 判断之前新增一个 `<sc-if value="{{ v.isSearching }}">` 区块，复用同款空态布局展示"搜索中…"文案，`search` 图标配了一个新增的 `searchPulse` 淡入淡出动画（[:39](examples/Listening%20Player.dc.html:39) 附近的 `@keyframes`）区别于纯静态的空结果态
+
+**验证方式**：`node --check` 校验内联脚本语法通过；headless Chromium 交互实测——因为真实网络请求在本环境经常两三百毫秒内就返回、不容易肉眼截到中间态，临时用 `preview_eval` 把 `window.fetch` 包了一层 3~8 秒延迟（仅调试用，未写入源码）人为拉长请求耗时，截图确认："搜索中…"态正确显示（无空结果提示、无状态栏文案），延迟结束后正确切换为真实结果列表（"林俊杰" 找到 30 首）；去掉延迟后又用一个必然查无结果的乱码关键词验证了"搜索完、真的没结果"这条路径依然正确显示「没有找到相关歌曲，换个关键词试试」，不会被误判卡在搜索中态；全程控制台无报错。
+
+### R. 修复：播放后"正在播放"标题不切换（id 撞车）（2026-07-08）
+
+**问题（F 节旧第 12 条）**：`_apiIdSeq`（[Listening Player.dc.html:393](examples/Listening%20Player.dc.html:393) 附近）从 0 自增给每条新搜索结果分配 `id`，与 `makeQueue()`（[:343](examples/Listening%20Player.dc.html:343)）硬编码的 mock 种子数据 `id:1~7` 共用同一个 id 空间。首次搜索、三源全开时前 7 条结果精确拿到 `id:1~7`，每一条都会撞上 mock 队列里对应 id 的条目。`playTrackAt()` 里 `!s.queue.find(t => t.id === id)` 因此误判为"已在队列"（其实是撞上了不相关的 mock 条目），真正点的曲目从未被写入 `state.queue`；音频本身能正常播放（`loadAndPlay` 用的是 `searchResults` 里正确的 track 对象），但界面"正在播放"信息来自 `s.queue.find(id===currentId)`，找到的是旧 mock 条目，标题/歌手就一直是错的。这个 bug 对网易云/QQ/SoundCloud 三个源一视同仁，只是撞车的具体 mock 条目不同。
+
+**修复**：`_apiIdSeq` 的初始值从写死的 `0` 改成动态计算 `Math.max(0, ...makeQueue().map(t => t.id))`（即 mock 种子队列里的最大 id，当前是 7），让本次会话的第一条搜索结果就从 8 开始分配 id，从根上避开 mock 占用的 `1~7` 区间。`makeQueue()` 是纯函数（每次调用返回全新数组，不含副作用），这里多调用一次不影响 `state.queue: makeQueue()` 的初始化。原本"用持久化队列里的最大 id 顶高 `_apiIdSeq`"（见 K 节）的逻辑不变，两者是互补的：一个管"和 mock 种子的碰撞"，一个管"和上次会话持久化数据的碰撞"。
+
+**遗留说明**：这个改动只保证**从现在起**新分配的 id 不再和 mock 撞车；由于 `ensureQueued`/`playTrackAt` 在发现 id 已存在于 `queue` 时会直接跳过、不会写入重复条目，之前触发过这个 bug 的会话里 `queue` 本身并未产生脏数据（撞车的搜索结果从未真正进入 `queue`，只是没被写入而已），所以不需要额外的一次性迁移脚本；用户只要刷新页面重新搜索即可拿到修复后的正确行为。
+
+**验证方式**：先用 node 跑最小复现（`makeQueue` 返回 `id:1~7`，旧逻辑 `_apiIdSeq` 从 0 开始时新分配的前 3 个 id 是 `1,2,3`，会撞车；改成从 `Math.max(...)` 开始后新分配的是 `8,9,10`，不撞车），确认修法逻辑本身成立。再做 headless Chromium 端到端实测：清空 `localStorage` 模拟全新会话，搜索"周杰伦"后点击第一条结果「布拉格广场」（网易云，蔡依林/周杰伦）——修复前这条会撞上 mock 里 `id:1` 的「夜行灯塔」（林间信号），播放器标题会显示错的那首；修复后播放器"正在播放"区正确显示「布拉格广场 / 蔡依林/周杰伦 - 看我72变」，进度条从 0 开始正常走动，右上角队列角标从 7 变成 8（证明这次真的被写入了 `state.queue`，不是命中了 mock 条目）；`node --check` 语法校验通过，全程控制台无报错。
+
 ---
 
 <details>
@@ -349,7 +387,7 @@ Listening/
 │   ├── browser-demo.html         ← 纯 vanilla API 用法 demo（README 里文档化的官方示例之一）
 │   ├── node-demo.mjs             ← Node.js API 用法 demo（README 里文档化的官方示例之一）
 │   └── search-test.html          ← 纯 vanilla 搜索验证页
-├── src/api/                      ← API 模块（netease/qq/soundcloud/joox + index 聚合；酷我已下线）
+├── src/api/                      ← API 模块（netease/qq/soundcloud + index 聚合；酷我、JOOX 均已下线）
 ├── proxy-server.mjs              ← CORS 代理（:8765，SoundCloud 用）
 └── DEBUG.md                      ← 本文档
 ```

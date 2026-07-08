@@ -37,6 +37,7 @@
   <style>
     body { margin: 0; background: #EAE6EE; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
     @keyframes vinylSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes searchPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
   </style>
 </helmet>
 
@@ -158,6 +159,12 @@
       </sc-if>
 
       <div style="flex:1;overflow-y:auto;padding:0 24px 24px;">
+        <sc-if value="{{ v.isSearching }}">
+          <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
+            <div style="display:flex;justify-content:center;margin-bottom:12px;"><span style="font-family:'Material Symbols Outlined';font-size:40px;animation:searchPulse 1.2s ease-in-out infinite;">search</span></div>
+            <div>搜索中…</div>
+          </div>
+        </sc-if>
         <sc-if value="{{ v.hasNoResults }}">
           <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
             <div style="display:flex;justify-content:center;margin-bottom:12px;"><span style="font-family:'Material Symbols Outlined';font-size:40px;">{{ v.emptyIcon }}</span></div>
@@ -383,7 +390,9 @@ function pickTileColor() { return TILE_PALETTES[Math.floor(Math.random() * TILE_
 // API 模块通过 esbuild 打包的 api-bundle.js 暴露为 window.ListeningAPI
 // 搜索/详情调用直接使用 ListeningAPI.searchAll() / ListeningAPI.ensureTrackDetails()
 
-let _apiIdSeq = 0; // track 内部 id 递增（兼容旧渲染逻辑）
+// track 内部 id 递增（兼容旧渲染逻辑）；起始值避开 mock 种子队列已占用的 id 区间（1~7），
+// 否则首次搜索的前几条结果会分配到和 mock 条目相同的 id，导致 playTrackAt 误判"已在队列"而不写入真实曲目
+let _apiIdSeq = Math.max(0, ...makeQueue().map(t => t.id));
 
 function normalizeTrack(t) {
   if (t.id == null) t.id = ++_apiIdSeq;
@@ -419,7 +428,7 @@ function savePersistedLibrary(s) {
 class Component extends DCLogic {
   state = (() => {
     const base = {
-      theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, viewingPlaylistId: null,
+      theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
       searchResults: [],
       sources: { netease: true, qq: true, soundcloud: true },
       liked: { 3: true },
@@ -573,22 +582,23 @@ class Component extends DCLogic {
     if (!q) return;
     const API = window.ListeningAPI;
     if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
-    this.patch({ appliedQuery: q, hasSearched: true, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: [] });
+    this.patch({ appliedQuery: q, hasSearched: true, isSearching: true, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: [] });
     this.showToast(`正在搜索 "${q}" …`);
     const sources = Object.keys(this.state.sources).filter(k => this.state.sources[k]);
     API.searchAll({ keyword: q, sources, limit: 10 }).then(tracks => {
       // 给每个 track 分配内部 id
       tracks.forEach(t => normalizeTrack(t));
       if (!tracks.length) {
-        this.patch({ searchResults: [] });
+        this.patch({ searchResults: [], isSearching: false });
         this.showToast(`没有找到「${q}」相关歌曲`);
         return;
       }
-      this.patch({ searchResults: tracks });
+      this.patch({ searchResults: tracks, isSearching: false });
       const srcLabels = [...new Set(tracks.map(t => SOURCE_LABELS[t.source] || t.source))].join('、');
       this.showToast(`"${q}" 找到 ${tracks.length} 首（${srcLabels}）`);
     }).catch(e => {
       console.error('search error:', e);
+      this.patch({ isSearching: false });
       this.showToast('搜索失败，请检查网络连接');
     });
   }
@@ -1006,8 +1016,9 @@ class Component extends DCLogic {
         isPlaylistView, isLibraryView: !isPlaylistView,
         playlistHeaderName: activePlaylist ? activePlaylist.name : '',
         showPlayAll: isPlaylistView && displayTracks.length > 0,
-        hasNoResults: !showPrompt && displayTracks.length === 0,
-        showPrompt, showStatusText: !showPrompt,
+        isSearching: s.isSearching,
+        hasNoResults: !showPrompt && !s.isSearching && displayTracks.length === 0,
+        showPrompt, showStatusText: !showPrompt && !s.isSearching,
         emptyIcon: isPlaylistView ? 'queue_music' : 'search_off',
         emptyText: isPlaylistView ? '这个歌单还没有歌曲，去搜索页添加吧' : '没有找到相关歌曲，换个关键词试试',
         statusText: isPlaylistView

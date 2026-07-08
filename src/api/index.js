@@ -1,11 +1,10 @@
 /**
  * 聚合跨平台音乐搜索
- * 并行调用网易云 / QQ / SoundCloud / JOOX，按源交错排列结果
+ * 并行调用网易云 / QQ / SoundCloud，按源交错排列结果
  */
 
 import { searchNetease, fetchNeteaseDetails } from './netease.js';
 import { searchQQ, fetchQQDetails } from './qq.js';
-import { searchJoox, fetchJooxDetails } from './joox.js';
 import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
 
 /**
@@ -31,12 +30,6 @@ export async function searchAll({ keyword, sources = ['netease', 'qq', 'soundclo
   if (sources.includes('qq')) {
     tasks.push(
       searchQQ(keyword, limit).then(tracks => ({ source: 'qq', tracks }))
-    );
-  }
-  // JOOX
-  if (sources.includes('joox')) {
-    tasks.push(
-      searchJoox(keyword, limit).then(tracks => ({ source: 'joox', tracks }))
     );
   }
   // SoundCloud
@@ -99,8 +92,6 @@ export async function ensureTrackDetails(track) {
       return fetchNeteaseDetails(track);
     case 'qq':
       return fetchQQDetails(track);
-    case 'joox':
-      return fetchJooxDetails(track);
     case 'soundcloud':
       return fetchSoundCloudDetails(track);
     default:
@@ -113,5 +104,4 @@ export async function ensureTrackDetails(track) {
  */
 export { searchNetease, fetchNeteaseDetails } from './netease.js';
 export { searchQQ, fetchQQDetails } from './qq.js';
-export { searchJoox, fetchJooxDetails } from './joox.js';
 export { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';

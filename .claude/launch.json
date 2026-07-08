@@ -5,7 +5,8 @@
       "name": "static",
       "runtimeExecutable": "node",
       "runtimeArgs": ["examples/static-server.mjs"],
-      "port": 4444
+      "port": 4444,
+      "autoPort": true
     },
     {
       "name": "proxy",
