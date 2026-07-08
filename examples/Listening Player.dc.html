@@ -130,7 +130,7 @@
 
       <sc-if value="{{ v.isPlaylistView }}">
       <div style="padding:0 24px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-        <button onclick="{{ H.goHome }}" style="width:32px;height:32px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:20px;">arrow_back</span></button>
+        <button onclick="{{ H.backFromPlaylist }}" style="width:32px;height:32px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:20px;">arrow_back</span></button>
         <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">{{ v.playlistHeaderName }}</span>
       </div>
       <sc-if value="{{ v.showPlayAll }}">
@@ -297,9 +297,6 @@
     </div>
   </sc-if>
 
-  <sc-if value="{{ v.hasToast }}">
-    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:{{ v.c.onSurface }};color:{{ v.c.bg }};padding:14px 20px;border-radius:4px;font-size:13px;font-weight:500;z-index:200;box-shadow:{{ v.c.e2 }};">{{ v.toast }}</div>
-  </sc-if>
 </div>
 
 </x-dc>
@@ -394,26 +391,68 @@ function normalizeTrack(t) {
   return t;
 }
 
+// ====================== 本地持久化（歌单 / 喜欢 / 队列 / 播放进度） ======================
+const LIBRARY_STORAGE_KEY = 'listening-player-library-v1';
+
+function loadPersistedLibrary() {
+  try {
+    const raw = localStorage.getItem(LIBRARY_STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !Array.isArray(data.playlists) || !data.liked || !Array.isArray(data.queue)) return null;
+    return data;
+  } catch (e) {
+    console.warn('读取本地歌单数据失败:', e);
+    return null;
+  }
+}
+
+function savePersistedLibrary(s) {
+  try {
+    const { playlists, liked, queue, currentId, currentTime, volume, playMode } = s;
+    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({ playlists, liked, queue, currentId, currentTime, volume, playMode }));
+  } catch (e) {
+    console.warn('保存本地歌单数据失败:', e);
+  }
+}
+
 class Component extends DCLogic {
-  state = {
-    theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, viewingPlaylistId: null,
-    searchResults: [],
-    sources: { netease: true, qq: true, soundcloud: true },
-    liked: { 3: true },
-    // 歌词解析结果，搜索播放时动态填充
-    lyrics: [],
-    queue: makeQueue(),
-    currentId: 2, currentTime: 42, volume: 70, playing: false, playMode: 0,
-    mediaView: 'cover', rightPanel: 'browse', dragId: null,
-    addModalId: null, toast: null, createModalOpen: false, createName: '',
-    importModalOpen: false, importUrl: '', importPlaylistName: '',
-    playlists: [
-      { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
-      { id: 'night', name: '深夜电台', builtin: false, trackIds: [2, 6], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#7C6BC4,#5C4A99)' },
-      { id: 'commute', name: '通勤路上', builtin: false, trackIds: [1, 4, 7], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#4FC3C0,#2A8F92)' },
-    ],
-    selectedPlaylist: 'liked', hoverPlaylistId: null,
-  };
+  state = (() => {
+    const base = {
+      theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, viewingPlaylistId: null,
+      searchResults: [],
+      sources: { netease: true, qq: true, soundcloud: true },
+      liked: { 3: true },
+      // 歌词解析结果，搜索播放时动态填充
+      lyrics: [],
+      queue: makeQueue(),
+      currentId: 2, currentTime: 42, volume: 70, playing: false, playMode: 0,
+      mediaView: 'cover', rightPanel: 'browse', dragId: null,
+      addModalId: null, createModalOpen: false, createName: '',
+      importModalOpen: false, importUrl: '', importPlaylistName: '',
+      playlists: [
+        { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
+        { id: 'night', name: '深夜电台', builtin: false, trackIds: [2, 6], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#7C6BC4,#5C4A99)' },
+        { id: 'commute', name: '通勤路上', builtin: false, trackIds: [1, 4, 7], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#4FC3C0,#2A8F92)' },
+      ],
+      selectedPlaylist: 'liked', hoverPlaylistId: null,
+    };
+    const persisted = loadPersistedLibrary();
+    if (!persisted) return base;
+    // 恢复的队列可能含有搜索来的 track，避开这些 id 再分配给本次会话新搜索结果，减少 id 撞车
+    const maxPersistedId = persisted.queue.reduce((m, t) => Math.max(m, t.id || 0), 0);
+    if (maxPersistedId > _apiIdSeq) _apiIdSeq = maxPersistedId;
+    return {
+      ...base,
+      playlists: persisted.playlists,
+      liked: persisted.liked,
+      queue: persisted.queue,
+      currentId: persisted.currentId ?? base.currentId,
+      currentTime: persisted.currentTime ?? base.currentTime,
+      volume: typeof persisted.volume === 'number' ? persisted.volume : base.volume,
+      playMode: typeof persisted.playMode === 'number' ? persisted.playMode : base.playMode,
+    };
+  })();
 
   componentWillUnmount() {
     if (this._audio) {
@@ -425,7 +464,7 @@ class Component extends DCLogic {
       this._audio.removeEventListener('loadedmetadata', this._onMeta);
     }
     this.stopHLS();
-    clearTimeout(this._toastTimer);
+    clearInterval(this._progressSaveTimer);
   }
 
   stopHLS() {
@@ -437,9 +476,26 @@ class Component extends DCLogic {
 
   patch(p) { this.setState(s => (typeof p === 'function' ? p(s) : p)); }
 
+  persist() { savePersistedLibrary(this.state); }
+
+  // playlists/liked 只存 trackId，真正的曲目数据都在 queue 里；
+  // 任何"给某个 id 建立引用"的操作（加入歌单/喜欢/播放）之前都要先确保这个 id 的曲目数据已经落在 queue 里，
+  // 否则歌单会显示数量但点进去看不到曲目（trackId 在 queue 里找不到对应数据）
+  ensureQueued(trackId) {
+    const s = this.state;
+    if (s.queue.find(t => t.id === trackId)) return;
+    const track = s.searchResults.find(t => t.id === trackId);
+    if (track) this.patch(s2 => ({ queue: [...s2.queue, track] }));
+  }
+
   componentDidMount() {
     // DC framework runs this method after the component is mounted
     setTimeout(() => this.initAudio(), 0);
+    // 播放进度（currentTime）随 timeupdate 高频变化，不逐帧写 localStorage，改为定期落盘
+    clearInterval(this._progressSaveTimer);
+    this._progressSaveTimer = setInterval(() => {
+      if (this.state.playing) this.persist();
+    }, 5000);
   }
 
   initAudio() {
@@ -482,12 +538,13 @@ class Component extends DCLogic {
   }
 
   selectPlaylist(id) { this.patch({ selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse' }); }
-  backToLibrary() { this.patch({ viewingPlaylistId: null, selectedPlaylist: null, appliedQuery: '', searchQuery: '', hasSearched: false, rightPanel: 'browse' }); }
+  backFromPlaylist() { this.patch({ viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse' }); }
   removeFromPlaylist(trackId) {
     const pid = this.state.viewingPlaylistId;
     if (!pid) return;
     if (pid === 'liked') { this.toggleLike(trackId); return; }
     this.patch(s => ({ playlists: s.playlists.map(p => p.id === pid ? { ...p, trackIds: (p.trackIds || []).filter(id => id !== trackId) } : p) }));
+    this.persist();
     this.showToast('已从歌单移除');
   }
   hoverPlaylist(id) { this.patch({ hoverPlaylistId: id }); }
@@ -502,6 +559,7 @@ class Component extends DCLogic {
       selectedPlaylist: s.selectedPlaylist === id ? null : s.selectedPlaylist,
       viewingPlaylistId: s.viewingPlaylistId === id ? null : s.viewingPlaylistId,
     }));
+    this.persist();
     this.showToast('已删除歌单');
   }
 
@@ -534,20 +592,17 @@ class Component extends DCLogic {
       this.showToast('搜索失败，请检查网络连接');
     });
   }
-  goHome() { this.backToLibrary(); }
   toggleSource(key) { this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] } })); }
 
-  showToast(msg) {
-    clearTimeout(this._toastTimer);
-    this.patch({ toast: msg });
-    this._toastTimer = setTimeout(() => this.patch({ toast: null }), 2200);
-  }
+  showToast() {}
 
   toggleLike(id) {
     const isLiked = !!this.state.liked[id];
+    if (!isLiked) this.ensureQueued(id);
     const liked = { ...this.state.liked };
     if (isLiked) delete liked[id]; else liked[id] = true;
     this.patch({ liked });
+    this.persist();
     this.showToast(isLiked ? '已取消喜欢' : '已添加到喜欢的歌曲');
   }
 
@@ -591,10 +646,12 @@ class Component extends DCLogic {
       playlists: [...s.playlists, { id, name, builtin: false, trackIds: [], glyph: 'queue_music', iconFill: 0, tileBg: pickTileColor() }],
       createModalOpen: false, createName: '', selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse',
     }));
+    this.persist();
     this.showToast(`已创建歌单「${name}」`);
   }
   confirmAdd(playlistId, playlistName) {
     const trackId = this.state.addModalId;
+    this.ensureQueued(trackId);
     this.patch({ addModalId: null });
     if (playlistId === 'liked') {
       this.patch(s => ({ liked: { ...s.liked, [trackId]: true } }));
@@ -607,6 +664,7 @@ class Component extends DCLogic {
         }),
       }));
     }
+    this.persist();
     this.showToast(`已添加到「${playlistName}」`);
   }
 
@@ -626,7 +684,7 @@ class Component extends DCLogic {
   toggleMediaView() { this.patch(s => ({ mediaView: s.mediaView === 'cover' ? 'lyrics' : 'cover' })); }
   toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue' })); }
   closeQueuePanel() { this.patch({ rightPanel: 'browse' }); }
-  cycleMode() { this.patch(s => ({ playMode: (s.playMode + 1) % 3 })); }
+  cycleMode() { this.patch(s => ({ playMode: (s.playMode + 1) % 3 })); this.persist(); }
 
   // ==== Real audio playback ====
 
@@ -657,7 +715,7 @@ class Component extends DCLogic {
     }
   }
 
-  loadAndPlay(track) {
+  loadAndPlay(track, resumeAt = 0) {
     if (!track) return;
     const API = window.ListeningAPI;
     if (!API) { this.showToast('API 模块未加载'); return; }
@@ -672,7 +730,7 @@ class Component extends DCLogic {
       this.stopHLS();
 
       const startPlayback = () => {
-        a.currentTime = 0;
+        a.currentTime = resumeAt;
         a.volume = this.state.volume / 100;
         a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
       };
@@ -745,7 +803,8 @@ class Component extends DCLogic {
       // 如果是首次播放且还没有音频源，加载当前 track
       if (!a.src || a.src === window.location.href) {
         const track = s.queue.find(t => t.id === s.currentId);
-        if (track) this.loadAndPlay(track);
+        // 页面刚加载、audio 元素还没设过 src：从上次持久化的进度续播
+        if (track) this.loadAndPlay(track, s.currentTime || 0);
         else a.play().catch(() => {});
       } else {
         a.play().catch(e => { console.error('play error:', e); });
@@ -768,17 +827,16 @@ class Component extends DCLogic {
     const a = this._audio;
     if (a) a.volume = frac;
     this.patch({ volume: vol });
+    this.persist();
   }
 
   playTrackAt(id) {
     const s = this.state;
     const track = s.searchResults.find(t => t.id === id) || s.queue.find(t => t.id === id);
     if (!track) return;
-    // 加入队列（如果不在）
-    if (!s.queue.find(t => t.id === id)) {
-      this.patch(s2 => ({ queue: [...s2.queue, track] }));
-    }
+    this.ensureQueued(id);
     this.patch({ currentId: id, currentTime: 0, playing: true, lyrics: [] });
+    this.persist();
     setTimeout(() => {
       this.initAudio();
       this.loadAndPlay(track);
@@ -800,8 +858,13 @@ class Component extends DCLogic {
       const queue = s.queue.filter(t => t.id !== id);
       let currentId = s.currentId;
       if (id === currentId) currentId = (queue[oldIdx] || queue[oldIdx - 1] || queue[0] || {}).id;
-      return { queue, currentId };
+      // 曲目从 queue 里彻底删除后，同步清掉歌单/喜欢里对它的引用，避免留下悬空 id（外面数量对不上点进去看到的数量）
+      const liked = { ...s.liked };
+      delete liked[id];
+      const playlists = s.playlists.map(p => p.trackIds ? { ...p, trackIds: p.trackIds.filter(tid => tid !== id) } : p);
+      return { queue, currentId, liked, playlists };
     });
+    this.persist();
   }
 
   dragStart(id) { this.patch({ dragId: id }); }
@@ -817,7 +880,7 @@ class Component extends DCLogic {
     queue.splice(to, 0, moved);
     this.patch({ queue });
   }
-  dragEnd() { this.patch({ dragId: null }); }
+  dragEnd() { this.patch({ dragId: null }); this.persist(); }
 
   renderVals() {
     const s = this.state;
@@ -917,7 +980,8 @@ class Component extends DCLogic {
       const hovered = s.hoverPlaylistId === pl.id;
       return {
         ...pl,
-        countLabel: pl.id === 'liked' ? likedCountNow : (pl.trackIds || []).length,
+        // 和歌单详情页用同一套「在 queue 里能查到」的过滤逻辑算数量，避免 trackIds/liked 里有 queue 已经删掉的悬空 id 时，外面数量和点进去的数量对不上
+        countLabel: pl.id === 'liked' ? s.queue.filter(t => s.liked[t.id]).length : s.queue.filter(t => (pl.trackIds || []).includes(t.id)).length,
         rowStyle: `display:flex;align-items:center;gap:12px;padding:9px 10px 9px 14px;border-radius:28px;cursor:pointer;background:${selected ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
         nameColor: selected ? c.onSecondaryContainer : c.onSurface,
         countColor: selected ? c.onSecondaryContainer : c.onSurfaceVariant,
@@ -970,14 +1034,13 @@ class Component extends DCLogic {
         hasAddModal: !!s.addModalId, pendingTrack, playlistOptions,
         hasCreateModal: s.createModalOpen, createName: s.createName,
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
-        hasToast: !!s.toast, toast: s.toast,
       },
       H: {
         toggleTheme: () => this.toggleTheme(),
         doSearch: () => this.doSearch(),
         setSearchQuery: (e) => this.setSearchQuery(e),
         searchKeyDown: (e) => this.searchKeyDown(e),
-        goHome: () => this.goHome(),
+        backFromPlaylist: () => this.backFromPlaylist(),
         toggleMediaView: () => this.toggleMediaView(),
         toggleQueuePanel: () => this.toggleQueuePanel(),
         closeQueuePanel: () => this.closeQueuePanel(),
