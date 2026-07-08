@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="bc1beacb-b97a-4da2-b075-f3df7cb859cf"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="true">
+  <style>/* cyrillic-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("3b310197-f45d-4119-8df3-f1a0db5d2379") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("44ce8ab7-1ebd-4eff-98cf-793ecaf8f8ba") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("9e5e33fd-0026-478e-9b01-aa0ea2a6d57b") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("ae6df238-9f46-4ef0-9b94-5d5600561fc6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("3b310197-f45d-4119-8df3-f1a0db5d2379") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("44ce8ab7-1ebd-4eff-98cf-793ecaf8f8ba") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("9e5e33fd-0026-478e-9b01-aa0ea2a6d57b") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("ae6df238-9f46-4ef0-9b94-5d5600561fc6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("3b310197-f45d-4119-8df3-f1a0db5d2379") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("44ce8ab7-1ebd-4eff-98cf-793ecaf8f8ba") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("9e5e33fd-0026-478e-9b01-aa0ea2a6d57b") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("ae6df238-9f46-4ef0-9b94-5d5600561fc6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("3b310197-f45d-4119-8df3-f1a0db5d2379") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("44ce8ab7-1ebd-4eff-98cf-793ecaf8f8ba") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("9e5e33fd-0026-478e-9b01-aa0ea2a6d57b") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("ae6df238-9f46-4ef0-9b94-5d5600561fc6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+/* cyrillic-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("3b310197-f45d-4119-8df3-f1a0db5d2379") format('woff2');
+  unicode-range: U+0460-052F, U+1C80-1C8A, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F;
+}
+/* vietnamese */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("44ce8ab7-1ebd-4eff-98cf-793ecaf8f8ba") format('woff2');
+  unicode-range: U+0102-0103, U+0110-0111, U+0128-0129, U+0168-0169, U+01A0-01A1, U+01AF-01B0, U+0300-0301, U+0303-0304, U+0308-0309, U+0323, U+0329, U+1EA0-1EF9, U+20AB;
+}
+/* latin-ext */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("9e5e33fd-0026-478e-9b01-aa0ea2a6d57b") format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+/* latin */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("ae6df238-9f46-4ef0-9b94-5d5600561fc6") format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+</style>
+  <style>/* fallback */
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  src: url("796331aa-98d6-423c-8851-48e75d860e67") format('woff2');
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+</style>
+  <style>
+    body { margin: 0; background: #EAE6EE; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+  </style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px;box-sizing:border-box;">
+  <div style="width:1280px;height:820px;border-radius:24px;overflow:hidden;box-shadow:0 24px 64px rgba(20,10,30,.28);display:flex;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};">
+
+    <div style="width:240px;min-width:240px;background:{{ v.c.surfaceLow }};display:flex;flex-direction:column;">
+      <div style="height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:17px;font-weight:500;color:{{ v.c.onSurface }};">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;color:{{ v.c.onSurface }};">library_music</span>我的歌单
+        </div>
+        <button onclick="{{ H.toggleTheme }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}">
+          <span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.themeIcon }}</span>
+        </button>
+      </div>
+      <div style="flex:1;padding:6px 10px;display:flex;flex-direction:column;gap:2px;">
+        <div style="display:flex;align-items:center;gap:12px;padding:9px 14px;border-radius:28px;background:{{ v.c.secondaryContainer }};">
+          <span style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#ff8a80,#ff5c8a);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-family:'Material Symbols Outlined';font-size:15px;color:#fff;font-variation-settings:'FILL' 1;">favorite</span>
+          </span>
+          <div style="min-width:0;">
+            <div style="font-size:12.5px;font-weight:500;color:{{ v.c.onSecondaryContainer }};">喜欢的音乐</div>
+            <div style="font-size:11px;color:{{ v.c.onSecondaryContainer }};opacity:.7;">{{ v.likedCount }} 首</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:9px 14px;border-radius:28px;">
+          <span style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#7C6BC4,#5C4A99);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-family:'Material Symbols Outlined';font-size:15px;color:#fff;">queue_music</span>
+          </span>
+          <div style="min-width:0;"><div style="font-size:12.5px;font-weight:500;color:{{ v.c.onSurface }};">深夜电台</div><div style="font-size:11px;color:{{ v.c.onSurfaceVariant }};">12 首</div></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:9px 14px;border-radius:28px;">
+          <span style="width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#4FC3C0,#2A8F92);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-family:'Material Symbols Outlined';font-size:15px;color:#fff;">queue_music</span>
+          </span>
+          <div style="min-width:0;"><div style="font-size:12.5px;font-weight:500;color:{{ v.c.onSurface }};">通勤路上</div><div style="font-size:11px;color:{{ v.c.onSurfaceVariant }};">24 首</div></div>
+        </div>
+      </div>
+      <div style="padding:16px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <button style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><span style="font-family:'Material Symbols Outlined';font-size:16px;">upload</span>导入</button>
+        <button style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><span style="font-family:'Material Symbols Outlined';font-size:16px;">download</span>导出</button>
+      </div>
+    </div>
+
+    <div style="flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;">
+
+      <div style="padding:20px 24px 14px;display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <div style="flex:1;position:relative;display:flex;align-items:center;">
+          <span style="font-family:'Material Symbols Outlined';font-size:19px;position:absolute;left:16px;color:{{ v.c.onSurfaceVariant }};">search</span>
+          <div style="width:100%;padding:11px 16px 11px 46px;border-radius:28px;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:13.5px;">周杰伦</div>
+        </div>
+        <button style="padding:0 22px;height:42px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-weight:500;font-size:13.5px;cursor:pointer;flex-shrink:0;">搜索</button>
+        <div style="display:flex;background:{{ v.c.surfaceHigh }};border-radius:20px;padding:2px;gap:2px;flex-shrink:0;">
+          <button onclick="{{ H.setViewGrid }}" style="width:34px;height:34px;border:none;border-radius:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.gridBtnBg }};color:{{ v.gridBtnColor }};"><span style="font-family:'Material Symbols Outlined';font-size:19px;">grid_view</span></button>
+          <button onclick="{{ H.setViewList }}" style="width:34px;height:34px;border:none;border-radius:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.listBtnBg }};color:{{ v.listBtnColor }};"><span style="font-family:'Material Symbols Outlined';font-size:19px;">view_list</span></button>
+        </div>
+      </div>
+
+      <div style="padding:0 24px 14px;display:flex;align-items:center;gap:8px;font-size:12px;flex-shrink:0;overflow-x:auto;">
+        <sc-for list="{{ v.sourcesRender }}" as="src" hint-placeholder-count="5">
+          <span onclick="{{ src.onClick }}" style="{{ src.chipStyle }}">
+            <sc-if value="{{ src.checked }}"><span style="font-family:'Material Symbols Outlined';font-size:15px;">check</span></sc-if>
+            <span style="width:7px;height:7px;border-radius:50%;background:{{ src.dot }};flex-shrink:0;"></span>{{ src.label }}
+          </span>
+        </sc-for>
+      </div>
+
+      <div style="padding:0 24px 14px;font-size:12px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">找到 {{ v.queueCount }} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）</div>
+
+      <div style="flex:1;overflow-y:auto;padding:0 24px 156px;">
+        <sc-if value="{{ v.viewIsGrid }}">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+            <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
+              <div style="background:{{ t.cardBg }};border-radius:12px;padding:11px;">
+                <div style="width:100%;aspect-ratio:1/1;border-radius:8px;margin-bottom:9px;background:{{ t.coverGradient }};display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="{{ t.onPlay }}">
+                  <span style="font-family:'Material Symbols Outlined';font-size:30px;color:rgba(255,255,255,.9);">music_note</span>
+                </div>
+                <div style="cursor:pointer;" onclick="{{ t.onPlay }}">
+                  <div style="font-size:12.5px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                    <span style="font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:600;background:{{ t.tagBg }};color:{{ t.tagColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
+                    <span style="font-size:11px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.artist }}</span>
+                  </div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:2px;margin-top:8px;">
+                  <button onclick="{{ t.onAdd }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};"><span style="font-family:'Material Symbols Outlined';font-size:17px;">playlist_add</span></button>
+                  <button onclick="{{ t.onLike }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};"><span style="font-family:'Material Symbols Outlined';font-size:17px;font-variation-settings:'FILL' {{ t.likeFill }};">{{ t.likeGlyph }}</span></button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ v.viewIsList }}">
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
+              <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};">
+                <div style="width:44px;height:44px;border-radius:8px;background:{{ t.coverGradient }};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
+                  <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
+                </div>
+                <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
+                  <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                    <span style="font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:600;background:{{ t.tagBg }};color:{{ t.tagColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
+                    <span style="font-size:11px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.artist }}</span>
+                  </div>
+                </div>
+                <button onclick="{{ t.onAdd }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">playlist_add</span></button>
+                <button onclick="{{ t.onLike }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:17px;font-variation-settings:'FILL' {{ t.likeFill }};">{{ t.likeGlyph }}</span></button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="position:absolute;left:16px;right:16px;bottom:16px;padding:11px 18px;border-radius:16px;background:{{ v.c.surfaceHigh }};box-shadow:{{ v.c.e2 }};display:flex;align-items:center;gap:14px;z-index:2;">
+        <div style="width:50px;height:50px;border-radius:10px;background:{{ v.track.coverGradient }};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ H.openLyrics }}">
+          <span style="font-family:'Material Symbols Outlined';font-size:22px;color:rgba(255,255,255,.9);">music_note</span>
+        </div>
+        <div style="width:150px;min-width:0;cursor:pointer;" onclick="{{ H.openLyrics }}">
+          <div style="font-size:13px;font-weight:500;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
+          <div style="font-size:11px;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artist }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0px;">
+          <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" style="width:30px;height:30px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:19px;">skip_previous</span></button>
+          <button onclick="{{ H.togglePlay }}" style="width:36px;height:36px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 2px;"><span style="font-family:'Material Symbols Outlined';font-size:20px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span></button>
+          <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" style="width:30px;height:30px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:19px;">skip_next</span></button>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;gap:10px;min-width:0;">
+          <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:30px;text-align:right;">{{ v.currentTimeStr }}</span>
+          <div onclick="{{ H.seek }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;">
+            <div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.primary }};width:{{ v.progressPct }}%;"></div>
+          </div>
+          <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:30px;">{{ v.durationStr }}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-family:'Material Symbols Outlined';font-size:17px;color:{{ v.c.onSurfaceVariant }};">volume_up</span>
+          <div onclick="{{ H.setVolume }}" style="width:64px;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;">
+            <div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.onSurfaceVariant }};width:{{ v.volume }}%;"></div>
+          </div>
+        </div>
+        <button onclick="{{ H.openQueue }}" style="position:relative;width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}">
+          <span style="font-family:'Material Symbols Outlined';font-size:19px;">queue_music</span>
+          <span style="position:absolute;top:1px;right:1px;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px;">{{ v.queueCount }}</span>
+        </button>
+      </div>
+
+      <div style="position:absolute;left:0;right:0;top:0;bottom:0;background:{{ v.c.surfaceLow }};box-shadow:{{ v.c.e3 }};transform:{{ v.expandTransform }};transition:transform .35s cubic-bezier(.2,.8,.2,1);display:flex;flex-direction:column;z-index:3;">
+
+        <div style="height:72px;flex-shrink:0;display:flex;align-items:center;">
+          <div style="width:280px;flex-shrink:0;padding:0 22px;display:flex;align-items:center;justify-content:space-between;">
+            <button onclick="{{ H.collapse }}" style="width:32px;height:32px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:20px;">expand_more</span></button>
+            <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurfaceVariant }};">正在播放</span>
+            <span style="width:32px;"></span>
+          </div>
+          <div style="flex:1;display:flex;align-items:center;gap:26px;padding:0 26px;">
+            <button onclick="{{ H.setTabLyrics }}" style="padding:24px 0 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:{{ v.tabLyricsColor }};border-bottom:2px solid {{ v.tabLyricsBorder }};">歌词</button>
+            <button onclick="{{ H.setTabQueue }}" style="padding:24px 0 20px;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:{{ v.tabQueueColor }};border-bottom:2px solid {{ v.tabQueueBorder }};">播放队列 · {{ v.queueCount }}</button>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:row;overflow:hidden;min-height:0;">
+
+        <div style="width:280px;flex-shrink:0;padding:0 22px 22px;display:flex;flex-direction:column;align-items:center;">
+          <div style="flex:1;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;">
+            <div style="width:150px;height:150px;border-radius:14px;background:{{ v.track.coverGradient }};display:flex;align-items:center;justify-content:center;box-shadow:{{ v.c.e2 }};margin-bottom:16px;flex-shrink:0;">
+              <span style="font-family:'Material Symbols Outlined';font-size:46px;color:rgba(255,255,255,.9);">music_note</span>
+            </div>
+            <div style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};margin-bottom:3px;text-align:center;">{{ v.track.title }}</div>
+            <div style="font-size:12.5px;color:{{ v.c.onSurfaceVariant }};margin-bottom:20px;text-align:center;">{{ v.track.artist }}</div>
+
+            <div style="width:100%;display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+              <span style="font-size:10.5px;color:{{ v.c.onSurfaceVariant }};width:28px;text-align:right;">{{ v.currentTimeStr }}</span>
+              <div onclick="{{ H.seek }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;">
+                <div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.primary }};width:{{ v.progressPct }}%;"></div>
+              </div>
+              <span style="font-size:10.5px;color:{{ v.c.onSurfaceVariant }};width:28px;">{{ v.durationStr }}</span>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:18px;">
+              <button onclick="{{ H.cycleMode }}" style="border:none;background:none;cursor:pointer;color:{{ v.modeColor }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ v.modeIcon }}</span></button>
+              <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" style="border:none;background:none;cursor:pointer;color:{{ v.c.onSurface }};"><span style="font-family:'Material Symbols Outlined';font-size:23px;">skip_previous</span></button>
+              <button onclick="{{ H.togglePlay }}" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span></button>
+              <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" style="border:none;background:none;cursor:pointer;color:{{ v.c.onSurface }};"><span style="font-family:'Material Symbols Outlined';font-size:23px;">skip_next</span></button>
+            </div>
+
+            <div style="width:100%;display:flex;align-items:center;gap:8px;">
+              <span style="font-family:'Material Symbols Outlined';font-size:18px;color:{{ v.c.onSurfaceVariant }};">volume_up</span>
+              <div onclick="{{ H.setVolume }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;"><div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.onSurfaceVariant }};width:{{ v.volume }}%;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding:0 26px 22px;">
+          <div style="flex:1;overflow:hidden;min-height:0;">
+            <sc-if value="{{ v.tabIsLyrics }}">
+              <div style="height:100%;overflow:hidden;position:relative;">
+                <div style="position:absolute;left:0;right:0;top:0;transform:translateY({{ v.lyricsOffset }}px);transition:transform .5s ease;">
+                  <sc-for list="{{ v.lyricsRender }}" as="line" hint-placeholder-count="6">
+                    <div style="{{ line.style }}">{{ line.text }}</div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ v.tabIsQueue }}">
+              <div style="height:100%;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
+                <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
+                  <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
+                    <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
+                    <span style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
+                    <div style="width:34px;height:34px;border-radius:8px;background:{{ item.coverGradient }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                      <span style="font-family:'Material Symbols Outlined';font-size:15px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:13px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
+                      <div style="font-size:11px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artist }} · {{ item.sourceLabel }}</div>
+                    </div>
+                    <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
+                    <button onclick="{{ item.onRemove }}" style="width:26px;height:26px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
+                      <span style="font-family:'Material Symbols Outlined';font-size:15px;">close</span>
+                    </button>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <sc-if value="{{ v.hasAddModal }}">
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
+      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:340px;box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">添加到歌单</div>
+        <sc-for list="{{ v.playlistOptions }}" as="pl" hint-placeholder-count="3">
+          <div onclick="{{ pl.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" style-hover="background:{{ v.c.hover }}">
+            <span style="width:32px;height:32px;border-radius:8px;background:{{ pl.tileBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:16px;color:#fff;">{{ pl.icon }}</span></span>
+            <span style="font-size:13.5px;font-weight:500;color:{{ v.c.onSurface }};">{{ pl.name }}</span>
+          </div>
+        </sc-for>
+        <button onclick="{{ H.closeAddModal }}" style="width:100%;margin-top:10px;padding:10px 0;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ v.hasToast }}">
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:{{ v.c.onSurface }};color:{{ v.c.bg }};padding:14px 20px;border-radius:4px;font-size:13px;font-weight:500;z-index:200;box-shadow:{{ v.c.e2 }};">{{ v.toast }}</div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="">
+const THEMES = {
+  dark: {
+    bg: '#141218', surfaceLow: '#1D1B20', surface: '#211F26', surfaceHigh: '#2B2930', surfaceHighest: '#36343B',
+    onSurface: '#E6E0E9', onSurfaceVariant: '#CAC4D0', outline: '#948F99', outlineVariant: '#49454F',
+    primary: '#D0BCFF', onPrimary: '#381E72', primaryContainer: '#4F378B', onPrimaryContainer: '#EADDFF',
+    secondaryContainer: '#4A4458', onSecondaryContainer: '#E8DEF8', heart: '#FFB4AB',
+    hover: 'rgba(230,224,233,0.08)', press: 'rgba(230,224,233,0.12)',
+    e2: '0 1px 2px rgba(0,0,0,.45), 0 2px 6px 2px rgba(0,0,0,.25)',
+    e3: '0 4px 8px 3px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.4)',
+  },
+  light: {
+    bg: '#FFFBFE', surfaceLow: '#F7F2FA', surface: '#F3EDF7', surfaceHigh: '#ECE6F0', surfaceHighest: '#E6E0E9',
+    onSurface: '#1D1B20', onSurfaceVariant: '#49454F', outline: '#79747E', outlineVariant: '#CAC4D0',
+    primary: '#6750A4', onPrimary: '#FFFFFF', primaryContainer: '#EADDFF', onPrimaryContainer: '#21005D',
+    secondaryContainer: '#E8DEF8', onSecondaryContainer: '#1D192B', heart: '#BA1A1A',
+    hover: 'rgba(29,27,32,0.06)', press: 'rgba(29,27,32,0.10)',
+    e2: '0 1px 2px rgba(0,0,0,.12), 0 2px 6px 2px rgba(0,0,0,.08)',
+    e3: '0 4px 8px 3px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.14)',
+  },
+};
+
+const SOURCE_COLORS = { netease: '#ff6b6b', qq: '#4dd0e1', kuwo: '#ba68c8', joox: '#65f7c4', soundcloud: '#ff8800' };
+const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', kuwo: '酷我', joox: 'JOOX', soundcloud: 'SoundCloud' };
+const GRADIENTS = {
+  netease: 'linear-gradient(135deg, rgba(255,107,107,.55), rgba(255,107,107,.14))',
+  qq: 'linear-gradient(135deg, rgba(77,208,225,.55), rgba(77,208,225,.14))',
+  kuwo: 'linear-gradient(135deg, rgba(186,104,200,.55), rgba(186,104,200,.14))',
+  joox: 'linear-gradient(135deg, rgba(101,247,196,.55), rgba(101,247,196,.14))',
+  soundcloud: 'linear-gradient(135deg, rgba(255,136,0,.55), rgba(255,136,0,.16))',
+};
+
+function makeQueue() {
+  return [
+    { id: 1, title: '夜行灯塔', artist: '林间信号', source: 'netease', duration: 214 },
+    { id: 2, title: '低语电台', artist: '纸飞机乐队', source: 'qq', duration: 198 },
+    { id: 3, title: '第七个路口', artist: '雾岛先生', source: 'kuwo', duration: 231 },
+    { id: 4, title: '折叠时区', artist: '半透明', source: 'netease', duration: 205 },
+    { id: 5, title: '留声海岸', artist: '南风不燥', source: 'joox', duration: 187 },
+    { id: 6, title: '慢速回放', artist: '纸飞机乐队', source: 'qq', duration: 222 },
+    { id: 7, title: '安静的光', artist: '雾岛先生', source: 'kuwo', duration: 196 },
+    { id: 8, title: '纸间信件', artist: '林间信号', source: 'netease', duration: 209 },
+  ];
+}
+
+function makeLyrics() {
+  const lines = [
+    '灯光渐渐暗下来', '窗外的风还没停', '我数着路过的车灯', '想着还没说完的话',
+    '手心里握着一张车票', '通向没有名字的车站', '如果雨再下大一点', '我们就有理由多留一会',
+    '街角的钟走得很慢', '像是在等一个人回头', '我把耳机音量调高', '盖住犹豫不决的心跳',
+    '这条路走了很多遍', '却还是记不住尽头', '你说过要一起看海', '现在风还记得这句话',
+    '把过去折成纸船', '放进今晚安静的河', '灯塔的光转了一圈', '照见了没寄出的信',
+    '如果这首歌能被听到', '希望你也刚好想起我',
+  ];
+  return lines.map((text, i) => ({ time: i * 9, text }));
+}
+
+const LYRICS = makeLyrics();
+
+function fmtTime(s) {
+  s = Math.max(0, Math.floor(s));
+  const m = Math.floor(s / 60), sec = s % 60;
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+const PLAYLIST_DEFS = [
+  { name: '喜欢的音乐', icon: 'favorite', tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
+  { name: '深夜电台', icon: 'queue_music', tileBg: 'linear-gradient(135deg,#7C6BC4,#5C4A99)' },
+  { name: '通勤路上', icon: 'queue_music', tileBg: 'linear-gradient(135deg,#4FC3C0,#2A8F92)' },
+];
+
+class Component extends DCLogic {
+  state = {
+    theme: 'dark', view: 'grid',
+    sources: { netease: true, qq: true, kuwo: true, joox: false, soundcloud: false },
+    liked: { 3: true },
+    queue: makeQueue(),
+    currentId: 2, currentTime: 42, volume: 70, playing: false, playMode: 0,
+    expanded: false, tab: 'lyrics', dragId: null,
+    addModalId: null, toast: null,
+  };
+
+  componentWillUnmount() { clearInterval(this._timer); clearTimeout(this._toastTimer); }
+
+  patch(p) { this.setState(s => (typeof p === 'function' ? p(s) : p)); }
+
+  stop(e) { e.stopPropagation(); }
+
+  toggleTheme() { this.patch(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })); }
+  setViewGrid() { this.patch({ view: 'grid' }); }
+  setViewList() { this.patch({ view: 'list' }); }
+  toggleSource(key) { this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] } })); }
+
+  showToast(msg) {
+    clearTimeout(this._toastTimer);
+    this.patch({ toast: msg });
+    this._toastTimer = setTimeout(() => this.patch({ toast: null }), 2200);
+  }
+
+  toggleLike(id) {
+    const isLiked = !!this.state.liked[id];
+    const liked = { ...this.state.liked };
+    if (isLiked) delete liked[id]; else liked[id] = true;
+    this.patch({ liked });
+    this.showToast(isLiked ? '已取消喜欢' : '已添加到喜欢的歌曲');
+  }
+
+  openAddModal(id) { this.patch({ addModalId: id }); }
+  closeAddModal() { this.patch({ addModalId: null }); }
+  confirmAdd(playlistName) {
+    this.patch({ addModalId: null });
+    this.showToast(`已添加到「${playlistName}」`);
+  }
+
+  toggleExpand(tab) { this.patch(s => ({ expanded: tab ? true : !s.expanded, tab: tab || s.tab })); }
+  collapse() { this.patch({ expanded: false }); }
+  setTab(tab) { this.patch({ tab }); }
+  cycleMode() { this.patch(s => ({ playMode: (s.playMode + 1) % 3 })); }
+
+  togglePlay() {
+    this.patch(s => ({ playing: !s.playing }));
+    setTimeout(() => this.syncTimer(), 0);
+  }
+
+  syncTimer() {
+    clearInterval(this._timer);
+    if (this.state.playing) {
+      this._timer = setInterval(() => {
+        this.setState(cur => {
+          const track = cur.queue.find(t => t.id === cur.currentId) || cur.queue[0];
+          const dur = track ? track.duration : 200;
+          let t = cur.currentTime + 1;
+          let currentId = cur.currentId;
+          if (t >= dur) {
+            const idx = cur.queue.findIndex(x => x.id === cur.currentId);
+            const nxt = cur.queue[idx + 1];
+            if (nxt) { currentId = nxt.id; t = 0; }
+            else { t = dur; clearInterval(this._timer); }
+          }
+          return { currentTime: t, currentId };
+        });
+      }, 1000);
+    }
+  }
+
+  seek(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const s = this.state;
+    const track = s.queue.find(t => t.id === s.currentId) || s.queue[0];
+    const dur = track ? track.duration : 200;
+    this.patch({ currentTime: frac * dur });
+  }
+
+  setVolume(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    this.patch({ volume: Math.round(frac * 100) });
+  }
+
+  playTrackAt(id) { this.patch({ currentId: id, currentTime: 0 }); }
+
+  stepTrack(dir) {
+    const s = this.state;
+    const idx = s.queue.findIndex(t => t.id === s.currentId);
+    const ni = idx + dir;
+    if (ni >= 0 && ni < s.queue.length) this.patch({ currentId: s.queue[ni].id, currentTime: 0 });
+  }
+
+  removeTrack(id) {
+    this.patch(s => {
+      const oldIdx = s.queue.findIndex(t => t.id === id);
+      const queue = s.queue.filter(t => t.id !== id);
+      let currentId = s.currentId;
+      if (id === currentId) currentId = (queue[oldIdx] || queue[oldIdx - 1] || queue[0] || {}).id;
+      return { queue, currentId };
+    });
+  }
+
+  dragStart(id) { this.patch({ dragId: id }); }
+  dragOverRow(overId, e) {
+    e.preventDefault();
+    const s = this.state;
+    if (s.dragId == null || s.dragId === overId) return;
+    const queue = [...s.queue];
+    const from = queue.findIndex(t => t.id === s.dragId);
+    const to = queue.findIndex(t => t.id === overId);
+    if (from < 0 || to < 0) return;
+    const [moved] = queue.splice(from, 1);
+    queue.splice(to, 0, moved);
+    this.patch({ queue });
+  }
+  dragEnd() { this.patch({ dragId: null }); }
+
+  renderVals() {
+    const s = this.state;
+    const c = THEMES[s.theme];
+    const rawTrack = s.queue.find(t => t.id === s.currentId) || s.queue[0] || { title: '未在播放', artist: '', duration: 200, source: 'netease' };
+    const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease };
+    const duration = track.duration;
+    const progressPct = Math.min(100, (s.currentTime / duration) * 100);
+
+    let curLyricIdx = 0;
+    for (let i = 0; i < LYRICS.length; i++) { if (LYRICS[i].time <= s.currentTime) curLyricIdx = i; }
+    const lineHeight = 52;
+    const viewportH = 300;
+    const offset = viewportH / 2 - (curLyricIdx * lineHeight + lineHeight / 2);
+    const lyricsRender = LYRICS.map((l, i) => {
+      const d = Math.abs(i - curLyricIdx);
+      let style;
+      if (d === 0) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:${c.primary};transition:all .4s ease;padding:0 20px;text-align:center;line-height:1.35;`;
+      else if (d === 1) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;color:${c.onSurface};opacity:0.55;transition:all .4s ease;padding:0 20px;text-align:center;`;
+      else if (d === 2) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:400;color:${c.onSurfaceVariant};opacity:0.32;transition:all .4s ease;padding:0 20px;text-align:center;`;
+      else style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:400;color:${c.onSurfaceVariant};opacity:0.14;transition:all .4s ease;padding:0 20px;text-align:center;`;
+      return { text: l.text, style, key: 'ly' + i };
+    });
+
+    const queueRender = s.queue.map((t, i) => {
+      const isCurrent = t.id === s.currentId;
+      return {
+        ...t, index: i + 1, isCurrent, coverGradient: GRADIENTS[t.source],
+        sourceLabel: SOURCE_LABELS[t.source], durationStr: fmtTime(t.duration),
+        playingGlyph: isCurrent ? 'graphic_eq' : 'music_note',
+        rowStyle: `display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:grab;background:${isCurrent ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
+        titleColor: isCurrent ? c.onSecondaryContainer : c.onSurface,
+        artistColor: isCurrent ? c.onSecondaryContainer : c.onSurfaceVariant,
+        onClick: () => this.playTrackAt(t.id),
+        onRemove: (e) => { e.stopPropagation(); this.removeTrack(t.id); },
+        onDragStart: () => this.dragStart(t.id),
+        onDragOver: (e) => this.dragOverRow(t.id, e),
+        onDrop: (e) => e.preventDefault(),
+      };
+    });
+
+    const tracksRender = s.queue.map(t => {
+      const isCurrent = t.id === s.currentId;
+      const liked = !!s.liked[t.id];
+      return {
+        ...t, coverGradient: GRADIENTS[t.source], sourceLabel: SOURCE_LABELS[t.source],
+        cardBg: isCurrent ? c.primaryContainer : c.surface,
+        titleColor: isCurrent ? c.onPrimaryContainer : c.onSurface,
+        artistColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
+        tagBg: c.secondaryContainer, tagColor: c.onSecondaryContainer,
+        likeGlyph: 'favorite', likeFill: liked ? 1 : 0,
+        likeColor: liked ? c.heart : c.onSurfaceVariant,
+        onPlay: () => this.playTrackAt(t.id),
+        onAdd: (e) => { e.stopPropagation(); this.openAddModal(t.id); },
+        onLike: (e) => { e.stopPropagation(); this.toggleLike(t.id); },
+      };
+    });
+
+    const sourcesRender = ['netease', 'qq', 'kuwo', 'joox', 'soundcloud'].map(key => {
+      const checked = s.sources[key];
+      return {
+        key, label: SOURCE_LABELS[key], dot: SOURCE_COLORS[key], checked,
+        chipStyle: `display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;flex-shrink:0;cursor:pointer;background:${checked ? c.secondaryContainer : 'transparent'};color:${checked ? c.onSecondaryContainer : c.onSurfaceVariant};border:1px solid ${checked ? 'transparent' : c.outlineVariant};`,
+        onClick: () => this.toggleSource(key),
+      };
+    });
+
+    const idx = s.queue.findIndex(t => t.id === s.currentId);
+    const MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
+    const modeActive = s.playMode !== 0;
+    const isLyrics = s.tab === 'lyrics';
+
+    const pendingTrack = s.queue.find(t => t.id === s.addModalId);
+    const playlistOptions = PLAYLIST_DEFS.map(pl => ({ ...pl, onClick: () => this.confirmAdd(pl.name) }));
+
+    return {
+      v: {
+        c, theme: s.theme, track,
+        currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, volume: s.volume,
+        lyricsRender, lyricsOffset: offset,
+        queueRender, queueCount: s.queue.length, tracksRender,
+        viewIsGrid: s.view === 'grid', viewIsList: s.view === 'list',
+        gridBtnBg: s.view === 'grid' ? c.primary : 'transparent', gridBtnColor: s.view === 'grid' ? c.onPrimary : c.onSurfaceVariant,
+        listBtnBg: s.view === 'list' ? c.primary : 'transparent', listBtnColor: s.view === 'list' ? c.onPrimary : c.onSurfaceVariant,
+        sourcesRender,
+        prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.queue.length - 1),
+        themeIcon: s.theme === 'dark' ? 'light_mode' : 'dark_mode',
+        playIcon: s.playing ? 'pause' : 'play_arrow',
+        expandTransform: s.expanded ? 'translateY(0)' : 'translateY(100%)',
+        tabIsLyrics: isLyrics, tabIsQueue: !isLyrics,
+        tabLyricsColor: isLyrics ? c.onSurface : c.onSurfaceVariant,
+        tabLyricsBorder: isLyrics ? c.primary : 'transparent',
+        tabQueueColor: !isLyrics ? c.onSurface : c.onSurfaceVariant,
+        tabQueueBorder: !isLyrics ? c.primary : 'transparent',
+        modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
+        likedCount: Object.keys(s.liked).length,
+        hasAddModal: !!s.addModalId, pendingTrack, playlistOptions,
+        hasToast: !!s.toast, toast: s.toast,
+      },
+      H: {
+        toggleTheme: () => this.toggleTheme(),
+        setViewGrid: () => this.setViewGrid(),
+        setViewList: () => this.setViewList(),
+        openLyrics: () => this.toggleExpand('lyrics'),
+        openQueue: () => this.toggleExpand('queue'),
+        collapse: () => this.collapse(),
+        setTabLyrics: () => this.setTab('lyrics'),
+        setTabQueue: () => this.setTab('queue'),
+        togglePlay: () => this.togglePlay(),
+        prev: () => this.stepTrack(-1),
+        next: () => this.stepTrack(1),
+        seek: (e) => this.seek(e),
+        setVolume: (e) => this.setVolume(e),
+        cycleMode: () => this.cycleMode(),
+        dragEnd: () => this.dragEnd(),
+        closeAddModal: () => this.closeAddModal(),
+        stop: (e) => this.stop(e),
+      },
+    };
+  }
+}
+
+</script>
+
+
+</body></html>

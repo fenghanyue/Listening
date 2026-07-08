@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="./support.js"></script>
+<script src="./api-bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="true">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+  <style>
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+</style>
+  <style>
+    body { margin: 0; background: #EAE6EE; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+    @keyframes vinylSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+</helmet>
+
+<div style="height:100vh;width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;">
+
+  <div style="height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:{{ v.c.surfaceLow }};border-bottom:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
+    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+      <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;">封寒月</span>
+      <span style="width:3px;height:3px;border-radius:50%;background:{{ v.c.outline }};flex-shrink:0;"></span>
+      <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">听音乐</span>
+    </div>
+    <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:16px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};">
+      <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span>GitHub
+    </a>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex;position:relative;overflow:hidden;">
+
+    <div style="width:220px;min-width:220px;background:{{ v.c.surfaceLow }};display:flex;flex-direction:column;">
+      <div style="height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:17px;font-weight:500;color:{{ v.c.onSurface }};">
+          <span style="font-family:'Material Symbols Outlined';font-size:21px;color:{{ v.c.onSurface }};">library_music</span>我的歌单
+        </div>
+        <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
+          <span style="position:absolute;top:2px;left:{{ v.switchThumbLeft }}px;width:24px;height:24px;border-radius:50%;background:{{ v.switchThumbBg }};display:flex;align-items:center;justify-content:center;transition:left .25s;box-shadow:0 1px 2px rgba(0,0,0,.35);">
+            <span style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.switchIconColor }};">{{ v.themeIcon }}</span>
+          </span>
+        </button>
+      </div>
+      <div style="flex:1;padding:6px 10px;display:flex;flex-direction:column;gap:2px;">
+        <sc-for list="{{ v.playlistsRender }}" as="pl" hint-placeholder-count="3">
+          <div onclick="{{ pl.onClick }}" onmouseenter="{{ pl.onMouseEnter }}" onmouseleave="{{ pl.onMouseLeave }}" style="{{ pl.rowStyle }}">
+            <span style="width:30px;height:30px;border-radius:8px;background:{{ pl.tileBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <span style="font-family:'Material Symbols Outlined';font-size:15px;color:#fff;font-variation-settings:'FILL' {{ pl.iconFill }};">{{ pl.glyph }}</span>
+            </span>
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:12.5px;font-weight:500;color:{{ pl.nameColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ pl.name }}</div>
+              <div style="font-size:11px;color:{{ pl.countColor }};">{{ pl.countLabel }} 首</div>
+            </div>
+            <button onclick="{{ pl.onDelete }}" style="width:26px;height:26px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ pl.countColor }};flex-shrink:0;display:{{ pl.deleteDisplay }};" style-hover="background:{{ v.c.press }};color:{{ v.c.heart }};">
+              <span style="font-family:'Material Symbols Outlined';font-size:16px;">delete</span>
+            </button>
+          </div>
+        </sc-for>
+      </div>
+      <div style="padding:16px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
+        <button onclick="{{ H.openImportModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><span style="font-family:'Material Symbols Outlined';font-size:16px;">upload</span>导入</button>
+        <button onclick="{{ H.openCreateModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><span style="font-family:'Material Symbols Outlined';font-size:16px;">add</span>新建歌单</button>
+      </div>
+    </div>
+
+    <div style="flex:1.5;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden;background:{{ v.c.bg }};">
+
+      <sc-if value="{{ v.rightIsQueue }}">
+        <div style="padding:20px 24px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+          <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">当前播放列表 · {{ v.queueCount }}</span>
+          <button onclick="{{ H.closeQueuePanel }}" style="display:flex;align-items:center;gap:4px;padding:7px 14px 7px 10px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:12.5px;font-weight:500;cursor:pointer;">
+            <span style="font-family:'Material Symbols Outlined';font-size:17px;">expand_more</span>收起
+          </button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
+          <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
+            <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
+              <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
+              <span style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
+              <div style="width:38px;height:38px;border-radius:8px;background:{{ item.coverGradient }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <span style="font-family:'Material Symbols Outlined';font-size:16px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
+                <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artist }} · {{ item.sourceLabel }}</div>
+              </div>
+              <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
+              <button onclick="{{ item.onRemove }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
+                <span style="font-family:'Material Symbols Outlined';font-size:16px;">close</span>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ v.rightIsBrowse }}">
+
+      <div style="padding:20px 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;flex-shrink:0;">
+        <div style="flex:1;min-width:200px;position:relative;display:flex;align-items:center;">
+          <span style="font-family:'Material Symbols Outlined';font-size:19px;position:absolute;left:16px;color:{{ v.c.onSurfaceVariant }};">search</span>
+          <input value="{{ v.searchQuery }}" onchange="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" placeholder="输入歌名 / 歌手，回车搜索…" style="width:100%;min-width:0;padding:11px 16px 11px 46px;border-radius:28px;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};font-size:13.5px;border:none;outline:none;font-family:inherit;box-sizing:border-box;">
+        </div>
+        <button onclick="{{ H.doSearch }}" style="padding:0 22px;height:42px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-weight:500;font-size:13.5px;cursor:pointer;flex-shrink:0;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.95);">搜索</button>
+      </div>
+
+      <sc-if value="{{ v.isPlaylistView }}">
+      <div style="padding:0 24px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+        <button onclick="{{ H.goHome }}" style="width:32px;height:32px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:20px;">arrow_back</span></button>
+        <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">{{ v.playlistHeaderName }}</span>
+      </div>
+      <sc-if value="{{ v.showPlayAll }}">
+      <div style="padding:0 24px 18.75px;flex-shrink:0;">
+        <button onclick="{{ H.playAllInPlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;">play_arrow</span>播放全部
+        </button>
+      </div>
+      </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ v.isLibraryView }}">
+      <div style="padding:0 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;flex-shrink:0;">
+        <sc-for list="{{ v.sourcesRender }}" as="src" hint-placeholder-count="5">
+          <span onclick="{{ src.onClick }}" style="{{ src.chipStyle }}">
+            <sc-if value="{{ src.checked }}"><span style="font-family:'Material Symbols Outlined';font-size:15px;">check</span></sc-if>
+            <span style="width:7px;height:7px;border-radius:50%;background:{{ src.dot }};flex-shrink:0;"></span>{{ src.label }}
+          </span>
+        </sc-for>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ v.showStatusText }}">
+      <div style="padding:0 24px 14px;font-size:12px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ v.statusText }}</div>
+      </sc-if>
+
+      <div style="flex:1;overflow-y:auto;padding:0 24px 24px;">
+        <sc-if value="{{ v.hasNoResults }}">
+          <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
+            <div style="display:flex;justify-content:center;margin-bottom:12px;"><span style="font-family:'Material Symbols Outlined';font-size:40px;">{{ v.emptyIcon }}</span></div>
+            <div>{{ v.emptyText }}</div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ v.viewIsList }}">
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
+              <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};">
+                <div style="width:44px;height:44px;border-radius:8px;background:{{ t.coverGradient }};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
+                  <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
+                </div>
+                <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
+                  <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
+                  <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                    <span style="font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:600;background:{{ t.tagBg }};color:{{ t.tagColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
+                    <span style="font-size:11px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.artist }}</span>
+                  </div>
+                </div>
+                <button onclick="{{ t.onAdd }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">{{ t.primaryActionIcon }}</span></button>
+                <button onclick="{{ t.onLike }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:17px;font-variation-settings:'FILL' {{ t.likeFill }};">{{ t.likeGlyph }}</span></button>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
+    </div>
+
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:{{ v.c.surfaceLow }};">
+     <div style="flex:1;min-height:0;width:100%;height:100%;box-sizing:border-box;padding:26px 30px 24px;display:flex;flex-direction:column;align-items:center;">
+      <div style="width:100%;text-align:center;margin-bottom:6px;flex-shrink:0;">
+        <span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;color:{{ v.c.onSurfaceVariant }};">正在播放</span>
+      </div>
+
+      <div onclick="{{ H.toggleMediaView }}" style="flex:1;width:100%;min-height:0;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;">
+        <sc-if value="{{ v.mediaIsCover }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ v.mediaDiscStyle }}">
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:78px;height:78px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(0,0,0,.1);">
+              <span style="font-family:'Material Symbols Outlined';font-size:28px;color:{{ v.c.onSurfaceVariant }};">music_note</span>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ v.mediaIsLyrics }}">
+          <div style="width:100%;height:100%;overflow:hidden;position:relative;">
+            <div style="position:absolute;left:0;right:0;top:0;transform:translateY({{ v.lyricsOffset }}px);transition:transform .5s ease;">
+              <sc-for list="{{ v.lyricsRender }}" as="line" hint-placeholder-count="6">
+                <div style="{{ line.style }}">{{ line.text }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="width:100%;text-align:center;margin-top:14px;flex-shrink:0;">
+        <div style="font-size:17px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
+        <div style="font-size:13px;color:{{ v.c.onSurfaceVariant }};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artist }}</div>
+      </div>
+
+      <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:16px;flex-shrink:0;">
+        <span style="font-size:10.5px;color:{{ v.c.onSurfaceVariant }};width:28px;text-align:right;flex-shrink:0;">{{ v.currentTimeStr }}</span>
+        <div onclick="{{ H.seek }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;">
+          <div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.primary }};width:{{ v.progressPct }}%;"></div>
+        </div>
+        <span style="font-size:10.5px;color:{{ v.c.onSurfaceVariant }};width:28px;flex-shrink:0;">{{ v.durationStr }}</span>
+      </div>
+
+      <div style="width:100%;display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-shrink:0;">
+        <button onclick="{{ H.toggleQueuePanel }}" style="position:relative;width:34px;height:34px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.queueBtnBg }};color:{{ v.queueBtnColor }};">
+          <span style="font-family:'Material Symbols Outlined';font-size:19px;">queue_music</span>
+          <span style="position:absolute;top:1px;right:1px;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px;">{{ v.queueCount }}</span>
+        </button>
+        <div style="display:flex;align-items:center;gap:2px;">
+          <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
+          <button onclick="{{ H.togglePlay }}" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span></button>
+          <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
+        </div>
+        <button onclick="{{ H.cycleMode }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
+      </div>
+
+      <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:14px;flex-shrink:0;">
+        <span style="font-family:'Material Symbols Outlined';font-size:18px;color:{{ v.c.onSurfaceVariant }};">volume_up</span>
+        <div onclick="{{ H.setVolume }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;"><div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.onSurfaceVariant }};width:{{ v.volume }}%;"></div></div>
+      </div>
+     </div>
+    </div>
+
+  </div>
+
+  <div style="height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:{{ v.c.surfaceLow }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
+    <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};">本页面仅供学习交流使用，请勿用于任何商业用途</span>
+  </div>
+
+  <sc-if value="{{ v.hasAddModal }}">
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
+      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:340px;box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">添加到歌单</div>
+        <sc-for list="{{ v.playlistOptions }}" as="pl" hint-placeholder-count="3">
+          <div onclick="{{ pl.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" style-hover="background:{{ v.c.hover }}">
+            <span style="width:32px;height:32px;border-radius:8px;background:{{ pl.tileBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:16px;color:#fff;">{{ pl.icon }}</span></span>
+            <span style="font-size:13.5px;font-weight:500;color:{{ v.c.onSurface }};">{{ pl.name }}</span>
+          </div>
+        </sc-for>
+        <button onclick="{{ H.closeAddModal }}" style="width:100%;margin-top:10px;padding:10px 0;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ v.hasImportModal }}">
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeImportModal }}">
+      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:380px;box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">导入歌单</div>
+        <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">支持网易云音乐、QQ音乐歌单链接</div>
+        <input value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;font-family:inherit;">
+        <input value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="歌单名称（可选）" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;font-family:inherit;">
+        <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">留空导入到「喜欢的音乐」，填写则新建同名歌单导入</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="{{ H.closeImportModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
+          <button onclick="{{ H.confirmImport }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;">导入</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ v.hasCreateModal }}">
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeCreateModal }}">
+      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:340px;box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">新建歌单</div>
+        <input value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="歌单名称…" maxlength="50" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:16px;box-sizing:border-box;font-family:inherit;">
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="{{ H.closeCreateModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
+          <button onclick="{{ H.confirmCreate }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;">创建</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ v.hasToast }}">
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:{{ v.c.onSurface }};color:{{ v.c.bg }};padding:14px 20px;border-radius:4px;font-size:13px;font-weight:500;z-index:200;box-shadow:{{ v.c.e2 }};">{{ v.toast }}</div>
+  </sc-if>
+</div>
+
+</x-dc>
+<audio id="player-audio" style="display:none;" crossorigin="anonymous"></audio>
+<script type="text/x-dc" data-dc-script>
+
+
+const THEMES = {
+  dark: {
+    bg: '#141218', surfaceLow: '#1D1B20', surface: '#211F26', surfaceHigh: '#2B2930', surfaceHighest: '#36343B',
+    onSurface: '#E6E0E9', onSurfaceVariant: '#CAC4D0', outline: '#948F99', outlineVariant: '#49454F',
+    primary: '#D0BCFF', onPrimary: '#381E72', primaryContainer: '#4F378B', onPrimaryContainer: '#EADDFF',
+    secondaryContainer: '#4A4458', onSecondaryContainer: '#E8DEF8', heart: '#FFB4AB',
+    hover: 'rgba(230,224,233,0.08)', press: 'rgba(230,224,233,0.12)',
+    e2: '0 1px 2px rgba(0,0,0,.45), 0 2px 6px 2px rgba(0,0,0,.25)',
+    e3: '0 4px 8px 3px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.4)',
+  },
+  light: {
+    bg: '#FFFBFE', surfaceLow: '#F7F2FA', surface: '#F3EDF7', surfaceHigh: '#ECE6F0', surfaceHighest: '#E6E0E9',
+    onSurface: '#1D1B20', onSurfaceVariant: '#49454F', outline: '#79747E', outlineVariant: '#CAC4D0',
+    primary: '#6750A4', onPrimary: '#FFFFFF', primaryContainer: '#EADDFF', onPrimaryContainer: '#21005D',
+    secondaryContainer: '#E8DEF8', onSecondaryContainer: '#1D192B', heart: '#BA1A1A',
+    hover: 'rgba(29,27,32,0.06)', press: 'rgba(29,27,32,0.10)',
+    e2: '0 1px 2px rgba(0,0,0,.12), 0 2px 6px 2px rgba(0,0,0,.08)',
+    e3: '0 4px 8px 3px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.14)',
+  },
+};
+
+const SOURCE_COLORS = { netease: '#ff6b6b', qq: '#4dd0e1', kuwo: '#ba68c8', soundcloud: '#ff8800' };
+const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', kuwo: '酷我', soundcloud: 'SoundCloud' };
+const GRADIENTS = {
+  netease: 'linear-gradient(135deg, rgba(255,107,107,.55), rgba(255,107,107,.14))',
+  qq: 'linear-gradient(135deg, rgba(77,208,225,.55), rgba(77,208,225,.14))',
+  kuwo: 'linear-gradient(135deg, rgba(186,104,200,.55), rgba(186,104,200,.14))',
+  soundcloud: 'linear-gradient(135deg, rgba(255,136,0,.55), rgba(255,136,0,.16))',
+};
+
+function makeQueue() {
+  return [
+    { id: 1, title: '夜行灯塔', artist: '林间信号', source: 'netease', duration: 214 },
+    { id: 2, title: '低语电台', artist: '纸飞机乐队', source: 'qq', duration: 198 },
+    { id: 3, title: '第七个路口', artist: '雾岛先生', source: 'kuwo', duration: 231 },
+    { id: 4, title: '折叠时区', artist: '半透明', source: 'netease', duration: 205 },
+    { id: 5, title: '慢速回放', artist: '纸飞机乐队', source: 'qq', duration: 222 },
+    { id: 6, title: '安静的光', artist: '雾岛先生', source: 'kuwo', duration: 196 },
+    { id: 7, title: '纸间信件', artist: '林间信号', source: 'netease', duration: 209 },
+  ];
+}
+
+function makeLyrics() {
+  const lines = [
+    '灯光渐渐暗下来', '窗外的风还没停', '我数着路过的车灯', '想着还没说完的话',
+    '手心里握着一张车票', '通向没有名字的车站', '如果雨再下大一点', '我们就有理由多留一会',
+    '街角的钟走得很慢', '像是在等一个人回头', '我把耳机音量调高', '盖住犹豫不决的心跳',
+    '这条路走了很多遍', '却还是记不住尽头', '你说过要一起看海', '现在风还记得这句话',
+    '把过去折成纸船', '放进今晚安静的河', '灯塔的光转了一圈', '照见了没寄出的信',
+    '如果这首歌能被听到', '希望你也刚好想起我',
+  ];
+  return lines.map((text, i) => ({ time: i * 9, text }));
+}
+
+const LYRICS = makeLyrics();
+
+function fmtTime(s) {
+  s = Math.max(0, Math.floor(s));
+  const m = Math.floor(s / 60), sec = s % 60;
+  return m + ':' + String(sec).padStart(2, '0');
+}
+
+const TILE_PALETTES = [
+  'linear-gradient(135deg,#7C6BC4,#5C4A99)', 'linear-gradient(135deg,#4FC3C0,#2A8F92)',
+  'linear-gradient(135deg,#E8916B,#C96A3E)', 'linear-gradient(135deg,#6FB07F,#3E8F58)',
+  'linear-gradient(135deg,#5B9BD5,#3A6EA8)', 'linear-gradient(135deg,#C97BB0,#A2508C)',
+];
+function pickTileColor() { return TILE_PALETTES[Math.floor(Math.random() * TILE_PALETTES.length)]; }
+
+// ====================== 搜索 API ======================
+// 浏览器端内联 API 调用（避免 ES module 导入问题）
+// 各源代理地址来自 src/api/ 模块
+
+// API 模块通过 esbuild 打包的 api-bundle.js 暴露为 window.ListeningAPI
+// 搜索/详情调用直接使用 ListeningAPI.searchAll() / ListeningAPI.ensureTrackDetails()
+
+let _apiIdSeq = 0; // track 内部 id 递增（兼容旧渲染逻辑）
+
+function normalizeTrack(t) {
+  if (t.id == null) t.id = ++_apiIdSeq;
+  if (!t.duration) t.duration = 0;
+  return t;
+}
+
+class Component extends DCLogic {
+  state = {
+    theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, viewingPlaylistId: null,
+    searchResults: [],
+    sources: { netease: true, qq: true, kuwo: true, soundcloud: true },
+    liked: { 3: true },
+    // 歌词解析结果，搜索播放时动态填充
+    lyrics: [],
+    queue: makeQueue(),
+    currentId: 2, currentTime: 42, volume: 70, playing: false, playMode: 0,
+    mediaView: 'cover', rightPanel: 'browse', dragId: null,
+    addModalId: null, toast: null, createModalOpen: false, createName: '',
+    importModalOpen: false, importUrl: '', importPlaylistName: '',
+    playlists: [
+      { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
+      { id: 'night', name: '深夜电台', builtin: false, trackIds: [2, 6], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#7C6BC4,#5C4A99)' },
+      { id: 'commute', name: '通勤路上', builtin: false, trackIds: [1, 4, 7], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#4FC3C0,#2A8F92)' },
+    ],
+    selectedPlaylist: 'liked', hoverPlaylistId: null,
+  };
+
+  componentWillUnmount() {
+    if (this._audio) {
+      this._audio.removeEventListener('timeupdate', this._onTimeUpdate);
+      this._audio.removeEventListener('ended', this._onEnded);
+      this._audio.removeEventListener('play', this._onPlay);
+      this._audio.removeEventListener('pause', this._onPause);
+      this._audio.removeEventListener('error', this._onError);
+      this._audio.removeEventListener('loadedmetadata', this._onMeta);
+    }
+    clearTimeout(this._toastTimer);
+  }
+
+  patch(p) { this.setState(s => (typeof p === 'function' ? p(s) : p)); }
+
+  componentDidMount() {
+    // DC framework runs this method after the component is mounted
+    setTimeout(() => this.initAudio(), 0);
+  }
+
+  initAudio() {
+    if (this._audio) return;
+    const el = document.getElementById('player-audio');
+    if (!el) { console.warn('No #player-audio element found'); return; }
+    const a = el;
+    this._audio = a;
+
+    this._onTimeUpdate = () => {
+      const t = a.currentTime;
+      if (isFinite(t)) this.setState(s => ({ currentTime: t }));
+    };
+    this._onEnded = () => this.handleTrackEnd();
+    this._onPlay = () => this.setState({ playing: true });
+    this._onPause = () => this.setState({ playing: false });
+    this._onError = () => {
+      console.error('audio error:', a.error);
+      this.showToast('播放失败，请尝试其他音源');
+      this.setState({ playing: false });
+    };
+    this._onMeta = () => {
+      const dur = a.duration;
+      if (isFinite(dur) && dur > 0) this.patch(s => {
+        const track = s.queue.find(t => t.id === s.currentId);
+        if (track) track.duration = dur;
+        return { currentTime: a.currentTime };
+      });
+    };
+
+    a.addEventListener('timeupdate', this._onTimeUpdate);
+    a.addEventListener('ended', this._onEnded);
+    a.addEventListener('play', this._onPlay);
+    a.addEventListener('pause', this._onPause);
+    a.addEventListener('error', this._onError);
+    a.addEventListener('loadedmetadata', this._onMeta);
+
+    // 同步初始音量
+    a.volume = this.state.volume / 100;
+  }
+
+  selectPlaylist(id) { this.patch({ selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse' }); }
+  backToLibrary() { this.patch({ viewingPlaylistId: null, selectedPlaylist: null, appliedQuery: '', searchQuery: '', hasSearched: false, rightPanel: 'browse' }); }
+  removeFromPlaylist(trackId) {
+    const pid = this.state.viewingPlaylistId;
+    if (!pid) return;
+    if (pid === 'liked') { this.toggleLike(trackId); return; }
+    this.patch(s => ({ playlists: s.playlists.map(p => p.id === pid ? { ...p, trackIds: (p.trackIds || []).filter(id => id !== trackId) } : p) }));
+    this.showToast('已从歌单移除');
+  }
+  hoverPlaylist(id) { this.patch({ hoverPlaylistId: id }); }
+  unhoverPlaylist() { this.patch({ hoverPlaylistId: null }); }
+  deletePlaylist(id, e) {
+    e.stopPropagation();
+    const pl = this.state.playlists.find(p => p.id === id);
+    if (!pl || pl.builtin) return;
+    if (!confirm(`确定删除歌单「${pl.name}」？`)) return;
+    this.patch(s => ({
+      playlists: s.playlists.filter(p => p.id !== id),
+      selectedPlaylist: s.selectedPlaylist === id ? null : s.selectedPlaylist,
+      viewingPlaylistId: s.viewingPlaylistId === id ? null : s.viewingPlaylistId,
+    }));
+    this.showToast('已删除歌单');
+  }
+
+  stop(e) { e.stopPropagation(); }
+
+  toggleTheme() { this.patch(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })); }
+  setSearchQuery(e) { this.patch({ searchQuery: e.target.value }); }
+  searchKeyDown(e) { if (e.key === 'Enter') this.doSearch(); }
+  doSearch() {
+    const q = this.state.searchQuery.trim();
+    if (!q) return;
+    const API = window.ListeningAPI;
+    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
+    this.patch({ appliedQuery: q, hasSearched: true, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: [] });
+    this.showToast(`正在搜索 "${q}" …`);
+    const sources = Object.keys(this.state.sources).filter(k => this.state.sources[k]);
+    API.searchAll({ keyword: q, sources, limit: 10 }).then(tracks => {
+      // 给每个 track 分配内部 id
+      tracks.forEach(t => normalizeTrack(t));
+      if (!tracks.length) {
+        this.patch({ searchResults: [] });
+        this.showToast(`没有找到「${q}」相关歌曲`);
+        return;
+      }
+      this.patch({ searchResults: tracks });
+      const srcLabels = [...new Set(tracks.map(t => SOURCE_LABELS[t.source] || t.source))].join('、');
+      this.showToast(`"${q}" 找到 ${tracks.length} 首（${srcLabels}）`);
+    }).catch(e => {
+      console.error('search error:', e);
+      this.showToast('搜索失败，请检查网络连接');
+    });
+  }
+  goHome() { this.backToLibrary(); }
+  toggleSource(key) { this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] } })); }
+
+  showToast(msg) {
+    clearTimeout(this._toastTimer);
+    this.patch({ toast: msg });
+    this._toastTimer = setTimeout(() => this.patch({ toast: null }), 2200);
+  }
+
+  toggleLike(id) {
+    const isLiked = !!this.state.liked[id];
+    const liked = { ...this.state.liked };
+    if (isLiked) delete liked[id]; else liked[id] = true;
+    this.patch({ liked });
+    this.showToast(isLiked ? '已取消喜欢' : '已添加到喜欢的歌曲');
+  }
+
+  openImportModal() { this.patch({ importModalOpen: true, importUrl: '', importPlaylistName: '' }); }
+  closeImportModal() { this.patch({ importModalOpen: false }); }
+  setImportUrl(e) { this.patch({ importUrl: e.target.value }); }
+  setImportPlaylistName(e) { this.patch({ importPlaylistName: e.target.value }); }
+  importKeyDown(e) { if (e.key === 'Enter') this.confirmImport(); }
+  confirmImport() {
+    const url = this.state.importUrl.trim();
+    if (!url) return;
+    let source = null;
+    if (/music\.163\.com/.test(url)) source = 'netease';
+    else if (/y\.qq\.com/.test(url)) source = 'qq';
+    const name = this.state.importPlaylistName.trim();
+    this.patch({ importModalOpen: false });
+    if (!source) {
+      this.showToast('暂不支持该链接，请粘贴网易云音乐或QQ音乐的歌单链接');
+      return;
+    }
+    const targetLabel = name ? `新建歌单「${name}」` : '「喜欢的音乐」';
+    // TODO: 在此接入歌单解析逻辑：
+    // - source: 'netease' | 'qq'
+    // - url: 用户粘贴的歌单链接
+    // - name: 非空时，先新建同名歌单，再将解析出的歌曲增量导入其中；
+    //         为空时，直接增量导入到内置歌单「喜欢的音乐」（即写入 state.liked）
+    this.showToast(`已识别${source === 'netease' ? '网易云音乐' : 'QQ音乐'}歌单链接，即将导入到${targetLabel}，解析功能开发中…`);
+  }
+
+  openAddModal(id) { this.patch({ addModalId: id }); }
+  closeAddModal() { this.patch({ addModalId: null }); }
+  openCreateModal() { this.patch({ createModalOpen: true, createName: '' }); }
+  closeCreateModal() { this.patch({ createModalOpen: false }); }
+  setCreateName(e) { this.patch({ createName: e.target.value }); }
+  createKeyDown(e) { if (e.key === 'Enter') this.confirmCreate(); }
+  confirmCreate() {
+    const name = this.state.createName.trim();
+    if (!name) return;
+    const id = 'pl_' + Date.now();
+    this.patch(s => ({
+      playlists: [...s.playlists, { id, name, builtin: false, trackIds: [], glyph: 'queue_music', iconFill: 0, tileBg: pickTileColor() }],
+      createModalOpen: false, createName: '', selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse',
+    }));
+    this.showToast(`已创建歌单「${name}」`);
+  }
+  confirmAdd(playlistId, playlistName) {
+    const trackId = this.state.addModalId;
+    this.patch({ addModalId: null });
+    if (playlistId === 'liked') {
+      this.patch(s => ({ liked: { ...s.liked, [trackId]: true } }));
+    } else {
+      this.patch(s => ({
+        playlists: s.playlists.map(p => {
+          if (p.id !== playlistId) return p;
+          const trackIds = (p.trackIds || []).includes(trackId) ? p.trackIds : [...(p.trackIds || []), trackId];
+          return { ...p, trackIds };
+        }),
+      }));
+    }
+    this.showToast(`已添加到「${playlistName}」`);
+  }
+
+  playAllInPlaylist() {
+    const s = this.state;
+    const pid = s.viewingPlaylistId;
+    if (!pid) return;
+    const pl = s.playlists.find(p => p.id === pid);
+    if (!pl) return;
+    const ids = pid === 'liked' ? Object.keys(s.liked).map(Number) : (pl.trackIds || []);
+    const tracks = s.queue.filter(t => ids.includes(t.id));
+    if (!tracks.length) return;
+    this.playTrackAt(tracks[0].id);
+    this.showToast(`正在播放「${pl.name}」`);
+  }
+
+  toggleMediaView() { this.patch(s => ({ mediaView: s.mediaView === 'cover' ? 'lyrics' : 'cover' })); }
+  toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue' })); }
+  closeQueuePanel() { this.patch({ rightPanel: 'browse' }); }
+  cycleMode() { this.patch(s => ({ playMode: (s.playMode + 1) % 3 })); }
+
+  // ==== Real audio playback ====
+
+  handleTrackEnd() {
+    const s = this.state;
+    const cur = this._audio;
+    const mode = s.playMode;
+    const queue = s.queue;
+    const idx = queue.findIndex(t => t.id === s.currentId);
+
+    if (mode === 2) {
+      // 单曲循环
+      if (cur) { cur.currentTime = 0; cur.play(); }
+    } else if (mode === 1) {
+      // 随机
+      if (queue.length > 0) {
+        const ri = Math.floor(Math.random() * queue.length);
+        this.playTrackAt(queue[ri].id);
+      }
+    } else {
+      // 列表循环
+      const nxt = queue[idx + 1];
+      if (nxt) {
+        this.playTrackAt(nxt.id);
+      } else if (queue.length > 0) {
+        this.playTrackAt(queue[0].id);
+      }
+    }
+  }
+
+  loadAndPlay(track) {
+    if (!track) return;
+    const API = window.ListeningAPI;
+    if (!API) { this.showToast('API 模块未加载'); return; }
+
+    this.initAudio();
+    const a = this._audio;
+    if (!a) return;
+
+    // 如果已有播放链接就直接播放，否则加载详情
+    const go = () => {
+      if (!track.audioUrl) { this.showToast('暂无可用播放链接'); return; }
+      a.src = track.audioUrl;
+      a.currentTime = 0;
+      a.volume = this.state.volume / 100;
+      a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+    };
+
+    if (track.audioUrl) {
+      go();
+      return;
+    }
+
+    this.showToast(`正在加载 "${track.title}" 的播放链接…`);
+    API.ensureTrackDetails(track).then(() => {
+      // 如果有歌词，解析并同步
+      if (track.lrc) {
+        this.parseAndSetLyrics(track.lrc);
+      }
+      go();
+    }).catch(e => {
+      console.error('load details error:', e);
+      this.showToast('加载播放链接失败，请尝试其他音源');
+    });
+  }
+
+  parseAndSetLyrics(lrcText) {
+    try {
+      const lines = lrcText.split(/\r?\n/);
+      const reg = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/;
+      const out = [];
+      for (const line of lines) {
+        const m = reg.exec(line);
+        if (!m) continue;
+        const min = parseInt(m[1], 10) || 0;
+        const sec = parseInt(m[2], 10) || 0;
+        const ms = m[3] ? parseInt(m[3].padEnd(3, '0'), 10) : 0;
+        const time = min * 60 + sec + ms / 1000;
+        const text = line.replace(reg, '').trim();
+        if (text) out.push({ time, text });
+      }
+      out.sort((a, b) => a.time - b.time);
+      this.setState(s => ({ lyrics: out }));
+    } catch (e) { console.warn('parse lyrics error:', e); }
+  }
+
+  togglePlay() {
+    const a = this._audio;
+    if (!a) return;
+    const s = this.state;
+    if (s.playing) {
+      a.pause();
+    } else {
+      // 如果是首次播放且还没有音频源，加载当前 track
+      if (!a.src || a.src === window.location.href) {
+        const track = s.queue.find(t => t.id === s.currentId);
+        if (track) this.loadAndPlay(track);
+        else a.play().catch(() => {});
+      } else {
+        a.play().catch(e => { console.error('play error:', e); });
+      }
+    }
+  }
+
+  seek(e) {
+    const a = this._audio;
+    if (!a || !a.duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    a.currentTime = frac * a.duration;
+  }
+
+  setVolume(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const vol = Math.round(frac * 100);
+    const a = this._audio;
+    if (a) a.volume = frac;
+    this.patch({ volume: vol });
+  }
+
+  playTrackAt(id) {
+    const s = this.state;
+    const track = s.searchResults.find(t => t.id === id) || s.queue.find(t => t.id === id);
+    if (!track) return;
+    // 加入队列（如果不在）
+    if (!s.queue.find(t => t.id === id)) {
+      this.patch(s2 => ({ queue: [...s2.queue, track] }));
+    }
+    this.patch({ currentId: id, currentTime: 0, playing: true, lyrics: [] });
+    setTimeout(() => {
+      this.initAudio();
+      this.loadAndPlay(track);
+    }, 0);
+  }
+
+  stepTrack(dir) {
+    const s = this.state;
+    const idx = s.queue.findIndex(t => t.id === s.currentId);
+    const ni = idx + dir;
+    if (ni >= 0 && ni < s.queue.length) {
+      this.playTrackAt(s.queue[ni].id);
+    }
+  }
+
+  removeTrack(id) {
+    this.patch(s => {
+      const oldIdx = s.queue.findIndex(t => t.id === id);
+      const queue = s.queue.filter(t => t.id !== id);
+      let currentId = s.currentId;
+      if (id === currentId) currentId = (queue[oldIdx] || queue[oldIdx - 1] || queue[0] || {}).id;
+      return { queue, currentId };
+    });
+  }
+
+  dragStart(id) { this.patch({ dragId: id }); }
+  dragOverRow(overId, e) {
+    e.preventDefault();
+    const s = this.state;
+    if (s.dragId == null || s.dragId === overId) return;
+    const queue = [...s.queue];
+    const from = queue.findIndex(t => t.id === s.dragId);
+    const to = queue.findIndex(t => t.id === overId);
+    if (from < 0 || to < 0) return;
+    const [moved] = queue.splice(from, 1);
+    queue.splice(to, 0, moved);
+    this.patch({ queue });
+  }
+  dragEnd() { this.patch({ dragId: null }); }
+
+  renderVals() {
+    const s = this.state;
+    const c = THEMES[s.theme];
+    const rawTrack = s.queue.find(t => t.id === s.currentId) || s.queue[0] || { title: '未在播放', artist: '', duration: 200, source: 'netease' };
+    const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease };
+    const duration = Math.max(track.duration || 0, 0.1);
+    const progressPct = Math.min(100, (s.currentTime / duration) * 100);
+
+    // 动态歌词（从 API 解析的实时歌词）
+    const lyricsForRender = (s.lyrics && s.lyrics.length) ? s.lyrics : LYRICS;
+    let curLyricIdx = 0;
+    for (let i = 0; i < lyricsForRender.length; i++) { if (lyricsForRender[i].time <= s.currentTime) curLyricIdx = i; }
+    const lineHeight = 48;
+    const viewportH = 300;
+    const offset = viewportH / 2 - (curLyricIdx * lineHeight + lineHeight / 2);
+    const lyricsRender = lyricsForRender.map((l, i) => {
+      const d = Math.abs(i - curLyricIdx);
+      let style;
+      if (d === 0) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:700;color:${c.primary};transition:all .4s ease;padding:0 12px;text-align:center;line-height:1.35;`;
+      else if (d === 1) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;color:${c.onSurface};opacity:0.55;transition:all .4s ease;padding:0 12px;text-align:center;`;
+      else if (d === 2) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:400;color:${c.onSurfaceVariant};opacity:0.32;transition:all .4s ease;padding:0 12px;text-align:center;`;
+      else style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:400;color:${c.onSurfaceVariant};opacity:0.14;transition:all .4s ease;padding:0 12px;text-align:center;`;
+      return { text: l.text, style, key: 'ly' + i };
+    });
+
+    const queueRender = s.queue.map((t, i) => {
+      const isCurrent = t.id === s.currentId;
+      return {
+        ...t, index: i + 1, isCurrent, coverGradient: GRADIENTS[t.source],
+        sourceLabel: SOURCE_LABELS[t.source], durationStr: fmtTime(t.duration),
+        playingGlyph: isCurrent ? 'graphic_eq' : 'music_note',
+        rowStyle: `display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:grab;background:${isCurrent ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
+        titleColor: isCurrent ? c.onSecondaryContainer : c.onSurface,
+        artistColor: isCurrent ? c.onSecondaryContainer : c.onSurfaceVariant,
+        onClick: () => this.playTrackAt(t.id),
+        onRemove: (e) => { e.stopPropagation(); this.removeTrack(t.id); },
+        onDragStart: () => this.dragStart(t.id),
+        onDragOver: (e) => this.dragOverRow(t.id, e),
+        onDrop: (e) => e.preventDefault(),
+      };
+    });
+
+    const isPlaylistView = !!s.viewingPlaylistId;
+    const activePlaylist = isPlaylistView ? s.playlists.find(p => p.id === s.viewingPlaylistId) : null;
+    const q = s.appliedQuery;
+    const filteredSearch = s.searchResults.filter(t => !q || t.title.toLowerCase().includes(q.toLowerCase()) || t.artist.toLowerCase().includes(q.toLowerCase()));
+    let displayTracks;
+    if (isPlaylistView && activePlaylist) {
+      const ids = activePlaylist.id === 'liked' ? Object.keys(s.liked).map(Number) : (activePlaylist.trackIds || []);
+      displayTracks = s.queue.filter(t => ids.includes(t.id));
+    } else if (s.hasSearched) {
+      displayTracks = filteredSearch;
+    } else {
+      displayTracks = [];
+    }
+    const showPrompt = !isPlaylistView && !s.hasSearched;
+    const tracksRender = displayTracks.map(t => {
+      const isCurrent = t.id === s.currentId;
+      const liked = !!s.liked[t.id];
+      return {
+        ...t, coverGradient: GRADIENTS[t.source], sourceLabel: SOURCE_LABELS[t.source],
+        cardBg: isCurrent ? c.primaryContainer : c.surface,
+        titleColor: isCurrent ? c.onPrimaryContainer : c.onSurface,
+        artistColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
+        tagBg: c.secondaryContainer, tagColor: c.onSecondaryContainer,
+        likeGlyph: 'favorite', likeFill: liked ? 1 : 0,
+        likeColor: liked ? c.heart : c.onSurfaceVariant,
+        primaryActionIcon: isPlaylistView ? 'playlist_remove' : 'playlist_add',
+        onPlay: () => this.playTrackAt(t.id),
+        onAdd: isPlaylistView ? (e) => { e.stopPropagation(); this.removeFromPlaylist(t.id); } : (e) => { e.stopPropagation(); this.openAddModal(t.id); },
+        onLike: (e) => { e.stopPropagation(); this.toggleLike(t.id); },
+      };
+    });
+
+    const sourcesRender = ['netease', 'qq', 'kuwo', 'soundcloud'].map(key => {
+      const checked = s.sources[key];
+      return {
+        key, label: SOURCE_LABELS[key], dot: SOURCE_COLORS[key], checked,
+        chipStyle: `display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;flex-shrink:0;cursor:pointer;background:${checked ? c.secondaryContainer : 'transparent'};color:${checked ? c.onSecondaryContainer : c.onSurfaceVariant};border:1px solid ${checked ? 'transparent' : c.outlineVariant};`,
+        onClick: () => this.toggleSource(key),
+      };
+    });
+
+    const idx = s.queue.findIndex(t => t.id === s.currentId);
+    const MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
+    const modeActive = s.playMode !== 0;
+
+    const pendingTrack = s.queue.find(t => t.id === s.addModalId);
+    const playlistOptions = s.playlists.map(pl => ({ id: pl.id, name: pl.name, icon: pl.glyph, tileBg: pl.tileBg, onClick: () => this.confirmAdd(pl.id, pl.name) }));
+
+    const likedCountNow = Object.keys(s.liked).length;
+    const playlistsRender = s.playlists.map(pl => {
+      const selected = pl.id === s.selectedPlaylist;
+      const hovered = s.hoverPlaylistId === pl.id;
+      return {
+        ...pl,
+        countLabel: pl.id === 'liked' ? likedCountNow : (pl.trackIds || []).length,
+        rowStyle: `display:flex;align-items:center;gap:12px;padding:9px 10px 9px 14px;border-radius:28px;cursor:pointer;background:${selected ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
+        nameColor: selected ? c.onSecondaryContainer : c.onSurface,
+        countColor: selected ? c.onSecondaryContainer : c.onSurfaceVariant,
+        deleteDisplay: (hovered && !pl.builtin) ? 'flex' : 'none',
+        onClick: () => this.selectPlaylist(pl.id),
+        onMouseEnter: () => this.hoverPlaylist(pl.id),
+        onMouseLeave: () => this.unhoverPlaylist(),
+        onDelete: (e) => this.deletePlaylist(pl.id, e),
+      };
+    });
+
+    const rightIsQueue = s.rightPanel === 'queue';
+    const mediaIsLyrics = s.mediaView === 'lyrics';
+
+    return {
+      v: {
+        c, theme: s.theme, track,
+        currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, volume: s.volume,
+        lyricsRender, lyricsOffset: offset,
+        queueRender, queueCount: s.queue.length, tracksRender,
+        searchQuery: s.searchQuery,
+        isPlaylistView, isLibraryView: !isPlaylistView,
+        playlistHeaderName: activePlaylist ? activePlaylist.name : '',
+        showPlayAll: isPlaylistView && displayTracks.length > 0,
+        hasNoResults: !showPrompt && displayTracks.length === 0,
+        showPrompt, showStatusText: !showPrompt,
+        emptyIcon: isPlaylistView ? 'queue_music' : 'search_off',
+        emptyText: isPlaylistView ? '这个歌单还没有歌曲，去搜索页添加吧' : '没有找到相关歌曲，换个关键词试试',
+        statusText: isPlaylistView
+          ? `${activePlaylist ? activePlaylist.name : ''} · ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · － 移出歌单）`
+          : (q
+            ? `“${q}” 找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`
+            : `找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`),
+        viewIsList: !showPrompt && displayTracks.length > 0,
+        mediaIsCover: !mediaIsLyrics, mediaIsLyrics,
+        mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.coverGradient};animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
+        rightIsQueue, rightIsBrowse: !rightIsQueue,
+        queueBtnBg: rightIsQueue ? c.primaryContainer : 'transparent',
+        queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
+        sourcesRender,
+        prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.queue.length - 1),
+        themeIcon: s.theme === 'dark' ? 'light_mode' : 'dark_mode',
+        switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
+        switchThumbBg: s.theme === 'dark' ? c.onPrimary : c.surfaceLow,
+        switchThumbLeft: s.theme === 'dark' ? 26 : 2,
+        switchIconColor: s.theme === 'dark' ? c.primary : c.onSurfaceVariant,
+        playIcon: s.playing ? 'pause' : 'play_arrow',
+        modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
+        likedCount: likedCountNow, playlistsRender,
+        hasAddModal: !!s.addModalId, pendingTrack, playlistOptions,
+        hasCreateModal: s.createModalOpen, createName: s.createName,
+        hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
+        hasToast: !!s.toast, toast: s.toast,
+      },
+      H: {
+        toggleTheme: () => this.toggleTheme(),
+        doSearch: () => this.doSearch(),
+        setSearchQuery: (e) => this.setSearchQuery(e),
+        searchKeyDown: (e) => this.searchKeyDown(e),
+        goHome: () => this.goHome(),
+        toggleMediaView: () => this.toggleMediaView(),
+        toggleQueuePanel: () => this.toggleQueuePanel(),
+        closeQueuePanel: () => this.closeQueuePanel(),
+        togglePlay: () => this.togglePlay(),
+        prev: () => this.stepTrack(-1),
+        next: () => this.stepTrack(1),
+        seek: (e) => this.seek(e),
+        setVolume: (e) => this.setVolume(e),
+        cycleMode: () => this.cycleMode(),
+        dragEnd: () => this.dragEnd(),
+        closeAddModal: () => this.closeAddModal(),
+        openCreateModal: () => this.openCreateModal(),
+        closeCreateModal: () => this.closeCreateModal(),
+        setCreateName: (e) => this.setCreateName(e),
+        createKeyDown: (e) => this.createKeyDown(e),
+        confirmCreate: () => this.confirmCreate(),
+        stop: (e) => this.stop(e),
+        playAllInPlaylist: () => this.playAllInPlaylist(),
+        openImportModal: () => this.openImportModal(),
+        closeImportModal: () => this.closeImportModal(),
+        setImportUrl: (e) => this.setImportUrl(e),
+        setImportPlaylistName: (e) => this.setImportPlaylistName(e),
+        importKeyDown: (e) => this.importKeyDown(e),
+        confirmImport: () => this.confirmImport(),
+      },
+    };
+  }
+}
+
+
+</script>
+</body>
+</html>
