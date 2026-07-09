@@ -103,8 +103,10 @@
             <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
               <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
               <span style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
-              <div style="width:38px;height:38px;border-radius:8px;background:{{ item.coverGradient }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                <span style="font-family:'Material Symbols Outlined';font-size:16px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
+              <div style="width:38px;height:38px;border-radius:8px;{{ item.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <sc-if value="{{ item.showCoverIcon }}">
+                  <span style="font-family:'Material Symbols Outlined';font-size:16px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
+                </sc-if>
               </div>
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
@@ -175,8 +177,10 @@
           <div style="display:flex;flex-direction:column;gap:2px;">
             <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
               <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};">
-                <div style="width:44px;height:44px;border-radius:8px;background:{{ t.coverGradient }};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
-                  <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
+                <div style="width:44px;height:44px;border-radius:8px;{{ t.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
+                  <sc-if value="{{ t.showCoverIcon }}">
+                    <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
+                  </sc-if>
                 </div>
                 <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
                   <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
@@ -374,6 +378,13 @@ function fmtTime(s) {
 
 function fmtArtistAlbum(t) {
   return t.album ? `${t.artist} - ${t.album}` : t.artist;
+}
+
+// 缩略图/卡片背景：优先用 track.cover 真实封面图，缺失时回退音源渐变色
+function coverStyle(t) {
+  return t.cover
+    ? `background-image:url('${t.cover}');background-size:cover;background-position:center;`
+    : `background:${GRADIENTS[t.source] || GRADIENTS.netease};`;
 }
 
 const TILE_PALETTES = [
@@ -920,7 +931,7 @@ class Component extends DCLogic {
     const queueRender = s.queue.map((t, i) => {
       const isCurrent = t.id === s.currentId;
       return {
-        ...t, index: i + 1, isCurrent, coverGradient: GRADIENTS[t.source],
+        ...t, index: i + 1, isCurrent, coverStyle: coverStyle(t), showCoverIcon: !t.cover,
         sourceLabel: SOURCE_LABELS[t.source], durationStr: fmtTime(t.duration),
         artistDisplay: fmtArtistAlbum(t),
         playingGlyph: isCurrent ? 'graphic_eq' : 'music_note',
@@ -953,7 +964,7 @@ class Component extends DCLogic {
       const isCurrent = t.id === s.currentId;
       const liked = !!s.liked[t.id];
       return {
-        ...t, coverGradient: GRADIENTS[t.source], sourceLabel: SOURCE_LABELS[t.source],
+        ...t, coverStyle: coverStyle(t), showCoverIcon: !t.cover, sourceLabel: SOURCE_LABELS[t.source],
         artistDisplay: fmtArtistAlbum(t),
         cardBg: isCurrent ? c.primaryContainer : c.surface,
         titleColor: isCurrent ? c.onPrimaryContainer : c.onSurface,
@@ -1028,7 +1039,7 @@ class Component extends DCLogic {
             : `找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`),
         viewIsList: !showPrompt && displayTracks.length > 0,
         mediaIsCover: !mediaIsLyrics, mediaIsLyrics,
-        mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.coverGradient};animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
+        mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.cover ? `url('${track.cover}')` : track.coverGradient};background-size:auto, cover;background-position:center;animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
         rightIsQueue, rightIsBrowse: !rightIsQueue,
         queueBtnBg: rightIsQueue ? c.primaryContainer : 'transparent',
         queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
