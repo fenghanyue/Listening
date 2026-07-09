@@ -6,8 +6,9 @@
 const BASE_URL = 'https://api.qijieya.cn/meting/';
 
 // meting 的 search/url/lrc 接口本身不带专辑名（固定 name/artist/url/pic/lrc 5 字段），
-// 专辑名需要额外查网易云官方接口，且该接口不发 CORS 头，浏览器端必须经本地代理 :8765 转发
-const NETEASE_PROXY = 'http://localhost:8765';
+// 专辑名需要额外查网易云官方接口，且该接口不发 CORS 头，浏览器端必须经代理转发（server.mjs
+// 提供的 /proxy，相对路径同源，本机开发和线上部署都一样）
+const NETEASE_PROXY = '';
 
 /**
  * 查专辑名（走本地代理，代理不可用或请求失败时静默放弃，不影响播放主流程）

@@ -11,7 +11,7 @@ Listening/
 │       ├── index.js      # 聚合入口：searchAll / ensureTrackDetails
 │       ├── netease.js    # 网易云音乐 (qijieya meting)
 │       ├── qq.js         # QQ音乐 (tang api)
-│       ├── soundcloud.js # SoundCloud (api-v2，浏览器端需配合 proxy-server.mjs)
+│       ├── soundcloud.js # SoundCloud (api-v2，浏览器端需配合 server.mjs 代理)
 │       └── utils.js      # LRC 解析
 ├── examples/
 │   ├── browser-demo.html # 浏览器 Demo（可直接打开）
@@ -84,7 +84,7 @@ await fetchNeteaseDetails(tracks[0]);
 |------|-----------|------|
 | 网易云 | meting proxy | api.qijieya.cn |
 | QQ音乐 | tang proxy | tang.api.s01s.cn |
-| SoundCloud | api-v2（浏览器端需走本地 `proxy-server.mjs` :8765 代理，见下方限制说明） | api-v2.soundcloud.com |
+| SoundCloud | api-v2（浏览器端需走 `server.mjs` 代理，`node server.mjs` 启动，见下方限制说明） | api-v2.soundcloud.com |
 
 > ⚠️ 以上均为第三方反向代理，非官方 API，不可控且无版权授权。仅供学习参考。
 

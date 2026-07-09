@@ -8,6 +8,14 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
 <script src="./support.js"></script>
 <script src="./api-bundle.js"></script>
+<script>
+// 封面图片浏览器缓存（sw.js）：特性检测，不支持的浏览器直接跳过，不影响播放主功能
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(e => console.warn('sw register failed:', e));
+  });
+}
+</script>
 </head>
 <body>
 <x-dc>
@@ -387,6 +395,97 @@ function coverStyle(t) {
     : `background:${GRADIENTS[t.source] || GRADIENTS.netease};`;
 }
 
+// 歌曲浏览器本地缓存（IndexedDB 存 Blob）：网易云/QQ/SoundCloud progressive 的音频 CDN
+// 实测都支持 CORS，可以直接 fetch 到字节；HLS（SoundCloud 部分曲目）是分片流，不在这套缓存范围内。
+const AUDIO_CACHE_DB = 'listening-audio-cache';
+const AUDIO_CACHE_STORE = 'tracks';
+const AUDIO_CACHE_CAP_BYTES = 300 * 1024 * 1024; // 300MB 上限，好调的一个常量
+
+function audioCacheKey(t) {
+  return `${t.source}:${t.id}`;
+}
+
+function openAudioCacheDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(AUDIO_CACHE_DB, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(AUDIO_CACHE_STORE)) {
+        req.result.createObjectStore(AUDIO_CACHE_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getCachedAudio(key) {
+  try {
+    const db = await openAudioCacheDB();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(AUDIO_CACHE_STORE, 'readonly').objectStore(AUDIO_CACHE_STORE).get(key);
+      req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('audio cache read failed:', e);
+    return null;
+  }
+}
+
+async function touchCachedAudio(key) {
+  try {
+    const db = await openAudioCacheDB();
+    const store = db.transaction(AUDIO_CACHE_STORE, 'readwrite').objectStore(AUDIO_CACHE_STORE);
+    const req = store.get(key);
+    req.onsuccess = () => {
+      if (req.result) { req.result.lastAccessed = Date.now(); store.put(req.result); }
+    };
+  } catch (e) { /* 命中计时更新失败不影响播放，静默跳过 */ }
+}
+
+async function putCachedAudio(key, blob) {
+  try {
+    const db = await openAudioCacheDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
+      tx.objectStore(AUDIO_CACHE_STORE).put({ id: key, blob, size: blob.size, lastAccessed: Date.now() });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+    evictAudioCacheIfOverCap();
+  } catch (e) {
+    console.warn('audio cache write failed:', e);
+  }
+}
+
+async function evictAudioCacheIfOverCap() {
+  try {
+    const db = await openAudioCacheDB();
+    const all = await new Promise((resolve, reject) => {
+      const req = db.transaction(AUDIO_CACHE_STORE, 'readonly').objectStore(AUDIO_CACHE_STORE).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    let total = all.reduce((sum, r) => sum + (r.size || 0), 0);
+    if (total <= AUDIO_CACHE_CAP_BYTES) return;
+    all.sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
+    const store = db.transaction(AUDIO_CACHE_STORE, 'readwrite').objectStore(AUDIO_CACHE_STORE);
+    for (const rec of all) {
+      if (total <= AUDIO_CACHE_CAP_BYTES) break;
+      store.delete(rec.id);
+      total -= (rec.size || 0);
+    }
+  } catch (e) {
+    console.warn('audio cache evict failed:', e);
+  }
+}
+
+function cacheAudioInBackground(key, url) {
+  fetch(url).then(r => (r.ok ? r.blob() : null)).then(blob => {
+    if (blob) putCachedAudio(key, blob);
+  }).catch(e => console.warn('audio cache fetch failed:', e));
+}
+
 const TILE_PALETTES = [
   'linear-gradient(135deg,#7C6BC4,#5C4A99)', 'linear-gradient(135deg,#4FC3C0,#2A8F92)',
   'linear-gradient(135deg,#E8916B,#C96A3E)', 'linear-gradient(135deg,#6FB07F,#3E8F58)',
@@ -484,6 +583,7 @@ class Component extends DCLogic {
       this._audio.removeEventListener('loadedmetadata', this._onMeta);
     }
     this.stopHLS();
+    if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
     clearInterval(this._progressSaveTimer);
   }
 
@@ -749,6 +849,7 @@ class Component extends DCLogic {
     const go = () => {
       if (!track.audioUrl) { this.showToast('暂无可用播放链接'); return; }
       this.stopHLS();
+      if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
 
       const startPlayback = () => {
         a.currentTime = resumeAt;
@@ -757,7 +858,8 @@ class Component extends DCLogic {
       };
 
       if (track.scIsHLS && window.Hls && window.Hls.isSupported()) {
-        // SoundCloud AAC HLS 流：manifest + 分片都在 CDN 上，交给 hls.js 直接拉取解封装
+        // SoundCloud AAC HLS 流：manifest + 分片都在 CDN 上，交给 hls.js 直接拉取解封装；
+        // 分片流不纳入本地缓存范围
         const hls = new window.Hls({ enableWorker: false });
         this._hls = hls;
         hls.loadSource(track.audioUrl);
@@ -770,9 +872,21 @@ class Component extends DCLogic {
           }
         });
       } else {
-        // 非 HLS，或浏览器原生支持 HLS（如 Safari）时直接设 src
-        a.src = track.audioUrl;
-        startPlayback();
+        // 非 HLS：先查本地缓存（IndexedDB），命中就播本地 blob，不发网络请求；
+        // 没命中照常联网播放，同时后台拉取完整文件存起来，下次播放这首歌就能命中
+        const cacheKey = audioCacheKey(track);
+        getCachedAudio(cacheKey).then(blob => {
+          if (blob) {
+            this._objectUrl = URL.createObjectURL(blob);
+            a.src = this._objectUrl;
+            startPlayback();
+            touchCachedAudio(cacheKey);
+          } else {
+            a.src = track.audioUrl;
+            startPlayback();
+            cacheAudioInBackground(cacheKey, track.audioUrl);
+          }
+        });
       }
     };
 

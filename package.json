@@ -5,7 +5,7 @@
   "description": "Listening — 跨平台音乐搜索与播放器",
   "scripts": {
     "build": "npx esbuild src/api/index.js --bundle --format=iife --global-name=ListeningAPI --outfile=examples/api-bundle.js",
-    "proxy": "node proxy-server.mjs",
-    "serve": "cd examples && python3 -m http.server 4444"
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
   }
 }

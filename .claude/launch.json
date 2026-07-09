@@ -2,17 +2,11 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "static",
+      "name": "dev",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["examples/static-server.mjs"],
+      "runtimeArgs": ["server.mjs"],
       "port": 4444,
       "autoPort": true
-    },
-    {
-      "name": "proxy",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["proxy-server.mjs"],
-      "port": 8765
     }
   ]
 }

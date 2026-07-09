@@ -1,7 +1,63 @@
 # DEBUG 日志
 
-> ⚠️ 当前功能状态以 **「2026-07-08 — 播放器功能规划 + 进展核对（权威）」** 一节为准。
+> ⚠️ 当前功能状态以 **「2026-07-08 — 播放器功能规划 + 进展核对（权威）」** 一节为准，
+> 部署/缓存相关的最新改动见下方 **「2026-07-09 — 部署到公网 + 浏览器端缓存」**。
 > 其下的 2026-07-07 / 2025-07 条目为历史记录，描述的实现已被取代或作废，仅供追溯。
+
+---
+
+## 2026-07-09 — 部署到公网 + 浏览器端缓存（代码已完成并本地验证，线上部署待用户操作）
+
+**背景**：用户想把播放器部署到公网给身边小范围朋友用，并加上"歌曲和封面在浏览器本地缓存"（重复播放/查看不用再联网）。对齐后确定：部署用 Render（前端页面 + 代理服务合并成一个进程一起部署），缓存在浏览器端（每个访问者自己设备本地）。
+
+### 部署前置修复（否则代码离开本机/公司网络会直接跑不起来）
+
+排查代码时发现三处环境相关的硬编码，是这次改动的主要动机：
+
+| 问题 | 位置（改动前） | 修复 |
+|------|----------------|------|
+| 所有代理出网请求写死走公司内网隧道 `proxy.nioint.com:8080` | `proxy-server.mjs` 的 `PROXY_HOST`/`PROXY_PORT` | 改成按需开启：只有设置 `CORP_PROXY_HOST` 环境变量才走隧道，默认直连。Render 等公网服务器连不到这个内网地址，必须直连 |
+| 代理地址写死 `http://localhost:8765` | `src/api/soundcloud.js`、`src/api/netease.js` 各一处 | 改成空字符串（相对路径/同源），因为代理和页面已合并到同一进程同一端口 |
+| QQ 音乐播放链接固定是 `http://`（接口本身返回的） | `src/api/qq.js` `fetchQQDetails` | 页面部署到 HTTPS 域名后浏览器会拦截这种混合内容；已实测 QQ 的 CDN（`isure6.stream.qqmusic.qq.com`）http/https 都通，改成统一升级成 `https://` |
+
+**合并成一个服务**：新增仓库根目录 [server.mjs](server.mjs)，把原来两个独立进程 `proxy-server.mjs`（:8765 代理）和 `examples/static-server.mjs`（:4444 静态页面）的逻辑合并成一个、监听同一个端口（`process.env.PORT`，Render 会自动注入；本机默认还是 4444）。原来两个文件已删除。`package.json` 的 `start`/`dev` 脚本、`.claude/launch.json` 的启动配置都已改成跑这一个文件。根路径 `/` 直接返回 `Listening Player.dc.html`，不用带文件名。
+
+### 音频缓存方案的关键发现：网易云/QQ 的 CDN 其实都已经支持 CORS
+
+原计划是让网易云/QQ 的音频也统一包一层走本地代理（跟 SoundCloud progressive 音频现在的做法一样），这样浏览器端才能读到完整字节做缓存。但实测（`curl` 直接探测，见下方验证方式）发现完全不需要：
+
+- 网易云：`type=url` 接口本身是个 302 跳转到真实 CDN（如 `m801.music.126.net`），跳转目标的响应头带 `access-control-allow-origin: *`，还支持 `Range`。
+- QQ 音乐：`song_play_url_*` 直接就是真实 CDN 地址（如 `isure6.stream.qqmusic.qq.com`），同样带 `access-control-allow-origin: *` 和完整的 Range/CORS 头。
+
+也就是说这两个源的音频文件浏览器端可以直接 `fetch()` 读到完整字节，不需要经过我们自己的代理转发。省掉了这层没必要的复杂度和额外的服务器带宽消耗。SoundCloud 维持现状不变：progressive mp3 仍走 `/stream` 代理（本身也是同源、也支持 CORS），HLS 分片流不纳入缓存范围。
+
+### 歌曲缓存（IndexedDB Blob）
+
+在 [Listening Player.dc.html](examples/Listening%20Player.dc.html) 新增一组 IndexedDB 助手函数（`audioCacheKey`/`getCachedAudio`/`putCachedAudio`/`touchCachedAudio`/`evictAudioCacheIfOverCap`/`cacheAudioInBackground`，紧邻 `coverStyle`），数据库 `listening-audio-cache`，表 `tracks`，key 是 `${track.source}:${track.id}`。
+
+`loadAndPlay()` 里非 HLS 分支改成：先查 IndexedDB，命中就 `URL.createObjectURL(blob)` 直接播放（零网络请求，seek 由浏览器原生处理，不需要自己实现范围请求切片）；没命中照常走原有的直连播放（不等待），同时后台 `fetch()` 把完整文件拉下来存入 IndexedDB，供下次播放命中。切歌/组件卸载时 `URL.revokeObjectURL()` 释放上一个 blob URL（`componentWillUnmount` 和 `go()` 内部都加了）。容量上限 300MB（`AUDIO_CACHE_CAP_BYTES`，好调的一个常量），超过按最久未访问优先淘汰。
+
+### 封面缓存（Service Worker）
+
+新增 [examples/sw.js](examples/sw.js)：只拦截 `event.request.destination === 'image'` 的请求，cache-first 策略（命中直接返回，未命中联网后写入 `listening-covers-v1` 缓存），数量上限 500 张，超过删最早写入的。DC 页 `</head>` 前新增特性检测注册代码，不支持的浏览器直接跳过。`coverStyle()` 本身不用改，Service Worker 对已有的 `background-image:url(...)` 请求是透明拦截的。
+
+### 验证方式（本次全部为真实网络实测，非仅代码走查）
+
+- `curl` 直接探测网易云/QQ 音频 CDN 的响应头，确认 CORS + Range 支持（见上文"关键发现"），以及 QQ 接口确实返回 `http://` 而非 `https://`。
+- `node --check` 校验 `server.mjs`、`examples/sw.js`、三个改动的 `src/api/*.js`，以及从 DC 页提取出的内联逻辑脚本，全部语法通过。
+- `npm run build` 重新打包 `api-bundle.js`，`grep` 确认不再包含任何 `localhost:8765` 字符串。
+- 用 preview 工具起 `node server.mjs`（走 `.claude/launch.json` 的 `dev` 配置，单端口），headless Chromium 交互实测：
+  - Service Worker 正确注册且 `active`（`navigator.serviceWorker.getRegistrations()` 确认）。
+  - 搜索"周杰伦"，网易云/QQ 结果正常返回（分别经 `api.qijieya.cn`、`tang.api.s01s.cn`，全部 200）；封面图片陆续写入 `listening-covers-v1`（实测 9 张）。
+  - 播放网易云「布拉格广场」：首次播放 `audio.src` 是直连的 meting 跳转地址，播放正常（`currentTime` 递增、`error: null`）；等待几秒后查 IndexedDB，确认 `netease:10` 已缓存，`size: 11786493` 与 CDN 返回的 `Content-Length` 完全一致；**再次点击播放同一首**，`audio.src` 变成 `blob:http://localhost:4444/...`，播放正常，证明缓存命中路径生效。
+  - 播放 QQ「晴天」：确认 `audio.src` 已是 `https://isure6.stream.qqmusic.qq.com/...`（不再是接口原始返回的 `http://`），播放正常无 `error`，证明混合内容修复生效。
+  - SoundCloud 搜索在这次实测环境里失败（`net::ERR_FAILED`）——核对后确认是本环境这个特定沙箱浏览器连不上 `soundcloud.com`，与 E 节此前记录的环境限制一致（非本次改动引入的回归），本机正常网络环境下应该不受影响，留给用户实际部署后再验证。
+
+### 遗留（下一步）
+
+1. **实际部署到 Render**：代码已经就绪，但注册 Render 账号、GitHub 授权、创建 Web Service 这几步需要用户自己在浏览器里操作（涉及账号归属），我可以在旁边指导，但不能代替完成。Build Command 留空/`npm install`（项目零依赖），Start Command `npm start`。
+2. **公网可达性验证**：Render 服务器本身出网没有障碍，但用户所在网络到 `.onrender.com` 这个域名是否通畅还未验证（用户此前反馈打不开 `render.com` 官网，原因未查明）——建议部署后先自己和一位朋友分别测试能否正常打开和使用，如果不通再考虑换成国内可达的平台，不需要改代码架构，只是换部署目标。
+3. 今天的改动尚未提交到 git，等用户确认后再提交推送。
 
 ---
 

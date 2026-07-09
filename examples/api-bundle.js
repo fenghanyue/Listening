@@ -32,7 +32,7 @@ var ListeningAPI = (() => {
 
   // src/api/netease.js
   var BASE_URL = "https://api.qijieya.cn/meting/";
-  var NETEASE_PROXY = "http://localhost:8765";
+  var NETEASE_PROXY = "";
   async function fetchNeteaseAlbum(songid) {
     const target = `https://interface3.music.163.com/api/v3/song/detail?c=${encodeURIComponent(JSON.stringify([{ id: Number(songid) }]))}`;
     try {
@@ -205,7 +205,7 @@ var ListeningAPI = (() => {
       track.cover = d.album_pic || d.singer_pic || track.cover;
       track.pageUrl = d.song_h5_url || track.pageUrl;
       const best = pickBestPlayUrl(d);
-      track.audioUrl = best.url || track.audioUrl;
+      if (best.url) track.audioUrl = best.url.replace(/^http:\/\//, "https://");
       track.lrc = d.song_lyric || d.lyric || track.lrc;
       track.qqQualityText = best.text || (d.vip ? `VIP:${d.vip}` : null) || track.qqQualityText;
       if (best.tag && best.label) {
@@ -229,7 +229,7 @@ var ListeningAPI = (() => {
   }
 
   // src/api/soundcloud.js
-  var SC_PROXY = "http://localhost:8765";
+  var SC_PROXY = "";
   var scProxyAvailable = null;
   async function checkScProxy() {
     if (scProxyAvailable !== null) return scProxyAvailable;

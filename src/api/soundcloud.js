@@ -3,12 +3,13 @@
  *
  * SoundCloud 已停止发放新 API key，client_id 需从 SoundCloud 网页 JavaScript 中提取。
  * ⚠️ SoundCloud API 在中国大陆无法直连，需要代理/VPN。
- * ⚠️ api-v2.soundcloud.com 不返回 CORS 响应头，浏览器端必须经本地代理 proxy-server.mjs（:8765）
- *    转发，否则搜索/详情请求会被浏览器直接拦截。代理不可用时退回直连（仅适用于 Node 等无 CORS
- *    限制的环境，浏览器端会失败）。
+ * ⚠️ api-v2.soundcloud.com 不返回 CORS 响应头，浏览器端必须经代理（server.mjs 提供的
+ *    /proxy /stream /sc-client-id）转发，否则搜索/详情请求会被浏览器直接拦截。代理走
+ *    相对路径（同源）——本机开发和线上部署页面与代理都在同一个进程/同一个域名下，不需要
+ *    区分环境。代理不可用时退回直连（仅适用于 Node 等无 CORS 限制的环境，浏览器端会失败）。
  */
 
-const SC_PROXY = 'http://localhost:8765';
+const SC_PROXY = '';
 let scProxyAvailable = null;
 
 // 探测本地代理是否在跑（结果缓存，避免每次请求都探测一遍）

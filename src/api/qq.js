@@ -101,7 +101,9 @@ export async function fetchQQDetails(track) {
     track.pageUrl = d.song_h5_url || track.pageUrl;
 
     const best = pickBestPlayUrl(d);
-    track.audioUrl = best.url || track.audioUrl;
+    // CDN 实测 http/https 都通且都发 CORS 头（access-control-allow-origin: *），但接口固定返回
+    // http://，页面部署到 HTTPS 域名后浏览器会拦截这种混合内容，这里统一升级成 https
+    if (best.url) track.audioUrl = best.url.replace(/^http:\/\//, 'https://');
     track.lrc = d.song_lyric || d.lyric || track.lrc;
     track.qqQualityText = best.text || (d.vip ? `VIP:${d.vip}` : null) || track.qqQualityText;
 
