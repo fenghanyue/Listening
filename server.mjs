@@ -150,6 +150,14 @@ server.listen(PORT, () => {
   if (CORP_PROXY_HOST) console.log(`  outbound via corp tunnel ${CORP_PROXY_HOST}:${CORP_PROXY_PORT}`);
 });
 
+// 自 ping：防止 Render 免费实例闲置 ~15 分钟后休眠。RENDER_EXTERNAL_URL 由 Render 自动注入，
+// 本机开发没有这个变量时不会启用。只能防止睡着，真睡着了还是得靠外部请求唤醒（见 .github/workflows/keep-alive.yml）。
+if (process.env.RENDER_EXTERNAL_URL) {
+  setInterval(() => {
+    fetch(process.env.RENDER_EXTERNAL_URL).catch(() => {});
+  }, 10 * 60 * 1000);
+}
+
 // ====================== helpers ======================
 
 let cachedClientId = null;

@@ -1,0 +1,15 @@
+name: Keep Render service awake
+
+# Render 免费实例闲置 ~15 分钟会自动休眠，下次请求要冷启动（10~30s+）。
+# 这里每 10 分钟 ping 一次首页，把服务保持在"热"状态，避免冷启动。
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping service
+        run: curl -fsS --max-time 30 https://listening-5bnv.onrender.com/ -o /dev/null
