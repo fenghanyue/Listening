@@ -253,7 +253,7 @@ if ('serviceWorker' in navigator) {
         </button>
         <div style="display:flex;align-items:center;gap:2px;">
           <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
-          <button onclick="{{ H.togglePlay }}" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span></button>
+          <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span></button>
           <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
         </div>
         <button onclick="{{ H.cycleMode }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
@@ -350,6 +350,7 @@ const GRADIENTS = {
   netease: 'linear-gradient(135deg, rgba(255,107,107,.55), rgba(255,107,107,.14))',
   qq: 'linear-gradient(135deg, rgba(77,208,225,.55), rgba(77,208,225,.14))',
   soundcloud: 'linear-gradient(135deg, rgba(255,136,0,.55), rgba(255,136,0,.16))',
+  empty: 'linear-gradient(135deg, rgba(148,148,158,.32), rgba(148,148,158,.10))',
 };
 
 function makeQueue() {
@@ -541,18 +542,16 @@ class Component extends DCLogic {
       theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
       searchResults: [],
       sources: { netease: true, qq: true, soundcloud: true },
-      liked: { 3: true },
+      liked: {},
       // 歌词解析结果，搜索播放时动态填充
       lyrics: [],
-      queue: makeQueue(),
-      currentId: 2, currentTime: 42, volume: 70, playing: false, playMode: 0,
+      queue: [],
+      currentId: null, currentTime: 0, volume: 70, playing: false, playMode: 0,
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
       addModalId: null, createModalOpen: false, createName: '',
       importModalOpen: false, importUrl: '', importPlaylistName: '',
       playlists: [
         { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
-        { id: 'night', name: '深夜电台', builtin: false, trackIds: [2, 6], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#7C6BC4,#5C4A99)' },
-        { id: 'commute', name: '通勤路上', builtin: false, trackIds: [1, 4, 7], glyph: 'queue_music', iconFill: 0, tileBg: 'linear-gradient(135deg,#4FC3C0,#2A8F92)' },
       ],
       selectedPlaylist: 'liked', hoverPlaylistId: null,
     };
@@ -1020,7 +1019,8 @@ class Component extends DCLogic {
   renderVals() {
     const s = this.state;
     const c = THEMES[s.theme];
-    const rawTrack = s.queue.find(t => t.id === s.currentId) || s.queue[0] || { title: '未在播放', artist: '', duration: 200, source: 'netease' };
+    const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue[0] || null;
+    const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
     const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack) };
     const duration = Math.max(track.duration || 0, 0.1);
     const progressPct = Math.min(100, (s.currentTime / duration) * 100);
@@ -1159,6 +1159,7 @@ class Component extends DCLogic {
         queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
         sourcesRender,
         prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.queue.length - 1),
+        playDisabled: !matchedTrack,
         themeIcon: s.theme === 'dark' ? 'light_mode' : 'dark_mode',
         switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
         switchThumbBg: s.theme === 'dark' ? c.onPrimary : c.surfaceLow,
