@@ -536,8 +536,8 @@ function loadPersistedLibrary() {
 
 function savePersistedLibrary(s) {
   try {
-    const { playlists, liked, queue, currentId, currentTime, volume, playMode } = s;
-    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({ playlists, liked, queue, currentId, currentTime, volume, playMode }));
+    const { playlists, liked, queue, playOrder, currentId, currentTime, volume, playMode } = s;
+    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({ playlists, liked, queue, playOrder, currentId, currentTime, volume, playMode }));
   } catch (e) {
     console.warn('保存本地歌单数据失败:', e);
   }
@@ -552,7 +552,10 @@ class Component extends DCLogic {
       liked: {},
       // 歌词解析结果，搜索播放时动态填充
       lyrics: [],
+      // queue = 曲库：所有搜过/导入过/收藏过的曲目数据，只增不减（歌单、喜欢的音乐都靠它按 id 解析内容）
       queue: [],
+      // playOrder = 当前播放队列：驱动下一曲/上一曲和右侧队列面板的曲目 id 顺序，和曲库是两回事
+      playOrder: [],
       currentId: null, currentTime: 0, volume: 70, playing: false, playMode: 0,
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
       addModalId: null, createModalOpen: false, createName: '',
@@ -572,6 +575,8 @@ class Component extends DCLogic {
       playlists: persisted.playlists,
       liked: persisted.liked,
       queue: persisted.queue,
+      // 老数据没有 playOrder 字段时兜底成空，避免读到 undefined
+      playOrder: Array.isArray(persisted.playOrder) ? persisted.playOrder : [],
       currentId: persisted.currentId ?? base.currentId,
       currentTime: persisted.currentTime ?? base.currentTime,
       volume: typeof persisted.volume === 'number' ? persisted.volume : base.volume,
@@ -831,6 +836,8 @@ class Component extends DCLogic {
     this.showToast(`已添加到「${playlistName}」`);
   }
 
+  // "播放全部"：整个替换当前播放队列（不是接在后面），曲库（s.queue）不动——
+  // 其它歌单/喜欢的音乐还要靠曲库解析自己的内容，不能因为播了别的歌单就丢数据
   playAllInPlaylist() {
     const s = this.state;
     const pid = s.viewingPlaylistId;
@@ -838,23 +845,11 @@ class Component extends DCLogic {
     const pl = s.playlists.find(p => p.id === pid);
     if (!pl) return;
     const ids = pid === 'liked' ? Object.keys(s.liked).map(Number) : (pl.trackIds || []);
-    // 按歌单自己的顺序取曲目（不是 s.queue 里的顺序——那只是曲目第一次被搜到/导入时落进去的顺序，
-    // 跟歌单顺序不一定一致）
+    // 按歌单自己的顺序取曲目（不是曲库里的顺序——那只是曲目第一次被搜到/导入时落进去的顺序）
     const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
     if (!tracks.length) return;
-    // "播放全部"应该让这个歌单变成当前播放队列，而不是在原来那锅大杂烩（历史搜索/导入攒下来的
-    // 全部曲目）后面接着播、下一曲还是那锅大杂烩的顺序。这里把歌单曲目按歌单顺序挪到 queue 最前面，
-    // 其余曲目跟在后面（不删除，其它歌单/喜欢还要靠 queue 解析曲目数据），
-    // 这样下一曲/上一曲和队列面板顶部看到的就是这个歌单本身
-    const idSet = new Set(ids);
-    const rest = s.queue.filter(t => !idSet.has(t.id));
-    const first = tracks[0];
-    this.patch({ queue: [...tracks, ...rest], currentId: first.id, currentTime: 0, playing: true, lyrics: [] });
-    this.persist();
-    setTimeout(() => {
-      this.initAudio();
-      this.loadAndPlay(first);
-    }, 0);
+    this.patch({ playOrder: tracks.map(t => t.id) });
+    this.startTrack(tracks[0]);
     this.showToast(`正在播放「${pl.name}」`);
   }
 
@@ -865,31 +860,40 @@ class Component extends DCLogic {
 
   // ==== Real audio playback ====
 
+  // 只负责“开始播放这首曲目”，不改动 playOrder——stepTrack/handleTrackEnd 在 playOrder 里原地
+  // 导航时用这个，避免每次自动切歌都把当前曲目重新挪到队首、把播放顺序搅乱
+  startTrack(track, resumeAt = 0) {
+    if (!track) return;
+    this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [] });
+    this.persist();
+    setTimeout(() => {
+      this.initAudio();
+      this.loadAndPlay(track, resumeAt);
+    }, 0);
+  }
+
   handleTrackEnd() {
     const s = this.state;
     const cur = this._audio;
     const mode = s.playMode;
-    const queue = s.queue;
-    const idx = queue.findIndex(t => t.id === s.currentId);
+    const order = s.playOrder;
 
     if (mode === 2) {
       // 单曲循环
       if (cur) { cur.currentTime = 0; cur.play(); }
-    } else if (mode === 1) {
+      return;
+    }
+
+    let nextId = null;
+    if (mode === 1) {
       // 随机
-      if (queue.length > 0) {
-        const ri = Math.floor(Math.random() * queue.length);
-        this.playTrackAt(queue[ri].id);
-      }
+      if (order.length > 0) nextId = order[Math.floor(Math.random() * order.length)];
     } else {
       // 列表循环
-      const nxt = queue[idx + 1];
-      if (nxt) {
-        this.playTrackAt(nxt.id);
-      } else if (queue.length > 0) {
-        this.playTrackAt(queue[0].id);
-      }
+      const idx = order.indexOf(s.currentId);
+      nextId = idx >= 0 && idx + 1 < order.length ? order[idx + 1] : (order.length > 0 ? order[0] : null);
     }
+    if (nextId != null) this.startTrack(s.queue.find(t => t.id === nextId));
   }
 
   loadAndPlay(track, resumeAt = 0) {
@@ -994,16 +998,12 @@ class Component extends DCLogic {
       // 如果是首次播放且还没有音频源，加载当前 track
       if (!a.src || a.src === window.location.href) {
         // 页面刚加载、audio 元素还没设过 src：优先续播上次持久化的曲目；
-        // currentId 没指向任何曲目时（比如刚导入歌单还没点过任何一首），从队首开始，
+        // currentId 没指向任何曲目时（比如刚导入歌单还没点过任何一首），从播放队列队首开始，
         // 而不是对着空 src 调用 play() 却什么都不播、UI 却显示"正在播放"
         const resuming = s.queue.find(t => t.id === s.currentId);
-        const track = resuming || s.queue[0];
-        if (track) {
-          if (!resuming) this.patch({ currentId: track.id, currentTime: 0 });
-          this.loadAndPlay(track, resuming ? (s.currentTime || 0) : 0);
-        } else {
-          a.play().catch(() => {});
-        }
+        const track = resuming || s.queue.find(t => t.id === s.playOrder[0]);
+        if (track) this.startTrack(track, resuming ? (s.currentTime || 0) : 0);
+        else a.play().catch(() => {});
       } else {
         a.play().catch(e => { console.error('play error:', e); });
       }
@@ -1028,39 +1028,40 @@ class Component extends DCLogic {
     this.persist();
   }
 
+  // 用户主动点某一首（搜索结果 / 歌单详情 / 队列面板）：插队到播放队列最前面再播放，
+  // 和 startTrack 的区别是这个会改 playOrder——按用户点击的意图重排"接下来听什么"
   playTrackAt(id) {
     const s = this.state;
     const track = s.searchResults.find(t => t.id === id) || s.queue.find(t => t.id === id);
     if (!track) return;
     this.ensureQueued(id);
-    this.patch({ currentId: id, currentTime: 0, playing: true, lyrics: [] });
-    this.persist();
-    setTimeout(() => {
-      this.initAudio();
-      this.loadAndPlay(track);
-    }, 0);
+    const playOrder = [id, ...s.playOrder.filter(pid => pid !== id)];
+    this.patch({ playOrder });
+    this.startTrack(track);
   }
 
   stepTrack(dir) {
     const s = this.state;
-    const idx = s.queue.findIndex(t => t.id === s.currentId);
+    const idx = s.playOrder.indexOf(s.currentId);
     const ni = idx + dir;
-    if (ni >= 0 && ni < s.queue.length) {
-      this.playTrackAt(s.queue[ni].id);
-    }
+    if (ni < 0 || ni >= s.playOrder.length) return;
+    const track = s.queue.find(t => t.id === s.playOrder[ni]);
+    if (track) this.startTrack(track);
   }
 
   removeTrack(id) {
     this.patch(s => {
-      const oldIdx = s.queue.findIndex(t => t.id === id);
       const queue = s.queue.filter(t => t.id !== id);
+      const oldOrderIdx = s.playOrder.indexOf(id);
+      const playOrder = s.playOrder.filter(pid => pid !== id);
       let currentId = s.currentId;
-      if (id === currentId) currentId = (queue[oldIdx] || queue[oldIdx - 1] || queue[0] || {}).id;
-      // 曲目从 queue 里彻底删除后，同步清掉歌单/喜欢里对它的引用，避免留下悬空 id（外面数量对不上点进去看到的数量）
+      // 删的正好是当前在播的曲目：接下来该播的是播放队列里的下一首，不是曲库里随便挨着的邻居
+      if (id === currentId) currentId = playOrder[oldOrderIdx] ?? playOrder[oldOrderIdx - 1] ?? playOrder[0] ?? null;
+      // 曲目从曲库里彻底删除后，同步清掉歌单/喜欢里对它的引用，避免留下悬空 id（外面数量对不上点进去看到的数量）
       const liked = { ...s.liked };
       delete liked[id];
       const playlists = s.playlists.map(p => p.trackIds ? { ...p, trackIds: p.trackIds.filter(tid => tid !== id) } : p);
-      return { queue, currentId, liked, playlists };
+      return { queue, playOrder, currentId, liked, playlists };
     });
     this.persist();
   }
@@ -1070,20 +1071,20 @@ class Component extends DCLogic {
     e.preventDefault();
     const s = this.state;
     if (s.dragId == null || s.dragId === overId) return;
-    const queue = [...s.queue];
-    const from = queue.findIndex(t => t.id === s.dragId);
-    const to = queue.findIndex(t => t.id === overId);
+    const order = [...s.playOrder];
+    const from = order.findIndex(id => id === s.dragId);
+    const to = order.findIndex(id => id === overId);
     if (from < 0 || to < 0) return;
-    const [moved] = queue.splice(from, 1);
-    queue.splice(to, 0, moved);
-    this.patch({ queue });
+    const [moved] = order.splice(from, 1);
+    order.splice(to, 0, moved);
+    this.patch({ playOrder: order });
   }
   dragEnd() { this.patch({ dragId: null }); this.persist(); }
 
   renderVals() {
     const s = this.state;
     const c = THEMES[s.theme];
-    const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue[0] || null;
+    const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]) || null;
     const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
     const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack) };
     const duration = Math.max(track.duration || 0, 0.1);
@@ -1106,7 +1107,8 @@ class Component extends DCLogic {
       return { text: l.text, style, key: 'ly' + i };
     });
 
-    const queueRender = s.queue.map((t, i) => {
+    // 队列面板显示的是播放队列（playOrder），不是整个曲库——按 id 从曲库里取曲目数据
+    const queueRender = s.playOrder.map(id => s.queue.find(t => t.id === id)).filter(Boolean).map((t, i) => {
       const isCurrent = t.id === s.currentId;
       return {
         ...t, index: i + 1, isCurrent, coverStyle: coverStyle(t), showCoverIcon: !t.cover,
@@ -1166,7 +1168,7 @@ class Component extends DCLogic {
       };
     });
 
-    const idx = s.queue.findIndex(t => t.id === s.currentId);
+    const idx = s.playOrder.indexOf(s.currentId);
     const MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
     const modeActive = s.playMode !== 0;
 
@@ -1200,7 +1202,7 @@ class Component extends DCLogic {
         c, theme: s.theme, track,
         currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, volume: s.volume,
         lyricsRender, lyricsOffset: offset,
-        queueRender, queueCount: s.queue.length, tracksRender,
+        queueRender, queueCount: s.playOrder.length, tracksRender,
         searchQuery: s.searchQuery,
         isPlaylistView, isLibraryView: !isPlaylistView,
         playlistHeaderName: activePlaylist ? activePlaylist.name : '',
@@ -1222,7 +1224,7 @@ class Component extends DCLogic {
         queueBtnBg: rightIsQueue ? c.primaryContainer : 'transparent',
         queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
         sourcesRender,
-        prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.queue.length - 1),
+        prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.playOrder.length - 1),
         playDisabled: !matchedTrack,
         themeIcon: s.theme === 'dark' ? 'light_mode' : 'dark_mode',
         switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
