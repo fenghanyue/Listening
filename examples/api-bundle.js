@@ -231,14 +231,18 @@ var ListeningAPI = (() => {
   // src/api/soundcloud.js
   var SC_PROXY = "";
   var scProxyAvailable = null;
+  var scProxyCheckedAt = 0;
+  var SC_PROXY_NEGATIVE_TTL = 3e4;
   async function checkScProxy() {
-    if (scProxyAvailable !== null) return scProxyAvailable;
+    if (scProxyAvailable === true) return true;
+    if (scProxyAvailable === false && Date.now() - scProxyCheckedAt < SC_PROXY_NEGATIVE_TTL) return false;
     try {
-      const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(3e3) });
+      const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(6e3) });
       scProxyAvailable = r.ok;
     } catch (e) {
       scProxyAvailable = false;
     }
+    scProxyCheckedAt = Date.now();
     return scProxyAvailable;
   }
   async function scFetchJson(url, timeout = 1e4) {

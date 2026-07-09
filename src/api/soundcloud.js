@@ -11,16 +11,21 @@
 
 const SC_PROXY = '';
 let scProxyAvailable = null;
+let scProxyCheckedAt = 0;
+// 失败结果只短暂缓存：Render 冷启动等瞬时问题不该让整个会话永久判定代理不可用
+const SC_PROXY_NEGATIVE_TTL = 30000;
 
-// 探测本地代理是否在跑（结果缓存，避免每次请求都探测一遍）
+// 探测本地代理是否在跑（成功结果永久缓存；失败结果 TTL 到期后重新探测）
 async function checkScProxy() {
-  if (scProxyAvailable !== null) return scProxyAvailable;
+  if (scProxyAvailable === true) return true;
+  if (scProxyAvailable === false && Date.now() - scProxyCheckedAt < SC_PROXY_NEGATIVE_TTL) return false;
   try {
-    const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(3000) });
+    const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(6000) });
     scProxyAvailable = r.ok;
   } catch (e) {
     scProxyAvailable = false;
   }
+  scProxyCheckedAt = Date.now();
   return scProxyAvailable;
 }
 
