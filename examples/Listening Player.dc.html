@@ -47,6 +47,52 @@ if ('serviceWorker' in navigator) {
     @keyframes vinylSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @keyframes searchPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
   </style>
+  <style>
+    /* 手机端断点：宽度以上保持桌面三栏布局不变，宽度以下用 !important 覆盖内联样式改成单栏 + 底部导航 */
+    @media (max-width: 860px) {
+      .dc-sidebar {
+        position: fixed !important;
+        top: 48px !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        width: 78vw !important;
+        max-width: 280px !important;
+        min-width: 0 !important;
+        z-index: 56 !important;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+        box-shadow: 2px 0 16px rgba(0,0,0,.3);
+      }
+      .dc-sidebar.dc-open { transform: translateX(0) !important; }
+      .dc-sidebar-close { display: flex !important; }
+      .dc-sidebar-scrim {
+        display: block !important;
+        position: fixed !important;
+        inset: 0;
+        z-index: 55;
+        background: rgba(0,0,0,.5);
+      }
+
+      .dc-nowplaying { display: none !important; }
+      .dc-nowplaying.dc-open {
+        display: flex !important;
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 60 !important;
+      }
+      .dc-nowplaying-close { display: none; }
+      .dc-nowplaying.dc-open .dc-nowplaying-close { display: flex !important; }
+
+      .dc-mobile-tabbar { display: flex !important; }
+      .dc-mobile-miniplayer { display: flex !important; }
+      .dc-desktop-only { display: none !important; }
+
+      .dc-scroll-area { padding-bottom: 112px !important; }
+
+      .dc-queue-drag-handle { display: none !important; }
+      .dc-queue-move-btns { display: flex !important; }
+    }
+  </style>
 </helmet>
 
 <div style="height:100vh;width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;">
@@ -64,7 +110,14 @@ if ('serviceWorker' in navigator) {
 
   <div style="flex:1;min-height:0;display:flex;position:relative;overflow:hidden;">
 
-    <div style="width:220px;min-width:220px;background:{{ v.c.surfaceLow }};display:flex;flex-direction:column;">
+    <sc-if value="{{ v.mobileSidebarOpen }}">
+      <div class="dc-sidebar-scrim" onclick="{{ H.closeMobileSidebar }}" style="display:none;"></div>
+    </sc-if>
+
+    <div class="{{ v.sidebarClass }}" style="width:220px;min-width:220px;background:{{ v.c.surfaceLow }};display:flex;flex-direction:column;position:relative;">
+      <button onclick="{{ H.closeMobileSidebar }}" class="dc-sidebar-close" style="display:none;position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;">
+        <span style="font-family:'Material Symbols Outlined';font-size:18px;">close</span>
+      </button>
       <div style="height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:8px;font-size:17px;font-weight:500;color:{{ v.c.onSurface }};">
           <span style="font-family:'Material Symbols Outlined';font-size:21px;color:{{ v.c.onSurface }};">library_music</span>我的歌单
@@ -106,11 +159,19 @@ if ('serviceWorker' in navigator) {
             <span style="font-family:'Material Symbols Outlined';font-size:17px;">expand_more</span>收起
           </button>
         </div>
-        <div style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
+        <div class="dc-scroll-area" style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
           <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
             <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
               <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
-              <span style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
+              <span class="dc-queue-drag-handle" style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
+              <div class="dc-queue-move-btns" style="display:none;align-items:center;gap:0;flex-shrink:0;">
+                <button onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveUpOpacity }};flex-shrink:0;">
+                  <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_up</span>
+                </button>
+                <button onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveDownOpacity }};flex-shrink:0;">
+                  <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_down</span>
+                </button>
+              </div>
               <div style="width:38px;height:38px;border-radius:8px;{{ item.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                 <sc-if value="{{ item.showCoverIcon }}">
                   <span style="font-family:'Material Symbols Outlined';font-size:16px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
@@ -168,7 +229,7 @@ if ('serviceWorker' in navigator) {
       <div style="padding:0 24px 14px;font-size:12px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ v.statusText }}</div>
       </sc-if>
 
-      <div style="flex:1;overflow-y:auto;padding:0 24px 24px;">
+      <div class="dc-scroll-area" style="flex:1;overflow-y:auto;padding:0 24px 24px;">
         <sc-if value="{{ v.showPrompt }}">
           <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
             <div style="display:flex;justify-content:center;margin-bottom:12px;"><span style="font-family:'Material Symbols Outlined';font-size:40px;">search</span></div>
@@ -215,7 +276,10 @@ if ('serviceWorker' in navigator) {
 
     </div>
 
-    <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:{{ v.c.surfaceLow }};">
+    <div class="{{ v.nowPlayingClass }}" style="flex:1;min-width:0;display:flex;flex-direction:column;background:{{ v.c.surfaceLow }};position:relative;">
+     <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;">
+       <span style="font-family:'Material Symbols Outlined';font-size:20px;">expand_more</span>
+     </button>
      <div style="flex:1;min-height:0;width:100%;height:100%;box-sizing:border-box;padding:26px 30px 24px;display:flex;flex-direction:column;align-items:center;">
       <div style="width:100%;text-align:center;margin-bottom:6px;flex-shrink:0;">
         <span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;color:{{ v.c.onSurfaceVariant }};">正在播放</span>
@@ -275,13 +339,39 @@ if ('serviceWorker' in navigator) {
 
   </div>
 
-  <div style="height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:{{ v.c.surfaceLow }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
+  <div class="dc-desktop-only" style="height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:{{ v.c.surfaceLow }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
     <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};">本页面仅供学习交流使用，请勿用于任何商业用途</span>
+  </div>
+
+  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:0;right:0;bottom:56px;height:56px;padding:0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;z-index:51;cursor:pointer;">
+    <div style="width:38px;height:38px;border-radius:8px;{{ v.track.coverStyle }}flex-shrink:0;"></div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
+      <div style="font-size:11px;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artistDisplay }}</div>
+    </div>
+    <button onclick="{{ H.miniPlayToggle }}" disabled="{{ v.playDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};flex-shrink:0;">
+      <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span>
+    </button>
+  </div>
+
+  <div class="dc-mobile-tabbar" style="display:none;position:fixed;left:0;right:0;bottom:0;height:56px;background:{{ v.c.surfaceLow }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;align-items:stretch;justify-content:space-around;z-index:50;">
+    <button onclick="{{ H.toggleMobileSidebar }}" style="flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:{{ v.mobileTabPlaylistColor }};">
+      <span style="font-family:'Material Symbols Outlined';font-size:22px;">library_music</span>
+      <span style="font-size:10px;font-weight:500;">歌单</span>
+    </button>
+    <button onclick="{{ H.closeQueuePanel }}" style="flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:{{ v.mobileTabBrowseColor }};">
+      <span style="font-family:'Material Symbols Outlined';font-size:22px;">search</span>
+      <span style="font-size:10px;font-weight:500;">搜索</span>
+    </button>
+    <button onclick="{{ H.openQueuePanel }}" style="flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:{{ v.mobileTabQueueColor }};">
+      <span style="font-family:'Material Symbols Outlined';font-size:22px;">queue_music</span>
+      <span style="font-size:10px;font-weight:500;">队列</span>
+    </button>
   </div>
 
   <sc-if value="{{ v.hasAddModal }}">
     <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
-      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:340px;box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
         <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">添加到歌单</div>
         <sc-for list="{{ v.playlistOptions }}" as="pl" hint-placeholder-count="3">
           <div onclick="{{ pl.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" style-hover="background:{{ v.c.hover }}">
@@ -296,7 +386,7 @@ if ('serviceWorker' in navigator) {
 
   <sc-if value="{{ v.hasImportModal }}">
     <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeImportModal }}">
-      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:380px;box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
         <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">导入歌单</div>
         <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">支持网易云音乐、QQ音乐歌单链接</div>
         <input value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;font-family:inherit;">
@@ -312,7 +402,7 @@ if ('serviceWorker' in navigator) {
 
   <sc-if value="{{ v.hasCreateModal }}">
     <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeCreateModal }}">
-      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:340px;box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
         <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">新建歌单</div>
         <input value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="歌单名称…" maxlength="50" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:16px;box-sizing:border-box;font-family:inherit;">
         <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -558,6 +648,7 @@ class Component extends DCLogic {
       playOrder: [],
       currentId: null, currentTime: 0, volume: 70, playing: false, playMode: 0,
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
+      mobileSidebarOpen: false, mobileNowPlayingExpanded: false,
       addModalId: null, createModalOpen: false, createName: '',
       importModalOpen: false, importUrl: '', importPlaylistName: '',
       playlists: [
@@ -856,6 +947,13 @@ class Component extends DCLogic {
   toggleMediaView() { this.patch(s => ({ mediaView: s.mediaView === 'cover' ? 'lyrics' : 'cover' })); }
   toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue' })); }
   closeQueuePanel() { this.patch({ rightPanel: 'browse' }); }
+  openQueuePanel() { this.patch({ rightPanel: 'queue' }); }
+  // 手机端：左侧歌单栏改为滑入抽屉
+  toggleMobileSidebar() { this.patch(s => ({ mobileSidebarOpen: !s.mobileSidebarOpen })); }
+  closeMobileSidebar() { this.patch({ mobileSidebarOpen: false }); }
+  // 手机端：正在播放栏收起为迷你条，点击展开为全屏
+  toggleMobileNowPlaying() { this.patch(s => ({ mobileNowPlayingExpanded: !s.mobileNowPlayingExpanded })); }
+  closeMobileNowPlaying() { this.patch({ mobileNowPlayingExpanded: false }); }
   cycleMode() { this.patch(s => ({ playMode: (s.playMode + 1) % 3 })); this.persist(); }
 
   // ==== Real audio playback ====
@@ -1080,13 +1178,23 @@ class Component extends DCLogic {
     this.patch({ playOrder: order });
   }
   dragEnd() { this.patch({ dragId: null }); this.persist(); }
+  // 触屏端队列排序（原生 HTML5 拖拽在手机浏览器上不可用）：与相邻项交换位置
+  moveQueueItem(id, dir) {
+    const order = [...this.state.playOrder];
+    const from = order.indexOf(id);
+    const to = from + dir;
+    if (from < 0 || to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to], order[from]];
+    this.patch({ playOrder: order });
+    this.persist();
+  }
 
   renderVals() {
     const s = this.state;
     const c = THEMES[s.theme];
     const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]) || null;
     const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
-    const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack) };
+    const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack), coverStyle: coverStyle(rawTrack) };
     const duration = Math.max(track.duration || 0, 0.1);
     const progressPct = Math.min(100, (s.currentTime / duration) * 100);
 
@@ -1108,8 +1216,9 @@ class Component extends DCLogic {
     });
 
     // 队列面板显示的是播放队列（playOrder），不是整个曲库——按 id 从曲库里取曲目数据
-    const queueRender = s.playOrder.map(id => s.queue.find(t => t.id === id)).filter(Boolean).map((t, i) => {
+    const queueRender = s.playOrder.map(id => s.queue.find(t => t.id === id)).filter(Boolean).map((t, i, arr) => {
       const isCurrent = t.id === s.currentId;
+      const isFirst = i === 0, isLast = i === arr.length - 1;
       return {
         ...t, index: i + 1, isCurrent, coverStyle: coverStyle(t), showCoverIcon: !t.cover,
         sourceLabel: SOURCE_LABELS[t.source], durationStr: fmtTime(t.duration),
@@ -1123,6 +1232,12 @@ class Component extends DCLogic {
         onDragStart: () => this.dragStart(t.id),
         onDragOver: (e) => this.dragOverRow(t.id, e),
         onDrop: (e) => e.preventDefault(),
+        // 手机端上移/下移按钮（触屏没有原生拖拽），复用同一份 playOrder 排序状态
+        isFirst, isLast,
+        moveUpOpacity: isFirst ? 0.35 : 1,
+        moveDownOpacity: isLast ? 0.35 : 1,
+        onMoveUp: (e) => { e.stopPropagation(); this.moveQueueItem(t.id, -1); },
+        onMoveDown: (e) => { e.stopPropagation(); this.moveQueueItem(t.id, 1); },
       };
     });
 
@@ -1196,6 +1311,9 @@ class Component extends DCLogic {
 
     const rightIsQueue = s.rightPanel === 'queue';
     const mediaIsLyrics = s.mediaView === 'lyrics';
+    const sidebarClass = 'dc-sidebar' + (s.mobileSidebarOpen ? ' dc-open' : '');
+    const nowPlayingClass = 'dc-nowplaying' + (s.mobileNowPlayingExpanded ? ' dc-open' : '');
+    const mobileTabActiveColor = c.primary, mobileTabInactiveColor = c.onSurfaceVariant;
 
     return {
       v: {
@@ -1237,6 +1355,12 @@ class Component extends DCLogic {
         hasAddModal: !!s.addModalId, pendingTrack, playlistOptions,
         hasCreateModal: s.createModalOpen, createName: s.createName,
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
+        // 手机端：抽屉/迷你播放条/底部导航状态
+        mobileSidebarOpen: s.mobileSidebarOpen, mobileNowPlayingExpanded: s.mobileNowPlayingExpanded,
+        sidebarClass, nowPlayingClass,
+        mobileTabPlaylistColor: s.mobileSidebarOpen ? mobileTabActiveColor : mobileTabInactiveColor,
+        mobileTabBrowseColor: (!rightIsQueue && !s.mobileSidebarOpen) ? mobileTabActiveColor : mobileTabInactiveColor,
+        mobileTabQueueColor: (rightIsQueue && !s.mobileSidebarOpen) ? mobileTabActiveColor : mobileTabInactiveColor,
       },
       H: {
         toggleTheme: () => this.toggleTheme(),
@@ -1247,6 +1371,12 @@ class Component extends DCLogic {
         toggleMediaView: () => this.toggleMediaView(),
         toggleQueuePanel: () => this.toggleQueuePanel(),
         closeQueuePanel: () => this.closeQueuePanel(),
+        openQueuePanel: () => this.openQueuePanel(),
+        toggleMobileSidebar: () => this.toggleMobileSidebar(),
+        closeMobileSidebar: () => this.closeMobileSidebar(),
+        toggleMobileNowPlaying: () => this.toggleMobileNowPlaying(),
+        closeMobileNowPlaying: () => this.closeMobileNowPlaying(),
+        miniPlayToggle: (e) => { e.stopPropagation(); this.togglePlay(); },
         togglePlay: () => this.togglePlay(),
         prev: () => this.stepTrack(-1),
         next: () => this.stepTrack(1),
