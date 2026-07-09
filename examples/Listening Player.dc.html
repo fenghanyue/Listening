@@ -838,9 +838,23 @@ class Component extends DCLogic {
     const pl = s.playlists.find(p => p.id === pid);
     if (!pl) return;
     const ids = pid === 'liked' ? Object.keys(s.liked).map(Number) : (pl.trackIds || []);
-    const tracks = s.queue.filter(t => ids.includes(t.id));
+    // 按歌单自己的顺序取曲目（不是 s.queue 里的顺序——那只是曲目第一次被搜到/导入时落进去的顺序，
+    // 跟歌单顺序不一定一致）
+    const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
     if (!tracks.length) return;
-    this.playTrackAt(tracks[0].id);
+    // "播放全部"应该让这个歌单变成当前播放队列，而不是在原来那锅大杂烩（历史搜索/导入攒下来的
+    // 全部曲目）后面接着播、下一曲还是那锅大杂烩的顺序。这里把歌单曲目按歌单顺序挪到 queue 最前面，
+    // 其余曲目跟在后面（不删除，其它歌单/喜欢还要靠 queue 解析曲目数据），
+    // 这样下一曲/上一曲和队列面板顶部看到的就是这个歌单本身
+    const idSet = new Set(ids);
+    const rest = s.queue.filter(t => !idSet.has(t.id));
+    const first = tracks[0];
+    this.patch({ queue: [...tracks, ...rest], currentId: first.id, currentTime: 0, playing: true, lyrics: [] });
+    this.persist();
+    setTimeout(() => {
+      this.initAudio();
+      this.loadAndPlay(first);
+    }, 0);
     this.showToast(`正在播放「${pl.name}」`);
   }
 
