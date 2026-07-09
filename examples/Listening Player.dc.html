@@ -738,25 +738,61 @@ class Component extends DCLogic {
   setImportUrl(e) { this.patch({ importUrl: e.target.value }); }
   setImportPlaylistName(e) { this.patch({ importPlaylistName: e.target.value }); }
   importKeyDown(e) { if (e.key === 'Enter') this.confirmImport(); }
-  confirmImport() {
-    const url = this.state.importUrl.trim();
-    if (!url) return;
+  async confirmImport() {
+    const raw = this.state.importUrl.trim();
+    if (!raw) return;
     let source = null;
-    if (/music\.163\.com/.test(url)) source = 'netease';
-    else if (/y\.qq\.com/.test(url)) source = 'qq';
+    if (/music\.163\.com/.test(raw)) source = 'netease';
+    else if (/y\.qq\.com/.test(raw)) source = 'qq';
     const name = this.state.importPlaylistName.trim();
     this.patch({ importModalOpen: false });
     if (!source) {
       this.showToast('暂不支持该链接，请粘贴网易云音乐或QQ音乐的歌单链接');
       return;
     }
-    const targetLabel = name ? `新建歌单「${name}」` : '「喜欢的音乐」';
-    // TODO: 在此接入歌单解析逻辑：
-    // - source: 'netease' | 'qq'
-    // - url: 用户粘贴的歌单链接
-    // - name: 非空时，先新建同名歌单，再将解析出的歌曲增量导入其中；
-    //         为空时，直接增量导入到内置歌单「喜欢的音乐」（即写入 state.liked）
-    this.showToast(`已识别${source === 'netease' ? '网易云音乐' : 'QQ音乐'}歌单链接，即将导入到${targetLabel}，解析功能开发中…`);
+    if (source === 'qq') {
+      this.showToast('QQ音乐歌单导入正在开发中，先支持了网易云');
+      return;
+    }
+    // 分享文本形如 "分享歌单: xxx https://music.163.com/m/playlist?id=36420739&creatorId=42270006"，
+    // 要求前面是 ? 或 & 才算参数边界，避免把 creatorId= 的数字误当成歌单 id
+    const idMatch = raw.match(/[?&]id=(\d+)/);
+    const playlistId = idMatch ? idMatch[1] : null;
+    if (!playlistId) {
+      this.showToast('识别不到歌单 id，检查一下链接是否完整');
+      return;
+    }
+    const API = window.ListeningAPI;
+    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
+
+    this.showToast('正在导入歌单…');
+    try {
+      const tracks = await API.fetchNeteasePlaylist(playlistId);
+      if (!tracks.length) {
+        this.showToast('没有解析到歌曲，确认一下歌单是否公开可见');
+        return;
+      }
+      tracks.forEach(t => normalizeTrack(t));
+      const trackIds = tracks.map(t => t.id);
+      if (name) {
+        const plId = 'pl_' + Date.now();
+        this.patch(s => ({
+          queue: [...s.queue, ...tracks],
+          playlists: [...s.playlists, { id: plId, name, builtin: false, trackIds, glyph: 'queue_music', iconFill: 0, tileBg: pickTileColor() }],
+        }));
+        this.showToast(`已导入 ${tracks.length} 首到「${name}」`);
+      } else {
+        this.patch(s => ({
+          queue: [...s.queue, ...tracks],
+          liked: { ...s.liked, ...Object.fromEntries(trackIds.map(id => [id, true])) },
+        }));
+        this.showToast(`已导入 ${tracks.length} 首到「喜欢的音乐」`);
+      }
+      this.persist();
+    } catch (e) {
+      console.error('import playlist error:', e);
+      this.showToast('导入失败，请稍后重试');
+    }
   }
 
   openAddModal(id) { this.patch({ addModalId: id }); }
@@ -943,10 +979,17 @@ class Component extends DCLogic {
     } else {
       // 如果是首次播放且还没有音频源，加载当前 track
       if (!a.src || a.src === window.location.href) {
-        const track = s.queue.find(t => t.id === s.currentId);
-        // 页面刚加载、audio 元素还没设过 src：从上次持久化的进度续播
-        if (track) this.loadAndPlay(track, s.currentTime || 0);
-        else a.play().catch(() => {});
+        // 页面刚加载、audio 元素还没设过 src：优先续播上次持久化的曲目；
+        // currentId 没指向任何曲目时（比如刚导入歌单还没点过任何一首），从队首开始，
+        // 而不是对着空 src 调用 play() 却什么都不播、UI 却显示"正在播放"
+        const resuming = s.queue.find(t => t.id === s.currentId);
+        const track = resuming || s.queue[0];
+        if (track) {
+          if (!resuming) this.patch({ currentId: track.id, currentTime: 0 });
+          this.loadAndPlay(track, resuming ? (s.currentTime || 0) : 0);
+        } else {
+          a.play().catch(() => {});
+        }
       } else {
         a.play().catch(e => { console.error('play error:', e); });
       }

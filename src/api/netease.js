@@ -38,6 +38,31 @@ function pickQueryParam(rawUrl, key) {
   }
 }
 
+// meting 返回的曲目对象（search/playlist 共用同一形状）转换成 track 对象
+function mapMetingItem(it, idx, keyword) {
+  const songId = pickQueryParam(it.url, 'id') || `${keyword || 'pl'}-${idx + 1}`;
+  return {
+    uid: `netease-${songId}`,
+    source: 'netease',
+    displayIndex: idx + 1,
+    keyword: keyword || '',
+
+    songid: songId,
+    title: it.name || '',
+    artist: it.artist || '',
+    album: '',
+
+    cover: it.pic || null,
+    audioUrl: null,
+    lrc: null,
+    lrcUrl: it.lrc || null,
+
+    detailsLoaded: false,
+    quality: null,
+    qualityLabel: null,
+  };
+}
+
 /**
  * 搜索网易云
  * @param {string} kw - 关键词
@@ -54,32 +79,31 @@ export async function searchNetease(kw, page = 1, num = 10) {
     const res = await fetch(url);
     const json = await res.json();
     if (!Array.isArray(json)) return results;
-
-    json.forEach((it, idx) => {
-      const songId = pickQueryParam(it.url, 'id') || `${kw}-${idx + 1}`;
-      results.push({
-        uid: `netease-${songId}`,
-        source: 'netease',
-        displayIndex: idx + 1,
-        keyword: kw,
-
-        songid: songId,
-        title: it.name || '',
-        artist: it.artist || '',
-        album: '',
-
-        cover: it.pic || null,
-        audioUrl: null,
-        lrc: null,
-        lrcUrl: it.lrc || null,
-
-        detailsLoaded: false,
-        quality: null,
-        qualityLabel: null,
-      });
-    });
+    json.forEach((it, idx) => results.push(mapMetingItem(it, idx, kw)));
   } catch (e) {
     console.error('netease search error:', e);
+  }
+  return results;
+}
+
+/**
+ * 拉取网易云歌单全部曲目
+ * @param {string|number} playlistId - 歌单数字 id
+ * @returns {Promise<Array>} track 对象数组
+ */
+export async function fetchNeteasePlaylist(playlistId) {
+  const id = String(playlistId || '').trim();
+  const results = [];
+  if (!/^\d+$/.test(id)) return results;
+
+  const url = `${BASE_URL}?type=playlist&id=${encodeURIComponent(id)}&server=netease`;
+  try {
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!Array.isArray(json)) return results;
+    json.forEach((it, idx) => results.push(mapMetingItem(it, idx, '')));
+  } catch (e) {
+    console.error('netease playlist fetch error:', e);
   }
   return results;
 }

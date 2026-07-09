@@ -22,6 +22,7 @@ var ListeningAPI = (() => {
   __export(index_exports, {
     ensureTrackDetails: () => ensureTrackDetails,
     fetchNeteaseDetails: () => fetchNeteaseDetails,
+    fetchNeteasePlaylist: () => fetchNeteasePlaylist,
     fetchQQDetails: () => fetchQQDetails,
     fetchSoundCloudDetails: () => fetchSoundCloudDetails,
     searchAll: () => searchAll,
@@ -53,6 +54,26 @@ var ListeningAPI = (() => {
       return m ? decodeURIComponent(m[1]) : "";
     }
   }
+  function mapMetingItem(it, idx, keyword) {
+    const songId = pickQueryParam(it.url, "id") || `${keyword || "pl"}-${idx + 1}`;
+    return {
+      uid: `netease-${songId}`,
+      source: "netease",
+      displayIndex: idx + 1,
+      keyword: keyword || "",
+      songid: songId,
+      title: it.name || "",
+      artist: it.artist || "",
+      album: "",
+      cover: it.pic || null,
+      audioUrl: null,
+      lrc: null,
+      lrcUrl: it.lrc || null,
+      detailsLoaded: false,
+      quality: null,
+      qualityLabel: null
+    };
+  }
   async function searchNetease(kw, page = 1, num = 10) {
     const requestLimit = Math.max(1, page) * Math.max(1, num);
     const url = `${BASE_URL}?type=search&id=${encodeURIComponent(kw)}&limit=${encodeURIComponent(requestLimit)}&server=netease`;
@@ -61,28 +82,24 @@ var ListeningAPI = (() => {
       const res = await fetch(url);
       const json = await res.json();
       if (!Array.isArray(json)) return results;
-      json.forEach((it, idx) => {
-        const songId = pickQueryParam(it.url, "id") || `${kw}-${idx + 1}`;
-        results.push({
-          uid: `netease-${songId}`,
-          source: "netease",
-          displayIndex: idx + 1,
-          keyword: kw,
-          songid: songId,
-          title: it.name || "",
-          artist: it.artist || "",
-          album: "",
-          cover: it.pic || null,
-          audioUrl: null,
-          lrc: null,
-          lrcUrl: it.lrc || null,
-          detailsLoaded: false,
-          quality: null,
-          qualityLabel: null
-        });
-      });
+      json.forEach((it, idx) => results.push(mapMetingItem(it, idx, kw)));
     } catch (e) {
       console.error("netease search error:", e);
+    }
+    return results;
+  }
+  async function fetchNeteasePlaylist(playlistId) {
+    const id = String(playlistId || "").trim();
+    const results = [];
+    if (!/^\d+$/.test(id)) return results;
+    const url = `${BASE_URL}?type=playlist&id=${encodeURIComponent(id)}&server=netease`;
+    try {
+      const res = await fetch(url);
+      const json = await res.json();
+      if (!Array.isArray(json)) return results;
+      json.forEach((it, idx) => results.push(mapMetingItem(it, idx, "")));
+    } catch (e) {
+      console.error("netease playlist fetch error:", e);
     }
     return results;
   }

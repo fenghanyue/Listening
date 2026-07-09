@@ -3,7 +3,7 @@
  * 并行调用网易云 / QQ / SoundCloud，按源交错排列结果
  */
 
-import { searchNetease, fetchNeteaseDetails } from './netease.js';
+import { searchNetease, fetchNeteaseDetails, fetchNeteasePlaylist } from './netease.js';
 import { searchQQ, fetchQQDetails } from './qq.js';
 import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
 
@@ -102,6 +102,6 @@ export async function ensureTrackDetails(track) {
 /**
  * 检出所有 API 源
  */
-export { searchNetease, fetchNeteaseDetails } from './netease.js';
+export { searchNetease, fetchNeteaseDetails, fetchNeteasePlaylist } from './netease.js';
 export { searchQQ, fetchQQDetails } from './qq.js';
 export { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
