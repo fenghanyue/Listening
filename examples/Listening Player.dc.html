@@ -768,8 +768,14 @@ class Component extends DCLogic {
       if (isFinite(t)) this.setState(s => ({ currentTime: t }));
     };
     this._onEnded = () => this.handleTrackEnd();
-    this._onPlay = () => this.setState({ playing: true });
-    this._onPause = () => this.setState({ playing: false });
+    this._onPlay = () => {
+      this.setState({ playing: true });
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+    };
+    this._onPause = () => {
+      this.setState({ playing: false });
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+    };
     this._onError = () => {
       console.error('audio error:', a.error);
       this.showToast('播放失败，请尝试其他音源');
@@ -790,6 +796,16 @@ class Component extends DCLogic {
     a.addEventListener('pause', this._onPause);
     a.addEventListener('error', this._onError);
     a.addEventListener('loadedmetadata', this._onMeta);
+
+    // 手机端后台切歌失败的根因：不注册 Media Session，系统不知道这个标签页在持续播放媒体，
+    // 后台时会限流/拦截 ended 事件里异步发起的下一首 play()。这里把播放控制接到已有方法上，
+    // 不新增播放逻辑。
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => a.play());
+      navigator.mediaSession.setActionHandler('pause', () => a.pause());
+      navigator.mediaSession.setActionHandler('previoustrack', () => this.stepTrack(-1));
+      navigator.mediaSession.setActionHandler('nexttrack', () => this.stepTrack(1));
+    }
 
     // 同步初始音量
     a.volume = this.state.volume / 100;
@@ -997,12 +1013,27 @@ class Component extends DCLogic {
   // 导航时用这个，避免每次自动切歌都把当前曲目重新挪到队首、把播放顺序搅乱
   startTrack(track, resumeAt = 0) {
     if (!track) return;
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title || '',
+        artist: track.artist || '',
+        album: track.album || '',
+        artwork: track.cover ? [{ src: track.cover }] : [],
+      });
+    }
     this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [] });
     this.persist();
-    setTimeout(() => {
-      this.initAudio();
+    // 已经初始化过 audio 元素时（自动切歌走的就是这条路径）直接同步调用，
+    // 不经 setTimeout(0) 多绕一圈——切到后台的标签页正是最容易被浏览器限流延迟的场景，
+    // ended 事件到真正调用 play() 的间隔越短越好
+    if (this._audio) {
       this.loadAndPlay(track, resumeAt);
-    }, 0);
+    } else {
+      setTimeout(() => {
+        this.initAudio();
+        this.loadAndPlay(track, resumeAt);
+      }, 0);
+    }
   }
 
   handleTrackEnd() {
