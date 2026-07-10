@@ -284,10 +284,10 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div class="{{ v.nowPlayingClass }}" style="flex:1;min-width:0;display:flex;flex-direction:column;background:{{ v.c.surfaceLow }};position:relative;">
+     <sc-if value="{{ v.showNowPlayingBody }}">
      <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;">
        <span style="font-family:'Material Symbols Outlined';font-size:20px;">expand_more</span>
      </button>
-     <sc-if value="{{ v.showNowPlayingBody }}">
      <div style="flex:1;min-height:0;width:100%;height:100%;box-sizing:border-box;padding:26px 30px 24px;display:flex;flex-direction:column;align-items:center;">
       <div style="width:100%;text-align:center;margin-bottom:6px;flex-shrink:0;">
         <span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;color:{{ v.c.onSurfaceVariant }};">正在播放</span>
@@ -347,7 +347,7 @@ if ('serviceWorker' in navigator) {
 
      <sc-if value="{{ v.showQueueInPlayer }}">
      <div style="flex:1;min-height:0;width:100%;display:flex;flex-direction:column;box-sizing:border-box;">
-       <div style="padding:20px 24px 14px 56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+       <div style="padding:20px 24px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
          <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">当前播放列表 · {{ v.queueCount }}</span>
          <button onclick="{{ H.closeQueuePanel }}" style="display:flex;align-items:center;gap:4px;padding:7px 14px 7px 10px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:12.5px;font-weight:500;cursor:pointer;">
            <span style="font-family:'Material Symbols Outlined';font-size:17px;">expand_more</span>收起
