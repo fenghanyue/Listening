@@ -287,6 +287,7 @@ if ('serviceWorker' in navigator) {
      <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;">
        <span style="font-family:'Material Symbols Outlined';font-size:20px;">expand_more</span>
      </button>
+     <sc-if value="{{ v.showNowPlayingBody }}">
      <div style="flex:1;min-height:0;width:100%;height:100%;box-sizing:border-box;padding:26px 30px 24px;display:flex;flex-direction:column;align-items:center;">
       <div style="width:100%;text-align:center;margin-bottom:6px;flex-shrink:0;">
         <span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;color:{{ v.c.onSurfaceVariant }};">正在播放</span>
@@ -342,6 +343,47 @@ if ('serviceWorker' in navigator) {
         <div onclick="{{ H.setVolume }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;"><div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.onSurfaceVariant }};width:{{ v.volume }}%;"></div></div>
       </div>
      </div>
+     </sc-if>
+
+     <sc-if value="{{ v.showQueueInPlayer }}">
+     <div style="flex:1;min-height:0;width:100%;display:flex;flex-direction:column;box-sizing:border-box;">
+       <div style="padding:20px 24px 14px 56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+         <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">当前播放列表 · {{ v.queueCount }}</span>
+         <button onclick="{{ H.closeQueuePanel }}" style="display:flex;align-items:center;gap:4px;padding:7px 14px 7px 10px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:12.5px;font-weight:500;cursor:pointer;">
+           <span style="font-family:'Material Symbols Outlined';font-size:17px;">expand_more</span>收起
+         </button>
+       </div>
+       <div style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
+         <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
+           <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
+             <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
+             <span class="dc-queue-drag-handle" style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
+             <div class="dc-queue-move-btns" style="display:none;align-items:center;gap:0;flex-shrink:0;">
+               <button onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveUpOpacity }};flex-shrink:0;">
+                 <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_up</span>
+               </button>
+               <button onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveDownOpacity }};flex-shrink:0;">
+                 <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_down</span>
+               </button>
+             </div>
+             <div style="width:38px;height:38px;border-radius:8px;{{ item.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+               <sc-if value="{{ item.showCoverIcon }}">
+                 <span style="font-family:'Material Symbols Outlined';font-size:16px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
+               </sc-if>
+             </div>
+             <div style="flex:1;min-width:0;">
+               <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
+               <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artistDisplay }} · {{ item.sourceLabel }}</div>
+             </div>
+             <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
+             <button onclick="{{ item.onRemove }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
+               <span style="font-family:'Material Symbols Outlined';font-size:16px;">close</span>
+             </button>
+           </div>
+         </sc-for>
+       </div>
+     </div>
+     </sc-if>
     </div>
 
   </div>
@@ -939,7 +981,7 @@ class Component extends DCLogic {
   }
 
   toggleMediaView() { this.patch(s => ({ mediaView: s.mediaView === 'cover' ? 'lyrics' : 'cover' })); }
-  toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue', mobileNowPlayingExpanded: false })); }
+  toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue' })); }
   closeQueuePanel() { this.patch({ rightPanel: 'browse' }); }
   // 手机端：左侧歌单栏改为滑入抽屉
   toggleMobileSidebar() { this.patch(s => ({ mobileSidebarOpen: !s.mobileSidebarOpen })); }
@@ -1306,6 +1348,7 @@ class Component extends DCLogic {
     const mediaIsLyrics = s.mediaView === 'lyrics';
     const sidebarClass = 'dc-sidebar' + (s.mobileSidebarOpen ? ' dc-open' : '');
     const nowPlayingClass = 'dc-nowplaying' + (s.mobileNowPlayingExpanded ? ' dc-open' : '');
+    const showQueueInPlayer = s.mobileNowPlayingExpanded && rightIsQueue;
 
     return {
       v: {
@@ -1331,6 +1374,7 @@ class Component extends DCLogic {
         mediaIsCover: !mediaIsLyrics, mediaIsLyrics,
         mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.cover ? `url('${track.cover}')` : track.coverGradient};background-size:auto, cover;background-position:center;animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
         rightIsQueue, rightIsBrowse: !rightIsQueue,
+        showQueueInPlayer, showNowPlayingBody: !showQueueInPlayer,
         queueBtnBg: rightIsQueue ? c.primaryContainer : 'transparent',
         queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
         sourcesRender,
