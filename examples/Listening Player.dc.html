@@ -213,9 +213,12 @@ if ('serviceWorker' in navigator) {
         <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">{{ v.playlistHeaderName }}</span>
       </div>
       <sc-if value="{{ v.showPlayAll }}">
-      <div style="padding:0 24px 18.75px;flex-shrink:0;">
+      <div style="padding:0 24px 18.75px;flex-shrink:0;display:flex;gap:8px;">
         <button onclick="{{ H.playAllInPlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
           <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;">play_arrow</span>播放全部
+        </button>
+        <button onclick="{{ H.exportPlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ v.exportBtnIcon }}</span>{{ v.exportBtnLabel }}
         </button>
       </div>
       </sc-if>
@@ -424,10 +427,10 @@ if ('serviceWorker' in navigator) {
     <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeImportModal }}">
       <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
         <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">导入歌单</div>
-        <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">支持网易云音乐、QQ音乐歌单链接</div>
+        <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">支持网易云音乐歌单链接，或粘贴本站导出的歌单字符串</div>
         <input value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;font-family:inherit;">
         <input value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="歌单名称（可选）" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;font-family:inherit;">
-        <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">留空导入到「喜欢的音乐」，填写则新建同名歌单导入</div>
+        <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">同名歌单会被直接覆盖；留空则整体替换「喜欢的音乐」（不是合并）</div>
         <div style="display:flex;gap:8px;justify-content:flex-end;">
           <button onclick="{{ H.closeImportModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
           <button onclick="{{ H.confirmImport }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;">导入</button>
@@ -644,6 +647,37 @@ function normalizeTrack(t) {
   return t;
 }
 
+// ====================== 歌单导出/导入字符串编解码 ======================
+// 导出字符串格式：固定前缀 + base64(UTF-8 安全) 的精简 JSON，
+// 不用原始 JSON 直接展示是为了让粘贴/复制体验干净（单行、无换行、无特殊字符冲突）。
+// 内部数字 id（normalizeTrack 分配）是本次会话临时的，不放进导出内容——
+// 只存各音源的真实 id（songid）+ 展示字段，导入时用 normalizeTrack 重新分配 id。
+const EXPORT_PREFIX = 'LSNPL1:';
+
+function encodePlaylistExport(name, tracks) {
+  const payload = {
+    v: 1,
+    name,
+    tracks: tracks.map(t => ({
+      source: t.source,
+      songid: String(t.source === 'qq' ? (t.qqId || t.songMid || t.songid) : t.songid),
+      title: t.title || '',
+      artist: t.artist || '',
+      album: t.album || '',
+      cover: t.cover || null,
+    })),
+  };
+  return EXPORT_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+}
+
+function decodePlaylistExport(str) {
+  if (!str.startsWith(EXPORT_PREFIX)) return null;
+  const json = decodeURIComponent(escape(atob(str.slice(EXPORT_PREFIX.length))));
+  const payload = JSON.parse(json);
+  if (!payload || payload.v !== 1 || !Array.isArray(payload.tracks)) throw new Error('bad payload');
+  return payload;
+}
+
 // ====================== 本地持久化（歌单 / 喜欢 / 队列 / 播放进度） ======================
 const LIBRARY_STORAGE_KEY = 'listening-player-library-v1';
 
@@ -686,7 +720,7 @@ class Component extends DCLogic {
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
       mobileSidebarOpen: false, mobileNowPlayingExpanded: false,
       addModalId: null, createModalOpen: false, createName: '',
-      importModalOpen: false, importUrl: '', importPlaylistName: '',
+      importModalOpen: false, importUrl: '', importPlaylistName: '', exportedPlaylistId: null,
       playlists: [
         { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
       ],
@@ -886,16 +920,70 @@ class Component extends DCLogic {
   setImportUrl(e) { this.patch({ importUrl: e.target.value }); }
   setImportPlaylistName(e) { this.patch({ importPlaylistName: e.target.value }); }
   importKeyDown(e) { if (e.key === 'Enter') this.confirmImport(); }
+
+  // 覆盖语义：
+  //  - name 命中已有的非内置歌单 -> 原地替换它的 trackIds（保留 id/glyph/tileBg，不会建出重名的第二个）
+  //  - name 没命中已有歌单 -> 新建
+  //  - name 留空 -> 整个替换 s.liked（不是合并，旧的喜欢里没在这次导入里的歌会被摘掉）
+  applyImportedTracks(tracks, name) {
+    const trackIds = tracks.map(t => t.id);
+    if (name) {
+      const existing = this.state.playlists.find(p => !p.builtin && p.name === name);
+      if (existing) {
+        this.patch(s => ({
+          queue: [...s.queue, ...tracks],
+          playlists: s.playlists.map(p => p.id === existing.id ? { ...p, trackIds } : p),
+        }));
+        this.showToast(`已导入 ${tracks.length} 首到「${name}」（覆盖了原有同名歌单）`);
+      } else {
+        const plId = 'pl_' + Date.now();
+        this.patch(s => ({
+          queue: [...s.queue, ...tracks],
+          playlists: [...s.playlists, { id: plId, name, builtin: false, trackIds, glyph: 'queue_music', iconFill: 0, tileBg: pickTileColor() }],
+        }));
+        this.showToast(`已导入 ${tracks.length} 首到「${name}」`);
+      }
+    } else {
+      this.patch(s => ({
+        queue: [...s.queue, ...tracks],
+        liked: Object.fromEntries(trackIds.map(id => [id, true])),
+      }));
+      this.showToast(`已导入 ${tracks.length} 首到「喜欢的音乐」（已整体覆盖原有收藏）`);
+    }
+    this.persist();
+  }
+
   async confirmImport() {
     const raw = this.state.importUrl.trim();
     if (!raw) return;
+    const typedName = this.state.importPlaylistName.trim();
+    this.patch({ importModalOpen: false });
+
+    // 先认本站自己的导出字符串格式，再走链接识别，避免误判
+    if (raw.startsWith(EXPORT_PREFIX)) {
+      let payload;
+      try {
+        payload = decodePlaylistExport(raw);
+      } catch (e) {
+        console.error('parse export string error:', e);
+        this.showToast('导出内容解析失败，检查一下是不是完整复制的');
+        return;
+      }
+      if (!payload.tracks.length) {
+        this.showToast('这段内容里没有歌曲');
+        return;
+      }
+      const tracks = payload.tracks.map(t => normalizeTrack({ ...t }));
+      // 留空时默认用导出内容自带的歌单名，只有它也是空的才会落到"覆盖喜欢的音乐"这条路
+      this.applyImportedTracks(tracks, typedName || payload.name || '');
+      return;
+    }
+
     let source = null;
     if (/music\.163\.com/.test(raw)) source = 'netease';
     else if (/y\.qq\.com/.test(raw)) source = 'qq';
-    const name = this.state.importPlaylistName.trim();
-    this.patch({ importModalOpen: false });
     if (!source) {
-      this.showToast('暂不支持该链接，请粘贴网易云音乐或QQ音乐的歌单链接');
+      this.showToast('暂不支持该链接，请粘贴网易云音乐或QQ音乐的歌单链接，或者导出字符串');
       return;
     }
     if (source === 'qq') {
@@ -921,22 +1009,7 @@ class Component extends DCLogic {
         return;
       }
       tracks.forEach(t => normalizeTrack(t));
-      const trackIds = tracks.map(t => t.id);
-      if (name) {
-        const plId = 'pl_' + Date.now();
-        this.patch(s => ({
-          queue: [...s.queue, ...tracks],
-          playlists: [...s.playlists, { id: plId, name, builtin: false, trackIds, glyph: 'queue_music', iconFill: 0, tileBg: pickTileColor() }],
-        }));
-        this.showToast(`已导入 ${tracks.length} 首到「${name}」`);
-      } else {
-        this.patch(s => ({
-          queue: [...s.queue, ...tracks],
-          liked: { ...s.liked, ...Object.fromEntries(trackIds.map(id => [id, true])) },
-        }));
-        this.showToast(`已导入 ${tracks.length} 首到「喜欢的音乐」`);
-      }
-      this.persist();
+      this.applyImportedTracks(tracks, typedName);
     } catch (e) {
       console.error('import playlist error:', e);
       this.showToast('导入失败，请稍后重试');
@@ -994,6 +1067,54 @@ class Component extends DCLogic {
     this.patch({ playOrder: tracks.map(t => t.id) });
     this.startTrack(tracks[0]);
     this.showToast(`正在播放「${pl.name}」`);
+  }
+
+  // "导出歌单"：把当前歌单的曲目编码成可复制粘贴的字符串，不动播放/曲库状态
+  exportPlaylist() {
+    const s = this.state;
+    const pid = s.viewingPlaylistId;
+    if (!pid) return;
+    const pl = s.playlists.find(p => p.id === pid);
+    if (!pl) return;
+    const ids = pid === 'liked' ? Object.keys(s.liked).map(Number) : (pl.trackIds || []);
+    const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
+    if (!tracks.length) { this.showToast('这个歌单还没有歌曲，没什么可导出的'); return; }
+
+    const text = encodePlaylistExport(pl.name, tracks);
+    this.copyToClipboard(text).then(ok => {
+      if (!ok) { this.showToast('复制失败，请手动复制'); return; }
+      if (this._exportRevertTimer) clearTimeout(this._exportRevertTimer);
+      this.patch({ exportedPlaylistId: pid });
+      this._exportRevertTimer = setTimeout(() => {
+        // 只在还是同一次导出结果时才复原，避免旧定时器把用户刚点的新反馈提前擦掉
+        if (this.state.exportedPlaylistId === pid) this.patch({ exportedPlaylistId: null });
+      }, 2000);
+    });
+  }
+
+  // 剪贴板写入：优先用标准 API，不可用/被拒绝时退化到隐藏 textarea + execCommand
+  copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(() => true).catch(() => this.copyToClipboardFallback(text));
+    }
+    return Promise.resolve(this.copyToClipboardFallback(text));
+  }
+
+  copyToClipboardFallback(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch (e) {
+      console.warn('clipboard fallback failed:', e);
+      return false;
+    }
   }
 
   toggleMediaView() { this.patch(s => ({ mediaView: s.mediaView === 'cover' ? 'lyrics' : 'cover' })); }
@@ -1389,6 +1510,8 @@ class Component extends DCLogic {
         isPlaylistView, isLibraryView: !isPlaylistView,
         playlistHeaderName: activePlaylist ? activePlaylist.name : '',
         showPlayAll: isPlaylistView && displayTracks.length > 0,
+        exportBtnLabel: s.exportedPlaylistId === s.viewingPlaylistId ? '已导出到剪贴板' : '导出歌单',
+        exportBtnIcon: s.exportedPlaylistId === s.viewingPlaylistId ? 'check' : 'ios_share',
         isSearching: s.isSearching,
         hasNoResults: !showPrompt && !s.isSearching && displayTracks.length === 0,
         showPrompt, showStatusText: !showPrompt && !s.isSearching,
@@ -1453,6 +1576,7 @@ class Component extends DCLogic {
         confirmCreate: () => this.confirmCreate(),
         stop: (e) => this.stop(e),
         playAllInPlaylist: () => this.playAllInPlaylist(),
+        exportPlaylist: () => this.exportPlaylist(),
         openImportModal: () => this.openImportModal(),
         closeImportModal: () => this.closeImportModal(),
         setImportUrl: (e) => this.setImportUrl(e),
