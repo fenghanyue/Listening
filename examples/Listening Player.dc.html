@@ -45,6 +45,7 @@ if ('serviceWorker' in navigator) {
   <style>
     body { margin: 0; background: #EAE6EE; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
     @keyframes vinylSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes iconSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @keyframes searchPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
   </style>
   <style>
@@ -335,7 +336,7 @@ if ('serviceWorker' in navigator) {
         </button>
         <div style="display:flex;align-items:center;gap:2px;">
           <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
-          <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span></button>
+          <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span></button>
           <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
         </div>
         <button onclick="{{ H.cycleMode }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
@@ -403,7 +404,7 @@ if ('serviceWorker' in navigator) {
       <div style="font-size:11px;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artistDisplay }}</div>
     </div>
     <button onclick="{{ H.miniPlayToggle }}" disabled="{{ v.playDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};flex-shrink:0;">
-      <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span>
+      <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span>
     </button>
   </div>
   </sc-if>
@@ -717,6 +718,14 @@ function likedIdsOrdered(s) {
   return [...ordered, ...extra];
 }
 
+// ====================== 自动切歌可靠性相关的可调参数 ======================
+const PREFETCH_LEAD_SECONDS = 12; // 离当前曲目结束还剩多少秒开始预取下一首
+const LOAD_WATCHDOG_MS = 12000;   // 一首歌从发起加载到超时判定卡死的等待时长：给慢速移动网络 +
+                                    // SoundCloud 最坏情况下的多跳解析留够余量（各 fetchXDetails 内部
+                                    // 吞掉自己的错误，外层 promise 实际上很少真的 reject，只能靠超时兜底）
+const MAX_CONSECUTIVE_LOAD_FAILURES = 2; // 连续几首都卡死超时就不再自动切歌，停在当前这首上，
+                                            // 避免离线时以 12s/首的速度把整条队列跳穿
+
 class Component extends DCLogic {
   state = (() => {
     const base = {
@@ -733,7 +742,7 @@ class Component extends DCLogic {
       queue: [],
       // playOrder = 当前播放队列：驱动下一曲/上一曲和右侧队列面板的曲目 id 顺序，和曲库是两回事
       playOrder: [],
-      currentId: null, currentTime: 0, volume: 70, playing: false, playMode: 0,
+      currentId: null, currentTime: 0, volume: 70, playing: false, playMode: 0, loadingTrackId: null,
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
       mobileSidebarOpen: false, mobileNowPlayingExpanded: false,
       addModalId: null, createModalOpen: false, createName: '',
@@ -777,6 +786,7 @@ class Component extends DCLogic {
     this.stopHLS();
     if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
     clearInterval(this._progressSaveTimer);
+    clearTimeout(this._loadWatchdogTimer);
   }
 
   stopHLS() {
@@ -819,7 +829,34 @@ class Component extends DCLogic {
 
     this._onTimeUpdate = () => {
       const t = a.currentTime;
-      if (isFinite(t)) this.setState(s => ({ currentTime: t }));
+      if (!isFinite(t)) return;
+      this.setState({ currentTime: t });
+
+      // 真正有播放进度了：这次加载没卡死，清掉守护计时器/加载中状态/失败计数。用 trackId 判断
+      // 而不是"清了就清"，防止一个已经过期（曲目已被切走）的旧计时器误清了新曲目正在等待的加载状态
+      if (t > 0 && this._loadWatchdogTrackId != null && this._loadWatchdogTrackId === this.state.currentId) {
+        clearTimeout(this._loadWatchdogTimer);
+        this._loadWatchdogTimer = null;
+        this._loadWatchdogTrackId = null;
+        this._consecutiveLoadFailures = 0;
+        if (this.state.loadingTrackId != null) this.patch({ loadingTrackId: null });
+      }
+
+      // 快放完时提前预取下一首：列表循环模式下一首是确定的；随机模式在这个时间点提前"掷一次骰子"
+      // 定下来（存进 this._shufflePrefetchedNextId），之后 handleTrackEnd() 的随机分支会优先用
+      // 这次定好的结果，保证真正播的下一首就是预取过的那首；单曲循环下一首是自己，不用预取
+      if (isFinite(a.duration) && (a.duration - t) <= PREFETCH_LEAD_SECONDS) {
+        const s = this.state;
+        if (s.playMode === 0) {
+          const nextTrack = this.nextListLoopTrack();
+          if (nextTrack && nextTrack.id !== s.currentId) this.prefetchTrack(nextTrack);
+        } else if (s.playMode === 1 && this._shufflePrefetchedNextId == null && s.playOrder.length > 0) {
+          const nextId = s.playOrder[Math.floor(Math.random() * s.playOrder.length)];
+          this._shufflePrefetchedNextId = nextId;
+          const nextTrack = s.queue.find(t2 => t2.id === nextId);
+          if (nextTrack) this.prefetchTrack(nextTrack);
+        }
+      }
     };
     this._onEnded = () => this.handleTrackEnd();
     this._onPlay = () => {
@@ -833,7 +870,14 @@ class Component extends DCLogic {
     this._onError = () => {
       console.error('audio error:', a.error);
       this.showToast('播放失败，请尝试其他音源');
-      this.setState({ playing: false });
+      // 拿到明确的 error 事件就不用等 watchdog 超时才知道这次加载失败了：立刻清掉加载中状态和
+      // 对应的守护计时器（避免它之后再触发一次多余的自动切歌——error 已经是明确的结论了）
+      if (this._loadWatchdogTrackId != null && this._loadWatchdogTrackId === this.state.currentId) {
+        clearTimeout(this._loadWatchdogTimer);
+        this._loadWatchdogTimer = null;
+        this._loadWatchdogTrackId = null;
+      }
+      this.setState({ playing: false, loadingTrackId: null });
     };
     this._onMeta = () => {
       const dur = a.duration;
@@ -1169,7 +1213,13 @@ class Component extends DCLogic {
         artwork: track.cover ? [{ src: track.cover }] : [],
       });
     }
-    this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [] });
+    // 新曲目开始加载：上一首的预取记录作废，从头给这一首武装加载超时兜底，
+    // 并把它标记成"正在加载中"（播放按钮显示 loading 图标，直到 _onTimeUpdate 观察到
+    // 真实播放进度、或 _onError/watchdog 判定失败为止）
+    this._prefetchedForId = null;
+    this._shufflePrefetchedNextId = null;
+    this.armLoadWatchdog(track.id);
+    this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [], loadingTrackId: track.id });
     this.persist();
     // 已经初始化过 audio 元素时（自动切歌走的就是这条路径）直接同步调用，
     // 不经 setTimeout(0) 多绕一圈——切到后台的标签页正是最容易被浏览器限流延迟的场景，
@@ -1184,6 +1234,16 @@ class Component extends DCLogic {
     }
   }
 
+  // 列表循环模式下"下一首"是谁：playOrder 里紧跟着 currentId 后面那个，到头了绕回队首。
+  // handleTrackEnd() 的列表循环分支、_onTimeUpdate 里判断要不要提前预取，都用这一份算法
+  nextListLoopTrack() {
+    const s = this.state;
+    const order = s.playOrder;
+    const idx = order.indexOf(s.currentId);
+    const nextId = idx >= 0 && idx + 1 < order.length ? order[idx + 1] : (order.length > 0 ? order[0] : null);
+    return nextId != null ? s.queue.find(t => t.id === nextId) : null;
+  }
+
   handleTrackEnd() {
     const s = this.state;
     const cur = this._audio;
@@ -1196,16 +1256,64 @@ class Component extends DCLogic {
       return;
     }
 
-    let nextId = null;
+    let nextTrack = null;
     if (mode === 1) {
-      // 随机
-      if (order.length > 0) nextId = order[Math.floor(Math.random() * order.length)];
+      // 随机模式：优先用预取阶段提前定好的那首（保证跟预取的是同一首），
+      // 提前定的那首已经不在播放队列里了，或者根本没提前定过，就现场重新随机
+      let nextId = (this._shufflePrefetchedNextId != null && order.includes(this._shufflePrefetchedNextId))
+        ? this._shufflePrefetchedNextId
+        : null;
+      if (nextId == null && order.length > 0) nextId = order[Math.floor(Math.random() * order.length)];
+      if (nextId != null) nextTrack = s.queue.find(t => t.id === nextId);
     } else {
       // 列表循环
-      const idx = order.indexOf(s.currentId);
-      nextId = idx >= 0 && idx + 1 < order.length ? order[idx + 1] : (order.length > 0 ? order[0] : null);
+      nextTrack = this.nextListLoopTrack();
     }
-    if (nextId != null) this.startTrack(s.queue.find(t => t.id === nextId));
+    if (nextTrack) this.startTrack(nextTrack);
+  }
+
+  // 提前给"接下来要放的下一首"解析播放链接 + (非 HLS 时)后台下载音频缓存，这样真正切到
+  // 这首歌时 loadAndPlay 大概率直接命中已经解析好的 audioUrl / 已经缓存好的 blob，不用等到
+  // ended 触发的那一刻才从零开始联网。纯粹是锦上添花的后台工作：失败/慢/没赶上都不影响正常
+  // 播放路径，loadAndPlay 该走的完整流程照样会走一遍
+  async prefetchTrack(track) {
+    if (!track || track.id === this._prefetchedForId) return;
+    this._prefetchedForId = track.id;
+    const API = window.ListeningAPI;
+    if (!API) return;
+    try {
+      if (!track.audioUrl) await API.ensureTrackDetails(track);
+      if (!track.audioUrl || track.scIsHLS) return; // HLS 分片流不纳入本地缓存范围
+      const cacheKey = audioCacheKey(track);
+      const cached = await getCachedAudio(cacheKey);
+      if (!cached) cacheAudioInBackground(cacheKey, track.audioUrl);
+    } catch (e) {
+      console.warn('prefetch track failed:', e);
+    }
+  }
+
+  armLoadWatchdog(trackId) {
+    clearTimeout(this._loadWatchdogTimer);
+    this._loadWatchdogTrackId = trackId;
+    this._loadWatchdogTimer = setTimeout(() => this.handleLoadTimeout(trackId), LOAD_WATCHDOG_MS);
+  }
+
+  // 加载卡死兜底：一首歌从发起加载到 LOAD_WATCHDOG_MS 毫秒后还没产生任何真实播放进度，
+  // 大概率是网络问题卡住了 ensureTrackDetails 或音频流请求——各音源 fetchXDetails 会把自己的
+  // 错误都吞掉，外层 promise 实际上很少真的 reject，只能靠这道超时来发现
+  handleLoadTimeout(trackId) {
+    if (this.state.currentId !== trackId) return; // 早就换到别的曲目了，这个计时器已经过期
+    this._consecutiveLoadFailures = (this._consecutiveLoadFailures || 0) + 1;
+    if (this._consecutiveLoadFailures <= MAX_CONSECUTIVE_LOAD_FAILURES) {
+      // 重新武装一次：handleTrackEnd() 的单曲循环分支不会调 startTrack()，不会自动重新武装计时器，
+      // 这里统一先兜底武装（列表循环/随机分支里 startTrack() 紧接着就会用新 trackId 覆盖它，不冲突）
+      this.armLoadWatchdog(trackId);
+      this.handleTrackEnd();
+    } else {
+      // 连续卡死超过阈值，大概率整个网络都不通，不再往后跳，停在这首上，
+      // 避免离线状态下把整条队列每首等 12 秒就跳一次这种失控的快速跳歌
+      this.patch({ playing: false, loadingTrackId: null });
+    }
   }
 
   loadAndPlay(track, resumeAt = 0) {
@@ -1306,6 +1414,9 @@ class Component extends DCLogic {
     const s = this.state;
     if (s.playing) {
       a.pause();
+      // 用户主动暂停：不管这首歌是不是还在加载中，都别再显示"加载中"的图标了——
+      // 暂停态应该看起来就是暂停，不能停留在转圈上
+      if (s.loadingTrackId != null) this.patch({ loadingTrackId: null });
     } else {
       // 如果是首次播放且还没有音频源，加载当前 track
       if (!a.src || a.src === window.location.href) {
@@ -1503,6 +1614,7 @@ class Component extends DCLogic {
     const idx = s.playOrder.indexOf(s.currentId);
     const MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
     const modeActive = s.playMode !== 0;
+    const isLoadingCurrent = s.loadingTrackId != null && s.loadingTrackId === s.currentId;
 
     const playlistOptions = s.playlists.map(pl => ({ id: pl.id, name: pl.name, icon: pl.glyph, tileBg: pl.tileBg, onClick: () => this.confirmAdd(pl.id, pl.name) }));
 
@@ -1567,7 +1679,8 @@ class Component extends DCLogic {
         switchThumbBg: s.theme === 'dark' ? c.onPrimary : c.surfaceLow,
         switchThumbLeft: s.theme === 'dark' ? 26 : 2,
         switchIconColor: s.theme === 'dark' ? c.primary : c.onSurfaceVariant,
-        playIcon: s.playing ? 'pause' : 'play_arrow',
+        playIcon: isLoadingCurrent ? 'progress_activity' : (s.playing ? 'pause' : 'play_arrow'),
+        playIconAnimStyle: isLoadingCurrent ? 'animation:iconSpin .9s linear infinite;display:inline-block;' : '',
         modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
         playlistsRender,
         hasAddModal: !!s.addModalId, playlistOptions,
