@@ -700,11 +700,21 @@ function loadPersistedLibrary() {
 
 function savePersistedLibrary(s) {
   try {
-    const { playlists, liked, queue, playOrder, currentId, currentTime, volume, playMode } = s;
-    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({ playlists, liked, queue, playOrder, currentId, currentTime, volume, playMode }));
+    const { playlists, liked, likedOrder, queue, playOrder, currentId, currentTime, volume, playMode } = s;
+    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({ playlists, liked, likedOrder, queue, playOrder, currentId, currentTime, volume, playMode }));
   } catch (e) {
     console.warn('保存本地歌单数据失败:', e);
   }
+}
+
+// "喜欢的音乐"要按点喜欢的先后顺序显示（最新喜欢的排最前面），不能像别的歌单那样直接按 s.liked
+// 这个纯 membership 集合的 key 顺序来——对象的整数型 key 在 JS 里天生按数值升序遍历，跟点喜欢的
+// 先后完全对不上。likedOrder 才是真正记录顺序的地方，s.liked 只负责"是不是喜欢"这个布尔判断。
+// 兜底：likedOrder 里没有、但 s.liked 里有的 id（旧数据迁移/边界情况）追加在最后，不会丢歌。
+function likedIdsOrdered(s) {
+  const ordered = s.likedOrder.filter(id => s.liked[id]);
+  const extra = Object.keys(s.liked).map(Number).filter(id => !s.likedOrder.includes(id));
+  return [...ordered, ...extra];
 }
 
 class Component extends DCLogic {
@@ -714,6 +724,9 @@ class Component extends DCLogic {
       searchResults: [],
       sources: { netease: true, qq: true, soundcloud: true },
       liked: {},
+      // likedOrder = "喜欢的音乐"的显示顺序（id 数组，最新点喜欢的排最前面），liked 本身只是个
+      // 无序的 id -> boolean 集合，不能拿它的 key 顺序当显示顺序
+      likedOrder: [],
       // 歌词解析结果，搜索播放时动态填充
       lyrics: [],
       // queue = 曲库：所有搜过/导入过/收藏过的曲目数据，只增不减（歌单、喜欢的音乐都靠它按 id 解析内容）
@@ -739,6 +752,9 @@ class Component extends DCLogic {
       ...base,
       playlists: persisted.playlists,
       liked: persisted.liked,
+      // 老数据没有 likedOrder 字段时，用当时 liked 里已有的 id 顺序兜底（不完美但不丢歌，
+      // 之后每次点喜欢/取消喜欢都会维护成正确的顺序）
+      likedOrder: Array.isArray(persisted.likedOrder) ? persisted.likedOrder : Object.keys(persisted.liked || {}).map(Number),
       queue: persisted.queue,
       // 老数据没有 playOrder 字段时兜底成空，避免读到 undefined
       playOrder: Array.isArray(persisted.playOrder) ? persisted.playOrder : [],
@@ -914,7 +930,10 @@ class Component extends DCLogic {
     if (!isLiked) this.ensureQueued(id);
     const liked = { ...this.state.liked };
     if (isLiked) delete liked[id]; else liked[id] = true;
-    this.patch({ liked });
+    // 取消喜欢的先从 likedOrder 里摘掉；新喜欢的插到最前面（先去重防止已经在列表里又插一次）
+    const likedOrder = this.state.likedOrder.filter(lid => lid !== id);
+    if (!isLiked) likedOrder.unshift(id);
+    this.patch({ liked, likedOrder });
     this.persist();
     this.showToast(isLiked ? '已取消喜欢' : '已添加到喜欢的歌曲');
   }
@@ -951,6 +970,7 @@ class Component extends DCLogic {
       this.patch(s => ({
         queue: [...s.queue, ...tracks],
         liked: Object.fromEntries(trackIds.map(id => [id, true])),
+        likedOrder: trackIds,
       }));
       this.showToast(`已导入 ${tracks.length} 首到「喜欢的音乐」（已整体覆盖原有收藏）`);
     }
@@ -1042,7 +1062,10 @@ class Component extends DCLogic {
     this.ensureQueued(trackId);
     this.patch({ addModalId: null });
     if (playlistId === 'liked') {
-      this.patch(s => ({ liked: { ...s.liked, [trackId]: true } }));
+      this.patch(s => ({
+        liked: { ...s.liked, [trackId]: true },
+        likedOrder: [trackId, ...s.likedOrder.filter(id => id !== trackId)],
+      }));
     } else {
       this.patch(s => ({
         playlists: s.playlists.map(p => {
@@ -1064,7 +1087,7 @@ class Component extends DCLogic {
     if (!pid) return;
     const pl = s.playlists.find(p => p.id === pid);
     if (!pl) return;
-    const ids = pid === 'liked' ? Object.keys(s.liked).map(Number) : (pl.trackIds || []);
+    const ids = pid === 'liked' ? likedIdsOrdered(s) : (pl.trackIds || []);
     // 按歌单自己的顺序取曲目（不是曲库里的顺序——那只是曲目第一次被搜到/导入时落进去的顺序）
     const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
     if (!tracks.length) return;
@@ -1080,7 +1103,7 @@ class Component extends DCLogic {
     if (!pid) return;
     const pl = s.playlists.find(p => p.id === pid);
     if (!pl) return;
-    const ids = pid === 'liked' ? Object.keys(s.liked).map(Number) : (pl.trackIds || []);
+    const ids = pid === 'liked' ? likedIdsOrdered(s) : (pl.trackIds || []);
     const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
     if (!tracks.length) { this.showToast('这个歌单还没有歌曲，没什么可导出的'); return; }
 
@@ -1349,8 +1372,9 @@ class Component extends DCLogic {
       // 曲目从曲库里彻底删除后，同步清掉歌单/喜欢里对它的引用，避免留下悬空 id（外面数量对不上点进去看到的数量）
       const liked = { ...s.liked };
       delete liked[id];
+      const likedOrder = s.likedOrder.filter(lid => lid !== id);
       const playlists = s.playlists.map(p => p.trackIds ? { ...p, trackIds: p.trackIds.filter(tid => tid !== id) } : p);
-      return { queue, playOrder, currentId, liked, playlists };
+      return { queue, playOrder, currentId, liked, likedOrder, playlists };
     });
     this.persist();
   }
@@ -1438,8 +1462,10 @@ class Component extends DCLogic {
     const filteredSearch = s.searchResults.filter(t => !q || t.title.toLowerCase().includes(q.toLowerCase()) || t.artist.toLowerCase().includes(q.toLowerCase()));
     let displayTracks;
     if (isPlaylistView && activePlaylist) {
-      const ids = activePlaylist.id === 'liked' ? Object.keys(s.liked).map(Number) : (activePlaylist.trackIds || []);
-      displayTracks = s.queue.filter(t => ids.includes(t.id));
+      const ids = activePlaylist.id === 'liked' ? likedIdsOrdered(s) : (activePlaylist.trackIds || []);
+      // 按 ids 自己的顺序取曲目，不能用 s.queue.filter——那是曲库的顺序（曲目第一次被搜到/导入时落进去的顺序），
+      // 跟歌单/喜欢自己的顺序是两回事，之前这里写成 filter 导致列表显示顺序对不上实际的 trackIds/likedOrder
+      displayTracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
     } else if (s.hasSearched) {
       displayTracks = filteredSearch;
     } else {
