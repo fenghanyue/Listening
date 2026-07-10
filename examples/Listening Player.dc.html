@@ -83,11 +83,12 @@ if ('serviceWorker' in navigator) {
       .dc-nowplaying-close { display: none; }
       .dc-nowplaying.dc-open .dc-nowplaying-close { display: flex !important; }
 
-      .dc-mobile-tabbar { display: flex !important; }
+      .dc-mobile-only { display: flex !important; }
       .dc-mobile-miniplayer { display: flex !important; }
+      .dc-search-input-wrap { min-width: 120px !important; }
       .dc-desktop-only { display: none !important; }
 
-      .dc-scroll-area { padding-bottom: 112px !important; }
+      .dc-scroll-area { padding-bottom: 56px !important; }
 
       .dc-queue-drag-handle { display: none !important; }
       .dc-queue-move-btns { display: flex !important; }
@@ -103,9 +104,16 @@ if ('serviceWorker' in navigator) {
       <span style="width:3px;height:3px;border-radius:50%;background:{{ v.c.outline }};flex-shrink:0;"></span>
       <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">听音乐</span>
     </div>
-    <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:16px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};">
-      <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span>GitHub
-    </a>
+    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:16px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};">
+        <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span>GitHub
+      </a>
+      <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
+        <span style="position:absolute;top:2px;left:{{ v.switchThumbLeft }}px;width:24px;height:24px;border-radius:50%;background:{{ v.switchThumbBg }};display:flex;align-items:center;justify-content:center;transition:left .25s;box-shadow:0 1px 2px rgba(0,0,0,.35);">
+          <span style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.switchIconColor }};">{{ v.themeIcon }}</span>
+        </span>
+      </button>
+    </div>
   </div>
 
   <div style="flex:1;min-height:0;display:flex;position:relative;overflow:hidden;">
@@ -118,15 +126,10 @@ if ('serviceWorker' in navigator) {
       <button onclick="{{ H.closeMobileSidebar }}" class="dc-sidebar-close" style="display:none;position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;">
         <span style="font-family:'Material Symbols Outlined';font-size:18px;">close</span>
       </button>
-      <div style="height:72px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;flex-shrink:0;">
+      <div style="height:72px;display:flex;align-items:center;padding:0 18px;flex-shrink:0;">
         <div style="display:flex;align-items:center;gap:8px;font-size:17px;font-weight:500;color:{{ v.c.onSurface }};">
           <span style="font-family:'Material Symbols Outlined';font-size:21px;color:{{ v.c.onSurface }};">library_music</span>我的歌单
         </div>
-        <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
-          <span style="position:absolute;top:2px;left:{{ v.switchThumbLeft }}px;width:24px;height:24px;border-radius:50%;background:{{ v.switchThumbBg }};display:flex;align-items:center;justify-content:center;transition:left .25s;box-shadow:0 1px 2px rgba(0,0,0,.35);">
-            <span style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.switchIconColor }};">{{ v.themeIcon }}</span>
-          </span>
-        </button>
       </div>
       <div style="flex:1;padding:6px 10px;display:flex;flex-direction:column;gap:2px;">
         <sc-for list="{{ v.playlistsRender }}" as="pl" hint-placeholder-count="3">
@@ -193,7 +196,10 @@ if ('serviceWorker' in navigator) {
       <sc-if value="{{ v.rightIsBrowse }}">
 
       <div style="padding:20px 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;flex-shrink:0;">
-        <div style="flex:1;min-width:200px;position:relative;display:flex;align-items:center;">
+        <button onclick="{{ H.toggleMobileSidebar }}" class="dc-mobile-only" style="display:none;width:42px;height:42px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};flex-shrink:0;">
+          <span style="font-family:'Material Symbols Outlined';font-size:20px;">library_music</span>
+        </button>
+        <div class="dc-search-input-wrap" style="flex:1;min-width:200px;position:relative;display:flex;align-items:center;">
           <span style="font-family:'Material Symbols Outlined';font-size:19px;position:absolute;left:16px;color:{{ v.c.onSurfaceVariant }};">search</span>
           <input value="{{ v.searchQuery }}" onchange="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" placeholder="输入歌名 / 歌手，回车搜索…" style="width:100%;min-width:0;padding:11px 16px 11px 46px;border-radius:28px;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};font-size:13.5px;border:none;outline:none;font-family:inherit;box-sizing:border-box;">
         </div>
@@ -343,7 +349,8 @@ if ('serviceWorker' in navigator) {
     <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};">本页面仅供学习交流使用，请勿用于任何商业用途</span>
   </div>
 
-  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:0;right:0;bottom:56px;height:56px;padding:0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;z-index:51;cursor:pointer;">
+  <sc-if value="{{ v.hasTrack }}">
+  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:0;right:0;bottom:0;height:56px;padding:0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;z-index:51;cursor:pointer;">
     <div style="width:38px;height:38px;border-radius:8px;{{ v.track.coverStyle }}flex-shrink:0;"></div>
     <div style="flex:1;min-width:0;">
       <div style="font-size:13px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
@@ -353,21 +360,7 @@ if ('serviceWorker' in navigator) {
       <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;">{{ v.playIcon }}</span>
     </button>
   </div>
-
-  <div class="dc-mobile-tabbar" style="display:none;position:fixed;left:0;right:0;bottom:0;height:56px;background:{{ v.c.surfaceLow }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;align-items:stretch;justify-content:space-around;z-index:50;">
-    <button onclick="{{ H.toggleMobileSidebar }}" style="flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:{{ v.mobileTabPlaylistColor }};">
-      <span style="font-family:'Material Symbols Outlined';font-size:22px;">library_music</span>
-      <span style="font-size:10px;font-weight:500;">歌单</span>
-    </button>
-    <button onclick="{{ H.closeQueuePanel }}" style="flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:{{ v.mobileTabBrowseColor }};">
-      <span style="font-family:'Material Symbols Outlined';font-size:22px;">search</span>
-      <span style="font-size:10px;font-weight:500;">搜索</span>
-    </button>
-    <button onclick="{{ H.openQueuePanel }}" style="flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:{{ v.mobileTabQueueColor }};">
-      <span style="font-family:'Material Symbols Outlined';font-size:22px;">queue_music</span>
-      <span style="font-size:10px;font-weight:500;">队列</span>
-    </button>
-  </div>
+  </sc-if>
 
   <sc-if value="{{ v.hasAddModal }}">
     <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
@@ -945,9 +938,8 @@ class Component extends DCLogic {
   }
 
   toggleMediaView() { this.patch(s => ({ mediaView: s.mediaView === 'cover' ? 'lyrics' : 'cover' })); }
-  toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue' })); }
+  toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue', mobileNowPlayingExpanded: false })); }
   closeQueuePanel() { this.patch({ rightPanel: 'browse' }); }
-  openQueuePanel() { this.patch({ rightPanel: 'queue' }); }
   // 手机端：左侧歌单栏改为滑入抽屉
   toggleMobileSidebar() { this.patch(s => ({ mobileSidebarOpen: !s.mobileSidebarOpen })); }
   closeMobileSidebar() { this.patch({ mobileSidebarOpen: false }); }
@@ -1313,7 +1305,6 @@ class Component extends DCLogic {
     const mediaIsLyrics = s.mediaView === 'lyrics';
     const sidebarClass = 'dc-sidebar' + (s.mobileSidebarOpen ? ' dc-open' : '');
     const nowPlayingClass = 'dc-nowplaying' + (s.mobileNowPlayingExpanded ? ' dc-open' : '');
-    const mobileTabActiveColor = c.primary, mobileTabInactiveColor = c.onSurfaceVariant;
 
     return {
       v: {
@@ -1343,7 +1334,7 @@ class Component extends DCLogic {
         queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
         sourcesRender,
         prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.playOrder.length - 1),
-        playDisabled: !matchedTrack,
+        playDisabled: !matchedTrack, hasTrack: !!matchedTrack,
         themeIcon: s.theme === 'dark' ? 'light_mode' : 'dark_mode',
         switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
         switchThumbBg: s.theme === 'dark' ? c.onPrimary : c.surfaceLow,
@@ -1355,12 +1346,9 @@ class Component extends DCLogic {
         hasAddModal: !!s.addModalId, pendingTrack, playlistOptions,
         hasCreateModal: s.createModalOpen, createName: s.createName,
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
-        // 手机端：抽屉/迷你播放条/底部导航状态
+        // 手机端：抽屉/迷你播放条状态
         mobileSidebarOpen: s.mobileSidebarOpen, mobileNowPlayingExpanded: s.mobileNowPlayingExpanded,
         sidebarClass, nowPlayingClass,
-        mobileTabPlaylistColor: s.mobileSidebarOpen ? mobileTabActiveColor : mobileTabInactiveColor,
-        mobileTabBrowseColor: (!rightIsQueue && !s.mobileSidebarOpen) ? mobileTabActiveColor : mobileTabInactiveColor,
-        mobileTabQueueColor: (rightIsQueue && !s.mobileSidebarOpen) ? mobileTabActiveColor : mobileTabInactiveColor,
       },
       H: {
         toggleTheme: () => this.toggleTheme(),
@@ -1371,7 +1359,6 @@ class Component extends DCLogic {
         toggleMediaView: () => this.toggleMediaView(),
         toggleQueuePanel: () => this.toggleQueuePanel(),
         closeQueuePanel: () => this.closeQueuePanel(),
-        openQueuePanel: () => this.openQueuePanel(),
         toggleMobileSidebar: () => this.toggleMobileSidebar(),
         closeMobileSidebar: () => this.closeMobileSidebar(),
         toggleMobileNowPlaying: () => this.toggleMobileNowPlaying(),
