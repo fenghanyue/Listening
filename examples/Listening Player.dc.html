@@ -2,7 +2,8 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D1B20">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
@@ -43,10 +44,40 @@ if ('serviceWorker' in navigator) {
 }
 </style>
   <style>
-    body { margin: 0; background: #EAE6EE; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+    body { margin: 0; background: #EAE6EE; font-family: 'Plus Jakarta Sans', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; }
+    /* App 化的触感细节：去掉移动端点击灰块，控件文字（含 Material Symbols 连字图标）不可长按选中，输入框除外 */
+    html, body { -webkit-tap-highlight-color: transparent; }
+    body { -webkit-user-select: none; user-select: none; }
+    input, textarea { -webkit-user-select: text; user-select: text; }
+    button, a, input { touch-action: manipulation; }
     @keyframes vinylSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @keyframes iconSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @keyframes searchPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes popIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+    @keyframes sheetUp { from { transform: translateY(48px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    /* 弹窗进出场：遮罩淡入，面板桌面缩放浮现（手机端在下面的媒体查询里改为底部弹层上滑） */
+    .dc-modal-overlay { animation: fadeIn .18s ease; }
+    .dc-modal { animation: popIn .22s cubic-bezier(.2, .9, .3, 1); }
+    /* 输入框焦点态：--ring 在根节点上取当前主题的 primary 色 */
+    .dc-search-input:focus { box-shadow: 0 0 0 2px var(--ring); }
+    .dc-input:focus { border-color: var(--ring) !important; }
+    /* 全屏播放页的封面氛围背景只在手机端启用，桌面三栏保持原样 */
+    .dc-ambient { display: none; }
+    /* 搜索按钮桌面端显示文字，手机端（媒体查询里）收成纯图标 */
+    .dc-search-btn-icon { display: none; }
+    /* 歌词渐隐：靠近视口上下边缘的行淡出 */
+    .dc-lyrics-mask { mask-image: linear-gradient(to bottom, transparent 0, black 15%, black 85%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 15%, black 85%, transparent 100%); }
+    /* 迷你播放器毛玻璃：只在浏览器支持 backdrop-filter 时启用，不支持时保留纯色背景兜底 */
+    @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+      .dc-mobile-miniplayer { background: var(--glass) !important; backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6); }
+    }
+    /* 全局提示条 */
+    .dc-toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      z-index: 200; max-width: calc(100vw - 32px); animation: toastIn .25s cubic-bezier(.2, .9, .3, 1);
+    }
   </style>
   <style>
     /* 手机端断点：宽度以上保持桌面三栏布局不变，宽度以下用 !important 覆盖内联样式改成单栏 + 底部导航 */
@@ -61,8 +92,12 @@ if ('serviceWorker' in navigator) {
         min-width: 0 !important;
         z-index: 56 !important;
         transform: translateX(-100%);
-        transition: transform .25s ease;
+        transition: transform .28s cubic-bezier(.2, .9, .3, 1);
         box-shadow: 2px 0 16px rgba(0,0,0,.3);
+        border-radius: 0 20px 20px 0 !important;
+        overflow: hidden;
+        padding-bottom: env(safe-area-inset-bottom) !important;
+        box-sizing: border-box !important;
       }
       .dc-sidebar.dc-open { transform: translateX(0) !important; }
       .dc-sidebar-close { display: flex !important; }
@@ -72,6 +107,7 @@ if ('serviceWorker' in navigator) {
         inset: 0;
         z-index: 55;
         background: rgba(0,0,0,.5);
+        animation: fadeIn .2s ease;
       }
 
       .dc-nowplaying {
@@ -79,18 +115,52 @@ if ('serviceWorker' in navigator) {
         inset: 0 !important;
         z-index: 60 !important;
         transform: translateY(100%);
-        transition: transform .3s ease;
+        transition: transform .32s cubic-bezier(.2, .9, .3, 1);
+        padding-top: env(safe-area-inset-top) !important;
+        padding-bottom: env(safe-area-inset-bottom) !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
       }
       .dc-nowplaying.dc-open { transform: translateY(0) !important; }
-      .dc-nowplaying-close { display: none; }
+      .dc-nowplaying-close { display: none; top: calc(10px + env(safe-area-inset-top)) !important; }
       .dc-nowplaying.dc-open .dc-nowplaying-close { display: flex !important; }
 
+      /* 全屏播放页手机端专属：封面氛围背景、更大的唱片和控制键 */
+      .dc-ambient { display: block !important; }
+      .dc-disc { width: min(258px, 66vw) !important; height: min(258px, 66vw) !important; }
+      .dc-play-btn { width: 58px !important; height: 58px !important; }
+      .dc-play-btn > span { font-size: 28px !important; }
+      .dc-skip-btn { width: 46px !important; height: 46px !important; }
+      .dc-skip-btn > span { font-size: 26px !important; }
+      .dc-side-btn { width: 42px !important; height: 42px !important; }
+
       .dc-mobile-only { display: flex !important; }
-      .dc-mobile-miniplayer { display: flex !important; }
+      .dc-mobile-miniplayer {
+        display: flex !important;
+        bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+      }
       .dc-search-input-wrap { min-width: 120px !important; }
       .dc-desktop-only { display: none !important; }
 
-      .dc-scroll-area { padding-bottom: 80px !important; }
+      /* 搜索按钮手机端收成圆形图标，把宽度让给输入框 */
+      .dc-search-btn { width: 42px !important; padding: 0 !important; border-radius: 50% !important; }
+      .dc-search-btn-icon { display: flex !important; }
+      .dc-search-btn-label { display: none !important; }
+
+      .dc-scroll-area { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+
+      /* 弹窗手机端改为底部弹层 */
+      .dc-modal-overlay { align-items: flex-end !important; }
+      .dc-modal {
+        width: 100% !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
+        border-radius: 28px 28px 0 0 !important;
+        padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+        animation: sheetUp .26s cubic-bezier(.2, .9, .3, 1);
+      }
+
+      .dc-toast { bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
 
       .dc-queue-drag-handle { display: none !important; }
       .dc-queue-move-btns { display: flex !important; }
@@ -98,7 +168,7 @@ if ('serviceWorker' in navigator) {
   </style>
 </helmet>
 
-<div style="height:100vh;width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;">
+<div style="height:100vh;width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;--ring:{{ v.c.primary }};--glass:{{ v.c.glass }};">
 
   <div style="height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:{{ v.c.surfaceLow }};border-bottom:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
     <div style="display:flex;align-items:center;gap:8px;min-width:0;">
@@ -107,8 +177,8 @@ if ('serviceWorker' in navigator) {
       <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">听音乐</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};">
-        <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span>GitHub
+      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="background:{{ v.c.press }};">
+        <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span><span class="dc-desktop-only" style="display:inline;">GitHub</span>
       </a>
       <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
         <span style="position:absolute;top:2px;left:{{ v.switchThumbLeft }}px;width:24px;height:24px;border-radius:50%;background:{{ v.switchThumbBg }};display:flex;align-items:center;justify-content:center;transition:left .25s;box-shadow:0 1px 2px rgba(0,0,0,.35);">
@@ -135,13 +205,13 @@ if ('serviceWorker' in navigator) {
       </div>
       <div style="flex:1;padding:6px 10px;display:flex;flex-direction:column;gap:2px;">
         <sc-for list="{{ v.playlistsRender }}" as="pl" hint-placeholder-count="3">
-          <div onclick="{{ pl.onClick }}" onmouseenter="{{ pl.onMouseEnter }}" onmouseleave="{{ pl.onMouseLeave }}" style="{{ pl.rowStyle }}">
+          <div onclick="{{ pl.onClick }}" onmouseenter="{{ pl.onMouseEnter }}" onmouseleave="{{ pl.onMouseLeave }}" style="{{ pl.rowStyle }}" style-active="background:{{ v.c.press }};">
             <span style="width:30px;height:30px;border-radius:8px;background:{{ pl.tileBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
               <span style="font-family:'Material Symbols Outlined';font-size:15px;color:#fff;font-variation-settings:'FILL' {{ pl.iconFill }};">{{ pl.glyph }}</span>
             </span>
             <div style="min-width:0;flex:1;">
               <div style="font-size:12.5px;font-weight:500;color:{{ pl.nameColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ pl.name }}</div>
-              <div style="font-size:11px;color:{{ pl.countColor }};">{{ pl.countLabel }} 首</div>
+              <div style="font-size:11.5px;color:{{ pl.countColor }};">{{ pl.countLabel }} 首</div>
             </div>
             <button onclick="{{ pl.onDelete }}" style="width:26px;height:26px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ pl.countColor }};flex-shrink:0;display:{{ pl.deleteDisplay }};" style-hover="background:{{ v.c.press }};color:{{ v.c.heart }};">
               <span style="font-family:'Material Symbols Outlined';font-size:16px;">delete</span>
@@ -150,8 +220,8 @@ if ('serviceWorker' in navigator) {
         </sc-for>
       </div>
       <div style="padding:16px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <button onclick="{{ H.openImportModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><span style="font-family:'Material Symbols Outlined';font-size:16px;">upload</span>导入</button>
-        <button onclick="{{ H.openCreateModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><span style="font-family:'Material Symbols Outlined';font-size:16px;">add</span>新建歌单</button>
+        <button onclick="{{ H.openImportModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:16px;">upload</span>导入</button>
+        <button onclick="{{ H.openCreateModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:16px;">add</span>新建歌单</button>
       </div>
     </div>
 
@@ -167,7 +237,7 @@ if ('serviceWorker' in navigator) {
         <div class="dc-scroll-area" style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
           <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
             <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
-              <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
+              <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
               <span class="dc-queue-drag-handle" style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
               <div class="dc-queue-move-btns" style="display:none;align-items:center;gap:0;flex-shrink:0;">
                 <button onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveUpOpacity }};flex-shrink:0;">
@@ -198,14 +268,17 @@ if ('serviceWorker' in navigator) {
       <sc-if value="{{ v.rightIsBrowse }}">
 
       <div style="padding:20px 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;flex-shrink:0;">
-        <button onclick="{{ H.toggleMobileSidebar }}" class="dc-mobile-only" style="display:none;width:42px;height:42px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};flex-shrink:0;">
+        <button onclick="{{ H.toggleMobileSidebar }}" class="dc-mobile-only" style="display:none;width:42px;height:42px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};flex-shrink:0;" style-active="background:{{ v.c.press }};transform:scale(0.94);">
           <span style="font-family:'Material Symbols Outlined';font-size:20px;">library_music</span>
         </button>
         <div class="dc-search-input-wrap" style="flex:1;min-width:200px;position:relative;display:flex;align-items:center;">
           <span style="font-family:'Material Symbols Outlined';font-size:19px;position:absolute;left:16px;color:{{ v.c.onSurfaceVariant }};">search</span>
-          <input value="{{ v.searchQuery }}" onchange="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" placeholder="输入歌名 / 歌手，回车搜索…" style="width:100%;min-width:0;padding:11px 16px 11px 46px;border-radius:28px;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};font-size:13.5px;border:none;outline:none;font-family:inherit;box-sizing:border-box;">
+          <input class="dc-search-input" type="search" enterkeyhint="search" autocomplete="off" value="{{ v.searchQuery }}" onchange="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" placeholder="输入歌名 / 歌手，回车搜索…" style="width:100%;min-width:0;padding:11px 16px 11px 46px;border-radius:28px;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};font-size:13.5px;border:none;outline:none;font-family:inherit;box-sizing:border-box;">
         </div>
-        <button onclick="{{ H.doSearch }}" style="padding:0 22px;height:42px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-weight:500;font-size:13.5px;cursor:pointer;flex-shrink:0;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.95);">搜索</button>
+        <button class="dc-search-btn" onclick="{{ H.doSearch }}" style="padding:0 22px;height:42px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-weight:500;font-size:13.5px;cursor:pointer;flex-shrink:0;transition:opacity .15s,transform .1s;display:flex;align-items:center;justify-content:center;" style-hover="opacity:0.88;" style-active="transform:scale(0.95);">
+          <span class="dc-search-btn-icon" style="font-family:'Material Symbols Outlined';font-size:19px;">search</span>
+          <span class="dc-search-btn-label">搜索</span>
+        </button>
       </div>
 
       <sc-if value="{{ v.isPlaylistView }}">
@@ -243,27 +316,27 @@ if ('serviceWorker' in navigator) {
       <div class="dc-scroll-area" style="flex:1;overflow-y:auto;padding:0 24px 24px;">
         <sc-if value="{{ v.showPrompt }}">
           <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
-            <div style="display:flex;justify-content:center;margin-bottom:12px;"><span style="font-family:'Material Symbols Outlined';font-size:40px;">search</span></div>
+            <div style="display:flex;justify-content:center;margin-bottom:16px;"><span style="width:72px;height:72px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:32px;">search</span></span></div>
             <div style="font-size:15px;font-weight:600;color:{{ v.c.onSurface }};">想听点什么？</div>
             <div style="font-size:12.5px;margin-top:6px;">支持网易云音乐 · QQ音乐 · SoundCloud，也可以导入歌单</div>
           </div>
         </sc-if>
         <sc-if value="{{ v.isSearching }}">
           <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
-            <div style="display:flex;justify-content:center;margin-bottom:12px;"><span style="font-family:'Material Symbols Outlined';font-size:40px;animation:searchPulse 1.2s ease-in-out infinite;">search</span></div>
+            <div style="display:flex;justify-content:center;margin-bottom:16px;"><span style="width:72px;height:72px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:32px;animation:searchPulse 1.2s ease-in-out infinite;">search</span></span></div>
             <div>搜索中…</div>
           </div>
         </sc-if>
         <sc-if value="{{ v.hasNoResults }}">
           <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
-            <div style="display:flex;justify-content:center;margin-bottom:12px;"><span style="font-family:'Material Symbols Outlined';font-size:40px;">{{ v.emptyIcon }}</span></div>
+            <div style="display:flex;justify-content:center;margin-bottom:16px;"><span style="width:72px;height:72px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:32px;">{{ v.emptyIcon }}</span></span></div>
             <div>{{ v.emptyText }}</div>
           </div>
         </sc-if>
         <sc-if value="{{ v.viewIsList }}">
           <div style="display:flex;flex-direction:column;gap:2px;">
             <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
-              <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};">
+              <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};transition:background .1s;" style-active="background:{{ v.c.press }};">
                 <div style="width:44px;height:44px;border-radius:8px;{{ t.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
                   <sc-if value="{{ t.showCoverIcon }}">
                     <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
@@ -271,13 +344,14 @@ if ('serviceWorker' in navigator) {
                 </div>
                 <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
                   <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
-                  <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
-                    <span style="font-size:9.5px;padding:1px 6px;border-radius:8px;font-weight:600;background:{{ t.tagBg }};color:{{ t.tagColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
-                    <span style="font-size:11px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.artistDisplay }}</span>
+                  <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
+                    <span style="width:6px;height:6px;border-radius:50%;background:{{ t.sourceDot }};flex-shrink:0;"></span>
+                    <span style="font-size:11px;font-weight:500;color:{{ t.sourceLabelColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
+                    <span style="font-size:11.5px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· {{ t.artistDisplay }}</span>
                   </div>
                 </div>
-                <button onclick="{{ t.onAdd }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:17px;">{{ t.primaryActionIcon }}</span></button>
-                <button onclick="{{ t.onLike }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:17px;font-variation-settings:'FILL' {{ t.likeFill }};">{{ t.likeGlyph }}</span></button>
+                <button onclick="{{ t.onAdd }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.primaryActionIcon }}</span></button>
+                <button onclick="{{ t.onLike }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' {{ t.likeFill }};">{{ t.likeGlyph }}</span></button>
               </div>
             </sc-for>
           </div>
@@ -289,24 +363,26 @@ if ('serviceWorker' in navigator) {
 
     <div class="{{ v.nowPlayingClass }}" style="flex:1;min-width:0;display:flex;flex-direction:column;background:{{ v.c.surfaceLow }};position:relative;">
      <sc-if value="{{ v.showNowPlayingBody }}">
-     <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;">
+     <div class="dc-ambient" style="{{ v.ambientStyle }}"></div>
+     <div class="dc-ambient" style="{{ v.ambientOverlayStyle }}"></div>
+     <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;" style-active="transform:scale(0.92);">
        <span style="font-family:'Material Symbols Outlined';font-size:20px;">expand_more</span>
      </button>
-     <div style="flex:1;min-height:0;width:100%;height:100%;box-sizing:border-box;padding:26px 30px 24px;display:flex;flex-direction:column;align-items:center;">
+     <div style="flex:1;min-height:0;width:100%;height:100%;box-sizing:border-box;padding:26px 30px 24px;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1;">
       <div style="width:100%;text-align:center;margin-bottom:6px;flex-shrink:0;">
         <span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;color:{{ v.c.onSurfaceVariant }};">正在播放</span>
       </div>
 
-      <div onclick="{{ H.toggleMediaView }}" style="flex:1;width:100%;min-height:0;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;">
+      <div class="dc-media-viewport" onclick="{{ H.toggleMediaView }}" style="flex:1;width:100%;min-height:0;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;">
         <sc-if value="{{ v.mediaIsCover }}" hint-placeholder-val="{{ true }}">
-          <div style="{{ v.mediaDiscStyle }}">
+          <div class="dc-disc" style="{{ v.mediaDiscStyle }}">
             <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:78px;height:78px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(0,0,0,.1);">
               <span style="font-family:'Material Symbols Outlined';font-size:28px;color:{{ v.c.onSurfaceVariant }};">music_note</span>
             </div>
           </div>
         </sc-if>
         <sc-if value="{{ v.mediaIsLyrics }}">
-          <div style="width:100%;height:100%;overflow:hidden;position:relative;">
+          <div class="dc-lyrics-mask" style="width:100%;height:100%;overflow:hidden;position:relative;">
             <div style="position:absolute;left:0;right:0;top:0;transform:translateY({{ v.lyricsOffset }}px);transition:transform .5s ease;">
               <sc-for list="{{ v.lyricsRender }}" as="line" hint-placeholder-count="6">
                 <div style="{{ line.style }}">{{ line.text }}</div>
@@ -322,27 +398,28 @@ if ('serviceWorker' in navigator) {
       </div>
 
       <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:16px;flex-shrink:0;">
-        <span style="font-size:10.5px;color:{{ v.c.onSurfaceVariant }};width:28px;text-align:right;flex-shrink:0;">{{ v.currentTimeStr }}</span>
+        <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:28px;text-align:right;flex-shrink:0;">{{ v.currentTimeStr }}</span>
         <div onclick="{{ H.seek }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;">
           <div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.primary }};width:{{ v.progressPct }}%;"></div>
+          <div style="position:absolute;top:50%;left:{{ v.progressPct }}%;width:12px;height:12px;border-radius:50%;background:{{ v.c.primary }};transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.35);"></div>
         </div>
-        <span style="font-size:10.5px;color:{{ v.c.onSurfaceVariant }};width:28px;flex-shrink:0;">{{ v.durationStr }}</span>
+        <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:28px;flex-shrink:0;">{{ v.durationStr }}</span>
       </div>
 
       <div style="width:100%;display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-shrink:0;">
-        <button onclick="{{ H.toggleQueuePanel }}" style="position:relative;width:34px;height:34px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.queueBtnBg }};color:{{ v.queueBtnColor }};">
+        <button onclick="{{ H.toggleQueuePanel }}" class="dc-side-btn" style="position:relative;width:34px;height:34px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.queueBtnBg }};color:{{ v.queueBtnColor }};" style-active="transform:scale(0.9);">
           <span style="font-family:'Material Symbols Outlined';font-size:19px;">queue_music</span>
           <span style="position:absolute;top:1px;right:1px;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px;">{{ v.queueCount }}</span>
         </button>
         <div style="display:flex;align-items:center;gap:2px;">
-          <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
-          <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span></button>
-          <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
+          <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
+          <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" class="dc-play-btn" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;box-shadow:{{ v.c.e2 }};" style-active="transform:scale(0.94);"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span></button>
+          <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
         </div>
-        <button onclick="{{ H.cycleMode }}" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
+        <button onclick="{{ H.cycleMode }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
       </div>
 
-      <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:14px;flex-shrink:0;">
+      <div class="dc-desktop-only" style="width:100%;display:flex;align-items:center;gap:8px;margin-top:14px;flex-shrink:0;">
         <span style="font-family:'Material Symbols Outlined';font-size:18px;color:{{ v.c.onSurfaceVariant }};">volume_up</span>
         <div onclick="{{ H.setVolume }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;"><div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.onSurfaceVariant }};width:{{ v.volume }}%;"></div></div>
       </div>
@@ -360,7 +437,7 @@ if ('serviceWorker' in navigator) {
        <div style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
          <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
            <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
-             <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
+             <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
              <span class="dc-queue-drag-handle" style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
              <div class="dc-queue-move-btns" style="display:none;align-items:center;gap:0;flex-shrink:0;">
                <button onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveUpOpacity }};flex-shrink:0;">
@@ -397,57 +474,64 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <sc-if value="{{ v.hasTrack }}">
-  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;height:56px;padding:0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-radius:20px;box-shadow:{{ v.c.e2 }};box-sizing:border-box;z-index:51;cursor:pointer;">
-    <div style="width:38px;height:38px;border-radius:8px;{{ v.track.coverStyle }}flex-shrink:0;"></div>
+  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;height:60px;padding:0 8px 0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-radius:20px;box-shadow:{{ v.c.e2 }};box-sizing:border-box;z-index:51;cursor:pointer;overflow:hidden;">
+    <div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:{{ v.c.outlineVariant }};">
+      <div style="height:100%;border-radius:0 2px 2px 0;background:{{ v.c.primary }};width:{{ v.progressPct }}%;"></div>
+    </div>
+    <div style="width:40px;height:40px;border-radius:8px;{{ v.track.coverStyle }}flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"></div>
     <div style="flex:1;min-width:0;">
       <div style="font-size:13px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
-      <div style="font-size:11px;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artistDisplay }}</div>
+      <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artistDisplay }}</div>
     </div>
-    <button onclick="{{ H.miniPlayToggle }}" disabled="{{ v.playDisabled }}" style="width:34px;height:34px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};flex-shrink:0;">
-      <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span>
+    <button onclick="{{ H.miniPlayToggle }}" disabled="{{ v.playDisabled }}" style="width:40px;height:40px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};flex-shrink:0;" style-active="transform:scale(0.92);">
+      <span style="font-family:'Material Symbols Outlined';font-size:20px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span>
     </button>
   </div>
   </sc-if>
 
+  <sc-if value="{{ v.hasToast }}">
+  <div class="dc-toast" key="toast-{{ v.toastKey }}" style="background:{{ v.c.inverse }};color:{{ v.c.onInverse }};padding:11px 20px;border-radius:24px;font-size:13px;font-weight:500;box-shadow:{{ v.c.e3 }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.toastText }}</div>
+  </sc-if>
+
   <sc-if value="{{ v.hasAddModal }}">
-    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
-      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
+      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
         <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">添加到歌单</div>
         <sc-for list="{{ v.playlistOptions }}" as="pl" hint-placeholder-count="3">
-          <div onclick="{{ pl.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" style-hover="background:{{ v.c.hover }}">
+          <div onclick="{{ pl.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};">
             <span style="width:32px;height:32px;border-radius:8px;background:{{ pl.tileBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:16px;color:#fff;">{{ pl.icon }}</span></span>
             <span style="font-size:13.5px;font-weight:500;color:{{ v.c.onSurface }};">{{ pl.name }}</span>
           </div>
         </sc-for>
-        <button onclick="{{ H.closeAddModal }}" style="width:100%;margin-top:10px;padding:10px 0;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
+        <button onclick="{{ H.closeAddModal }}" style="width:100%;margin-top:10px;padding:10px 0;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">取消</button>
       </div>
     </div>
   </sc-if>
 
   <sc-if value="{{ v.hasImportModal }}">
-    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeImportModal }}">
-      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeImportModal }}">
+      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
         <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">导入歌单</div>
         <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">支持网易云音乐歌单链接，或粘贴本站导出的歌单字符串</div>
-        <input value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;font-family:inherit;">
-        <input value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="歌单名称（可选）" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;font-family:inherit;">
+        <input class="dc-input" value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;font-family:inherit;transition:border-color .15s;">
+        <input class="dc-input" value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="歌单名称（可选）" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;font-family:inherit;transition:border-color .15s;">
         <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">同名歌单会被直接覆盖；留空则整体替换「喜欢的音乐」（不是合并）</div>
         <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button onclick="{{ H.closeImportModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
-          <button onclick="{{ H.confirmImport }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;">导入</button>
+          <button onclick="{{ H.closeImportModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">取消</button>
+          <button onclick="{{ H.confirmImport }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">导入</button>
         </div>
       </div>
     </div>
   </sc-if>
 
   <sc-if value="{{ v.hasCreateModal }}">
-    <div style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeCreateModal }}">
-      <div style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeCreateModal }}">
+      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
         <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">新建歌单</div>
-        <input value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="歌单名称…" maxlength="50" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:16px;box-sizing:border-box;font-family:inherit;">
+        <input class="dc-input" value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="歌单名称…" maxlength="50" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:16px;box-sizing:border-box;font-family:inherit;transition:border-color .15s;">
         <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button onclick="{{ H.closeCreateModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;">取消</button>
-          <button onclick="{{ H.confirmCreate }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;">创建</button>
+          <button onclick="{{ H.closeCreateModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">取消</button>
+          <button onclick="{{ H.confirmCreate }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">创建</button>
         </div>
       </div>
     </div>
@@ -469,6 +553,7 @@ const THEMES = {
     hover: 'rgba(230,224,233,0.08)', press: 'rgba(230,224,233,0.12)',
     e2: '0 1px 2px rgba(0,0,0,.45), 0 2px 6px 2px rgba(0,0,0,.25)',
     e3: '0 4px 8px 3px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.4)',
+    glass: 'rgba(43,41,48,0.72)', inverse: '#E6E0E9', onInverse: '#322F35',
   },
   light: {
     bg: '#FFFBFE', surfaceLow: '#F7F2FA', surface: '#F3EDF7', surfaceHigh: '#ECE6F0', surfaceHighest: '#E6E0E9',
@@ -478,6 +563,7 @@ const THEMES = {
     hover: 'rgba(29,27,32,0.06)', press: 'rgba(29,27,32,0.10)',
     e2: '0 1px 2px rgba(0,0,0,.12), 0 2px 6px 2px rgba(0,0,0,.08)',
     e3: '0 4px 8px 3px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.14)',
+    glass: 'rgba(236,230,240,0.72)', inverse: '#322F35', onInverse: '#F5EFF7',
   },
 };
 
@@ -745,6 +831,7 @@ class Component extends DCLogic {
       currentId: null, currentTime: 0, volume: 70, playing: false, playMode: 0, loadingTrackId: null,
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
       mobileSidebarOpen: false, mobileNowPlayingExpanded: false,
+      toast: null, toastKey: 0,
       addModalId: null, createModalOpen: false, createName: '',
       importModalOpen: false, importUrl: '', importPlaylistName: '', exportedPlaylistId: null,
       playlists: [
@@ -787,6 +874,8 @@ class Component extends DCLogic {
     if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
     clearInterval(this._progressSaveTimer);
     clearTimeout(this._loadWatchdogTimer);
+    clearTimeout(this._toastTimer);
+    window.removeEventListener('resize', this._onResizeMeasureLyrics);
   }
 
   stopHLS() {
@@ -818,6 +907,19 @@ class Component extends DCLogic {
     this._progressSaveTimer = setInterval(() => {
       if (this.state.playing) this.persist();
     }, 5000);
+    // 歌词居中要用可视区的真实高度（手机全屏播放页在不同机型/横竖屏下不是固定 300px），
+    // 挂载后量一次，横竖屏切换/软键盘收起等触发的 resize 再量一次；量不到就让 renderVals 用兜底值
+    this._onResizeMeasureLyrics = () => this.measureLyricsViewport();
+    window.addEventListener('resize', this._onResizeMeasureLyrics);
+    setTimeout(() => this.measureLyricsViewport(), 0);
+    this.syncThemeColorMeta();
+  }
+
+  measureLyricsViewport() {
+    const el = document.querySelector('.dc-media-viewport');
+    if (!el) return;
+    const h = el.clientHeight;
+    if (h && h !== this.state.lyricsViewportH) this.patch({ lyricsViewportH: h });
   }
 
   initAudio() {
@@ -937,7 +1039,18 @@ class Component extends DCLogic {
 
   stop(e) { e.stopPropagation(); }
 
-  toggleTheme() { this.patch(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })); }
+  toggleTheme() {
+    this.patch(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }));
+    this.persist();
+    setTimeout(() => this.syncThemeColorMeta(), 0);
+  }
+
+  // 手机浏览器地址栏/状态栏的着色（theme-color meta）跟着当前主题的 surfaceLow 走，
+  // 不然切到浅色主题后顶部还留着深色地址栏，看着像没切干净
+  syncThemeColorMeta() {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEMES[this.state.theme].surfaceLow);
+  }
   setSearchQuery(e) { this.patch({ searchQuery: e.target.value }); }
   searchKeyDown(e) { if (e.key === 'Enter') this.doSearch(); }
   doSearch() {
@@ -967,7 +1080,14 @@ class Component extends DCLogic {
   }
   toggleSource(key) { this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] } })); }
 
-  showToast() {}
+  // 简易 snackbar：连续调用会重置消失计时（而不是排队），跟原生 App 的 toast 行为一致——
+  // 后一条提示总是完整展示 2.6s，不会被前一条的计时器提前打断
+  showToast(text) {
+    if (!text) return;
+    clearTimeout(this._toastTimer);
+    this.patch({ toast: text, toastKey: (this.state.toastKey || 0) + 1 });
+    this._toastTimer = setTimeout(() => this.patch({ toast: null }), 2600);
+  }
 
   toggleLike(id) {
     const isLiked = !!this.state.liked[id];
@@ -1529,7 +1649,9 @@ class Component extends DCLogic {
     let curLyricIdx = 0;
     for (let i = 0; i < lyricsForRender.length; i++) { if (lyricsForRender[i].time <= s.currentTime) curLyricIdx = i; }
     const lineHeight = 48;
-    const viewportH = 300;
+    // 手机端全屏播放页的歌词可视区高度实测不到 300px（更矮的机型/横屏尤其明显），硬编码会让当前行明显偏上；
+    // componentDidMount/resize 里测量真实高度存进 state，这里只在还没测量到时兜底用 300
+    const viewportH = s.lyricsViewportH || 300;
     const offset = viewportH / 2 - (curLyricIdx * lineHeight + lineHeight / 2);
     const lyricsRender = lyricsForRender.map((l, i) => {
       const d = Math.abs(i - curLyricIdx);
@@ -1588,11 +1710,12 @@ class Component extends DCLogic {
       const liked = !!s.liked[t.id];
       return {
         ...t, coverStyle: coverStyle(t), showCoverIcon: !t.cover, sourceLabel: SOURCE_LABELS[t.source],
+        sourceDot: SOURCE_COLORS[t.source] || SOURCE_COLORS.netease,
         artistDisplay: fmtArtistAlbum(t),
         cardBg: isCurrent ? c.primaryContainer : c.surface,
         titleColor: isCurrent ? c.onPrimaryContainer : c.onSurface,
         artistColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
-        tagBg: c.secondaryContainer, tagColor: c.onSecondaryContainer,
+        sourceLabelColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
         likeGlyph: 'favorite', likeFill: liked ? 1 : 0,
         likeColor: liked ? c.heart : c.onSurfaceVariant,
         primaryActionIcon: isPlaylistView ? 'playlist_remove' : 'playlist_add',
@@ -1667,6 +1790,12 @@ class Component extends DCLogic {
         viewIsList: !showPrompt && displayTracks.length > 0,
         mediaIsCover: !mediaIsLyrics, mediaIsLyrics,
         mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.cover ? `url('${track.cover}')` : track.coverGradient};background-size:auto, cover;background-position:center;animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
+        // 全屏播放页手机端的封面氛围背景：一层放大模糊的封面图（无封面时退化成来源渐变）+ 一层主题面色半透明遮罩，
+        // 分成两个 div 叠加，省得手写 hex->rgba 换算
+        ambientStyle: track.cover
+          ? `position:absolute;inset:-24px;z-index:0;background-image:url('${track.cover}');background-size:cover;background-position:center;filter:blur(48px) saturate(1.35) brightness(${s.theme === 'dark' ? 0.6 : 0.9});transform:scale(1.3);`
+          : `position:absolute;inset:-24px;z-index:0;background:${track.coverGradient};`,
+        ambientOverlayStyle: `position:absolute;inset:0;z-index:0;background:${c.surfaceLow};opacity:0.8;`,
         rightIsQueue, rightIsBrowse: !rightIsQueue,
         showQueueInPlayer, showNowPlayingBody: !showQueueInPlayer,
         queueBtnBg: rightIsQueue ? c.primaryContainer : 'transparent',
@@ -1686,6 +1815,7 @@ class Component extends DCLogic {
         hasAddModal: !!s.addModalId, playlistOptions,
         hasCreateModal: s.createModalOpen, createName: s.createName,
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
+        hasToast: !!s.toast, toastText: s.toast || '', toastKey: s.toastKey,
         // 手机端：歌单抽屉是否打开（控制遮罩层显隐）
         mobileSidebarOpen: s.mobileSidebarOpen,
         sidebarClass, nowPlayingClass,
