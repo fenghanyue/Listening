@@ -3,7 +3,7 @@
  * 本机开发和线上部署（如 Render）都跑这一个文件：node server.mjs
  *
  * 静态部分：原 examples/static-server.mjs 的逻辑
- * 代理部分：原 proxy-server.mjs 的逻辑（/proxy /proxy-auth /stream /sc-client-id）
+ * 代理部分：原 proxy-server.mjs 的逻辑（/proxy /stream /sc-client-id）
  *
  * 为什么合并：合并后代理和页面同源，前端不用再写死 localhost:8765 这种本机地址，
  * 部署到公网上代理和页面自然就在同一个域名下。
@@ -55,26 +55,6 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ client_id: cid }));
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: e.message }));
-    }
-    return;
-  }
-
-  if (req.url.startsWith('/proxy-auth')) {
-    const targetUrl = reqUrl.searchParams.get('url');
-    const auth = reqUrl.searchParams.get('auth');
-    if (!targetUrl) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Missing ?url= parameter' }));
-      return;
-    }
-    try {
-      const target = new URL(targetUrl);
-      const result = await proxyRequest(target, auth ? { Authorization: auth } : {});
-      res.writeHead(result.status, { 'Content-Type': result.contentType || 'application/json' });
-      res.end(result.body);
-    } catch (e) {
-      res.writeHead(502, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: e.message }));
     }
     return;
@@ -144,7 +124,6 @@ server.listen(PORT, () => {
   console.log(`listening server on :${PORT}`);
   console.log('  /                  — Listening Player.dc.html');
   console.log('  /proxy?url=...     — basic forward');
-  console.log('  /proxy-auth?url=...&auth=... — forward with Authorization header');
   console.log('  /stream?url=...    — streaming forward (audio)');
   console.log('  /sc-client-id      — get SoundCloud client_id');
   if (CORP_PROXY_HOST) console.log(`  outbound via corp tunnel ${CORP_PROXY_HOST}:${CORP_PROXY_PORT}`);

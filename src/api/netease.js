@@ -3,6 +3,8 @@
  * API 来源: qijieya meting (第三方代理)
  */
 
+import { isLosslessExtension } from './utils.js';
+
 const BASE_URL = 'https://api.qijieya.cn/meting/';
 
 // meting 的 search/url/lrc 接口本身不带专辑名（固定 name/artist/url/pic/lrc 5 字段），
@@ -125,11 +127,7 @@ export async function fetchNeteaseDetails(track) {
 
   // 音质推断
   if (track.audioUrl) {
-    const url = track.audioUrl;
-    const base = url.split('?')[0].toLowerCase();
-    const extMatch = base.match(/\.([a-z0-9]+)$/);
-    const ext = extMatch ? extMatch[1] : '';
-    if (['flac', 'wav', 'ape', 'alac', 'aiff'].includes(ext)) {
+    if (isLosslessExtension(track.audioUrl)) {
       track.quality = 'lossless';
       track.qualityLabel = 'LOSSLESS';
     } else {

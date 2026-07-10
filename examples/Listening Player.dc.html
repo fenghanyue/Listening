@@ -1322,10 +1322,8 @@ class Component extends DCLogic {
     const MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
     const modeActive = s.playMode !== 0;
 
-    const pendingTrack = s.queue.find(t => t.id === s.addModalId);
     const playlistOptions = s.playlists.map(pl => ({ id: pl.id, name: pl.name, icon: pl.glyph, tileBg: pl.tileBg, onClick: () => this.confirmAdd(pl.id, pl.name) }));
 
-    const likedCountNow = Object.keys(s.liked).length;
     const playlistsRender = s.playlists.map(pl => {
       const selected = pl.id === s.selectedPlaylist;
       const hovered = s.hoverPlaylistId === pl.id;
@@ -1352,7 +1350,7 @@ class Component extends DCLogic {
 
     return {
       v: {
-        c, theme: s.theme, track,
+        c, track,
         currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, volume: s.volume,
         lyricsRender, lyricsOffset: offset,
         queueRender, queueCount: s.playOrder.length, tracksRender,
@@ -1387,12 +1385,12 @@ class Component extends DCLogic {
         switchIconColor: s.theme === 'dark' ? c.primary : c.onSurfaceVariant,
         playIcon: s.playing ? 'pause' : 'play_arrow',
         modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
-        likedCount: likedCountNow, playlistsRender,
-        hasAddModal: !!s.addModalId, pendingTrack, playlistOptions,
+        playlistsRender,
+        hasAddModal: !!s.addModalId, playlistOptions,
         hasCreateModal: s.createModalOpen, createName: s.createName,
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
-        // 手机端：抽屉/迷你播放条状态
-        mobileSidebarOpen: s.mobileSidebarOpen, mobileNowPlayingExpanded: s.mobileNowPlayingExpanded,
+        // 手机端：歌单抽屉是否打开（控制遮罩层显隐）
+        mobileSidebarOpen: s.mobileSidebarOpen,
         sidebarClass, nowPlayingClass,
       },
       H: {

@@ -31,6 +31,15 @@ var ListeningAPI = (() => {
     searchSoundCloud: () => searchSoundCloud
   });
 
+  // src/api/utils.js
+  function isLosslessExtension(url) {
+    if (!url) return false;
+    const base = url.split("?")[0].toLowerCase();
+    const extMatch = base.match(/\.([a-z0-9]+)$/);
+    const ext = extMatch ? extMatch[1] : "";
+    return ["flac", "wav", "ape", "alac", "aiff"].includes(ext);
+  }
+
   // src/api/netease.js
   var BASE_URL = "https://api.qijieya.cn/meting/";
   var NETEASE_PROXY = "";
@@ -113,11 +122,7 @@ var ListeningAPI = (() => {
       }
     }
     if (track.audioUrl) {
-      const url = track.audioUrl;
-      const base = url.split("?")[0].toLowerCase();
-      const extMatch = base.match(/\.([a-z0-9]+)$/);
-      const ext = extMatch ? extMatch[1] : "";
-      if (["flac", "wav", "ape", "alac", "aiff"].includes(ext)) {
+      if (isLosslessExtension(track.audioUrl)) {
         track.quality = "lossless";
         track.qualityLabel = "LOSSLESS";
       } else {
@@ -229,14 +234,9 @@ var ListeningAPI = (() => {
         track.quality = best.tag;
         track.qualityLabel = best.label;
       }
-      if (track.audioUrl) {
-        const base = track.audioUrl.split("?")[0].toLowerCase();
-        const extMatch = base.match(/\.([a-z0-9]+)$/);
-        const ext = extMatch ? extMatch[1] : "";
-        if (["flac", "wav", "ape", "alac", "aiff"].includes(ext)) {
-          track.quality = "lossless";
-          track.qualityLabel = "LOSSLESS";
-        }
+      if (track.audioUrl && isLosslessExtension(track.audioUrl)) {
+        track.quality = "lossless";
+        track.qualityLabel = "LOSSLESS";
       }
       track.detailsLoaded = true;
     } catch (e) {

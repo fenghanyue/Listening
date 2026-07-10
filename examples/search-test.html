@@ -53,8 +53,8 @@ async function searchQQ(kw, limit) {
   }).filter(Boolean);
 }
 
-// SoundCloud api-v2 不发 CORS 头，浏览器端要走本地代理 proxy-server.mjs（:8765），不可用时退回直连兜底
-const SC_PROXY = 'http://localhost:8765';
+// SoundCloud api-v2 不发 CORS 头，浏览器端要走 server.mjs 提供的同源代理，不可用时退回直连兜底
+const SC_PROXY = '';
 let scProxyAvailable = null;
 async function checkScProxy() {
   if (scProxyAvailable !== null) return scProxyAvailable;

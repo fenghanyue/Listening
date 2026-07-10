@@ -26,3 +26,16 @@ export function parseLRC(txt) {
   out.sort((a, b) => a.time - b.time);
   return out;
 }
+
+/**
+ * 根据播放链接的文件扩展名判断是否无损格式（flac/wav/ape/alac/aiff）
+ * @param {string} url - 播放链接
+ * @returns {boolean}
+ */
+export function isLosslessExtension(url) {
+  if (!url) return false;
+  const base = url.split('?')[0].toLowerCase();
+  const extMatch = base.match(/\.([a-z0-9]+)$/);
+  const ext = extMatch ? extMatch[1] : '';
+  return ['flac', 'wav', 'ape', 'alac', 'aiff'].includes(ext);
+}

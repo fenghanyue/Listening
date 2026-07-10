@@ -3,6 +3,8 @@
  * API 来源: tang.api.s01s.cn (第三方代理)
  */
 
+import { isLosslessExtension } from './utils.js';
+
 const SEARCH_URL = 'https://tang.api.s01s.cn/music_open_api.php';
 
 /**
@@ -112,14 +114,9 @@ export async function fetchQQDetails(track) {
       track.qualityLabel = best.label;
     }
 
-    if (track.audioUrl) {
-      const base = track.audioUrl.split('?')[0].toLowerCase();
-      const extMatch = base.match(/\.([a-z0-9]+)$/);
-      const ext = extMatch ? extMatch[1] : '';
-      if (['flac', 'wav', 'ape', 'alac', 'aiff'].includes(ext)) {
-        track.quality = 'lossless';
-        track.qualityLabel = 'LOSSLESS';
-      }
+    if (track.audioUrl && isLosslessExtension(track.audioUrl)) {
+      track.quality = 'lossless';
+      track.qualityLabel = 'LOSSLESS';
     }
 
     track.detailsLoaded = true;
