@@ -538,8 +538,12 @@ const AUDIO_CACHE_DB = 'listening-audio-cache';
 const AUDIO_CACHE_STORE = 'tracks';
 const AUDIO_CACHE_CAP_BYTES = 300 * 1024 * 1024; // 300MB 上限，好调的一个常量
 
+// 缓存 key 得用音源自己的真实曲目 id（哪个字段算"真实 id"跟 fetchQQDetails 的取值优先级保持一致），
+// 不能用 t.id——那是 normalizeTrack 每次分配的临时内部 id，同一首歌重新搜索/重新导入一次就会变，
+// 会导致明明本地已经缓存过音频，却因为 key 变了而查不到，重新联网下载一遍
 function audioCacheKey(t) {
-  return `${t.source}:${t.id}`;
+  const stableId = t.source === 'qq' ? (t.qqId || t.songMid || t.songid) : t.songid;
+  return `${t.source}:${stableId || t.id}`;
 }
 
 function openAudioCacheDB() {
