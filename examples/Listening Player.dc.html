@@ -88,7 +88,7 @@ if ('serviceWorker' in navigator) {
       .dc-search-input-wrap { min-width: 120px !important; }
       .dc-desktop-only { display: none !important; }
 
-      .dc-scroll-area { padding-bottom: 56px !important; }
+      .dc-scroll-area { padding-bottom: 80px !important; }
 
       .dc-queue-drag-handle { display: none !important; }
       .dc-queue-move-btns { display: flex !important; }
@@ -105,7 +105,7 @@ if ('serviceWorker' in navigator) {
       <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">听音乐</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:16px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};">
+      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};">
         <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span>GitHub
       </a>
       <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
@@ -267,7 +267,7 @@ if ('serviceWorker' in navigator) {
                 <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
                   <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
                   <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
-                    <span style="font-size:9.5px;padding:1px 6px;border-radius:5px;font-weight:600;background:{{ t.tagBg }};color:{{ t.tagColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
+                    <span style="font-size:9.5px;padding:1px 6px;border-radius:8px;font-weight:600;background:{{ t.tagBg }};color:{{ t.tagColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
                     <span style="font-size:11px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.artistDisplay }}</span>
                   </div>
                 </div>
@@ -350,7 +350,7 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <sc-if value="{{ v.hasTrack }}">
-  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:0;right:0;bottom:0;height:56px;padding:0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;z-index:51;cursor:pointer;">
+  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;height:56px;padding:0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-radius:20px;box-shadow:{{ v.c.e2 }};box-sizing:border-box;z-index:51;cursor:pointer;">
     <div style="width:38px;height:38px;border-radius:8px;{{ v.track.coverStyle }}flex-shrink:0;"></div>
     <div style="flex:1;min-width:0;">
       <div style="font-size:13px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
@@ -752,7 +752,7 @@ class Component extends DCLogic {
     a.volume = this.state.volume / 100;
   }
 
-  selectPlaylist(id) { this.patch({ selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse' }); }
+  selectPlaylist(id) { this.patch({ selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse', mobileSidebarOpen: false }); }
   backFromPlaylist() { this.patch({ viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse' }); }
   removeFromPlaylist(trackId) {
     const pid = this.state.viewingPlaylistId;
