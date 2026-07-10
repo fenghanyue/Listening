@@ -1380,7 +1380,7 @@ class Component extends DCLogic {
         sourcesRender,
         prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.playOrder.length - 1),
         playDisabled: !matchedTrack, hasTrack: !!matchedTrack,
-        themeIcon: s.theme === 'dark' ? 'light_mode' : 'dark_mode',
+        themeIcon: s.theme === 'dark' ? 'dark_mode' : 'light_mode',
         switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
         switchThumbBg: s.theme === 'dark' ? c.onPrimary : c.surfaceLow,
         switchThumbLeft: s.theme === 'dark' ? 26 : 2,
