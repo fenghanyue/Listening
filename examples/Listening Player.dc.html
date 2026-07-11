@@ -966,6 +966,12 @@ class Component extends DCLogic {
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
     };
     this._onPause = () => {
+      // 自然播完时浏览器会先触发一次 pause、再触发 ended——这一步的 paused=true 只是流程自带的步骤，
+      // 不是真的暂停，此时 a.ended 已经是 true。把这种“假暂停”同步成 Media Session 的 paused 状态，
+      // 会让手机锁屏/通知栏在每次自动切歌时短暂显示“已暂停”，可能被系统当成页面已经不在播媒体而收起
+      // 通知、降低后台执行优先级，导致后台连续自动切歌失败。真正的暂停（用户点暂停按钮，或系统通知栏
+      // 点暂停）此时 a.ended 一定是 false，不受影响。
+      if (a.ended) return;
       this.setState({ playing: false });
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
     };
