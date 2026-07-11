@@ -1151,10 +1151,11 @@ class Component extends DCLogic {
   // 覆盖语义：
   //  - name 命中已有的非内置歌单 -> 原地替换它的 trackIds（保留 id/glyph/tileBg，不会建出重名的第二个）
   //  - name 没命中已有歌单 -> 新建
-  //  - name 留空 -> 整个替换 s.liked（不是合并，旧的喜欢里没在这次导入里的歌会被摘掉）
+  //  - name 留空，或者刚好等于内置「喜欢的音乐」的名字 -> 整个替换 s.liked（不是合并，旧的喜欢里没在这次导入里的歌会被摘掉）
   applyImportedTracks(tracks, name) {
     const trackIds = tracks.map(t => t.id);
-    if (name) {
+    const likedName = this.state.playlists.find(p => p.id === 'liked').name;
+    if (name && name !== likedName) {
       const existing = this.state.playlists.find(p => !p.builtin && p.name === name);
       if (existing) {
         this.patch(s => ({
@@ -1202,8 +1203,10 @@ class Component extends DCLogic {
         return;
       }
       const tracks = payload.tracks.map(t => normalizeTrack({ ...t }));
-      // 留空时默认用导出内容自带的歌单名，只有它也是空的才会落到"覆盖喜欢的音乐"这条路
-      this.applyImportedTracks(tracks, typedName || payload.name || '');
+      // 名称框留空就是留空，跟网易云导入路径保持一致地整体覆盖「喜欢的音乐」，
+      // 不再 fallback 到导出内容自带的歌单名（否则留空导入自己导出的「喜欢的音乐」
+      // 会因为 payload.name === '喜欢的音乐' 而变成新建一个重名歌单）
+      this.applyImportedTracks(tracks, typedName);
       return;
     }
 
