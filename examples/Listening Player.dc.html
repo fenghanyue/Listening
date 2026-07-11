@@ -142,6 +142,8 @@ if ('serviceWorker' in navigator) {
       .dc-side-btn { width: 42px !important; height: 42px !important; }
 
       .dc-mobile-only { display: flex !important; }
+      /* 歌单删除按钮桌面端靠鼠标 hover 才出现，触屏没有 hover 状态，手机端强制常驻显示 */
+      .dc-pl-delete-btn { display: flex !important; }
       .dc-mobile-miniplayer {
         display: flex !important;
         bottom: calc(12px + env(safe-area-inset-bottom)) !important;
@@ -220,7 +222,7 @@ if ('serviceWorker' in navigator) {
               <div style="font-size:12.5px;font-weight:500;color:{{ pl.nameColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ pl.name }}</div>
               <div style="font-size:11.5px;color:{{ pl.countColor }};">{{ pl.countLabel }} 首</div>
             </div>
-            <button onclick="{{ pl.onDelete }}" style="width:26px;height:26px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ pl.countColor }};flex-shrink:0;display:{{ pl.deleteDisplay }};" style-hover="background:{{ v.c.press }};color:{{ v.c.heart }};">
+            <button class="{{ pl.deleteBtnClass }}" onclick="{{ pl.onDelete }}" style="width:26px;height:26px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ pl.countColor }};flex-shrink:0;display:{{ pl.deleteDisplay }};" style-hover="background:{{ v.c.press }};color:{{ v.c.heart }};">
               <span style="font-family:'Material Symbols Outlined';font-size:16px;">delete</span>
             </button>
           </div>
@@ -1843,6 +1845,9 @@ class Component extends DCLogic {
         nameColor: selected ? c.onSecondaryContainer : c.onSurface,
         countColor: selected ? c.onSecondaryContainer : c.onSurfaceVariant,
         deleteDisplay: (hovered && !pl.builtin) ? 'flex' : 'none',
+        // 手机端没有 hover，删除图标靠 CSS 断点强制常驻显示（见 .dc-pl-delete-btn 规则）；
+        // 内置歌单（喜欢的音乐）本来就不该有删除按钮，这里不给它加这个 class，断点样式就不会误命中它
+        deleteBtnClass: pl.builtin ? '' : 'dc-pl-delete-btn',
         onClick: () => this.selectPlaylist(pl.id),
         onMouseEnter: () => this.hoverPlaylist(pl.id),
         onMouseLeave: () => this.unhoverPlaylist(),
