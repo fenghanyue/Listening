@@ -90,7 +90,9 @@ const server = http.createServer(async (req, res) => {
     try {
       const target = new URL(targetUrl);
       const result = await proxyRequest(target);
-      res.writeHead(result.status, { 'Content-Type': result.contentType || 'application/json' });
+      const headers = { 'Content-Type': result.contentType || 'application/json' };
+      if (result.location) headers['X-Proxy-Location'] = result.location;
+      res.writeHead(result.status, headers);
       res.end(result.body);
     } catch (e) {
       res.writeHead(502, { 'Content-Type': 'application/json' });

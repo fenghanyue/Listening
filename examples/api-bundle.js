@@ -25,6 +25,7 @@ var ListeningAPI = (() => {
     fetchNeteasePlaylist: () => fetchNeteasePlaylist,
     fetchQQDetails: () => fetchQQDetails,
     fetchSoundCloudDetails: () => fetchSoundCloudDetails,
+    resolveNeteaseShortLink: () => resolveNeteaseShortLink,
     searchAll: () => searchAll,
     searchNetease: () => searchNetease,
     searchQQ: () => searchQQ,
@@ -96,6 +97,22 @@ var ListeningAPI = (() => {
       console.error("netease search error:", e);
     }
     return results;
+  }
+  async function resolveNeteaseShortLink(shortUrl) {
+    let url = shortUrl;
+    try {
+      for (let i = 0; i < 3; i++) {
+        const res = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5e3) });
+        const location = res.headers.get("x-proxy-location");
+        if (!location) break;
+        url = new URL(location, url).toString();
+        if (/music\.163\.com/.test(url)) return url;
+      }
+    } catch (e) {
+      console.error("netease short link resolve error:", e);
+      return "";
+    }
+    return /music\.163\.com/.test(url) ? url : "";
   }
   async function fetchNeteasePlaylist(playlistId) {
     const id = String(playlistId || "").trim();

@@ -89,6 +89,28 @@ export async function searchNetease(kw, page = 1, num = 10) {
 }
 
 /**
+ * 解析网易云 App「分享」生成的 163cn.tv 短链，返回跳转后的真实长链接
+ * 短链没有 CORS 头，必须走 /proxy 代理请求，从响应头 X-Proxy-Location 里读跳转目标；
+ * 跳转链路可能不止一跳，最多跟进 3 次，直到拿到 music.163.com 长链接或没有更多跳转
+ */
+export async function resolveNeteaseShortLink(shortUrl) {
+  let url = shortUrl;
+  try {
+    for (let i = 0; i < 3; i++) {
+      const res = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+      const location = res.headers.get('x-proxy-location');
+      if (!location) break;
+      url = new URL(location, url).toString();
+      if (/music\.163\.com/.test(url)) return url;
+    }
+  } catch (e) {
+    console.error('netease short link resolve error:', e);
+    return '';
+  }
+  return /music\.163\.com/.test(url) ? url : '';
+}
+
+/**
  * 拉取网易云歌单全部曲目
  * @param {string|number} playlistId - 歌单数字 id
  * @returns {Promise<Array>} track 对象数组

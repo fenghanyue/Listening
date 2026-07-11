@@ -1195,6 +1195,7 @@ class Component extends DCLogic {
 
     let source = null;
     if (/music\.163\.com/.test(raw)) source = 'netease';
+    else if (/163cn\.tv/.test(raw)) source = 'netease-short';
     else if (/y\.qq\.com/.test(raw)) source = 'qq';
     if (!source) {
       this.showToast('暂不支持该链接，请粘贴网易云音乐或QQ音乐的歌单链接，或者导出字符串');
@@ -1204,16 +1205,34 @@ class Component extends DCLogic {
       this.showToast('QQ音乐歌单导入正在开发中，先支持了网易云');
       return;
     }
+    const API = window.ListeningAPI;
+    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
+
+    let longUrl = raw;
+    if (source === 'netease-short') {
+      // App「分享」生成的短链形如 "分享歌单: xxx https://163cn.tv/baMSiItq (@网易云音乐)"，
+      // 短链本身不带歌单 id，需要先跟进跳转拿到真实的 music.163.com 长链接
+      const shortMatch = raw.match(/https?:\/\/163cn\.tv\/[a-zA-Z0-9]+/);
+      if (!shortMatch) {
+        this.showToast('识别不到分享链接，检查一下链接是否完整');
+        return;
+      }
+      this.showToast('正在解析短链…');
+      longUrl = await API.resolveNeteaseShortLink(shortMatch[0]);
+      if (!longUrl) {
+        this.showToast('短链解析失败，请从网页版复制完整歌单链接重试');
+        return;
+      }
+    }
+
     // 分享文本形如 "分享歌单: xxx https://music.163.com/m/playlist?id=36420739&creatorId=42270006"，
     // 要求前面是 ? 或 & 才算参数边界，避免把 creatorId= 的数字误当成歌单 id
-    const idMatch = raw.match(/[?&]id=(\d+)/);
+    const idMatch = longUrl.match(/[?&]id=(\d+)/);
     const playlistId = idMatch ? idMatch[1] : null;
     if (!playlistId) {
       this.showToast('识别不到歌单 id，检查一下链接是否完整');
       return;
     }
-    const API = window.ListeningAPI;
-    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
 
     this.showToast('正在导入歌单…');
     try {
