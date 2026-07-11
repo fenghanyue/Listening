@@ -1005,15 +1005,7 @@ class Component extends DCLogic {
     };
     this._onError = () => {
       console.error('audio error:', a.error);
-      this.showToast('播放失败，请尝试其他音源');
-      // 拿到明确的 error 事件就不用等 watchdog 超时才知道这次加载失败了：立刻清掉加载中状态和
-      // 对应的守护计时器（避免它之后再触发一次多余的自动切歌——error 已经是明确的结论了）
-      if (this._loadWatchdogTrackId != null && this._loadWatchdogTrackId === this.state.currentId) {
-        clearTimeout(this._loadWatchdogTimer);
-        this._loadWatchdogTimer = null;
-        this._loadWatchdogTrackId = null;
-      }
-      this.setState({ playing: false, loadingTrackId: null });
+      this.handlePlaybackFailure('audio error: ' + (a.error ? a.error.code : 'unknown'), this._audioErrorToken);
     };
     this._onMeta = () => {
       const dur = a.duration;
@@ -1372,6 +1364,7 @@ class Component extends DCLogic {
     // 真实播放进度、或 _onError/watchdog 判定失败为止）
     this._prefetchedForId = null;
     this._shufflePrefetchedNextId = null;
+    this._playRetriedForId = null;
     this.armLoadWatchdog(track.id);
     this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [], loadingTrackId: track.id });
     this.persist();
@@ -1470,10 +1463,51 @@ class Component extends DCLogic {
     }
   }
 
+  // 播放失败的统一入口（_onError / HLS fatal error / play() 被拒绝 / ensureTrackDetails 失败都会走这里）：
+  // 先重试一次——QQ音乐/SoundCloud 拿到的是源站直链，带时效性 token，之前解析过的链接过一阵子会失效；
+  // 网易云走的是第三方 meting 代理，也可能临时抽风。不管哪种，清掉这首歌已经解析过的播放信息
+  // （audioUrl/detailsLoaded/scIsHLS），逼 loadAndPlay 重新问一次源站要新链接，比直接用同一个大概率
+  // 还是坏的链接重试更有意义。同一首歌只重试一次，避免源站真的没有可用链接时无限重试
+  //
+  // myToken 是这次失败信号所属的那次 loadAndPlay 调用的编号（见 loadAndPlay 里的 this._loadToken）。
+  // 一次真实失败经常会同时触发两个信号——audio 元素的 error 事件和 play() 被拒绝的 rejection，两个
+  // 几乎同时到达但不是同一个事件循环轮次，如果都不做去重会被当成两次独立失败，导致重试没完没了。
+  // 用 token 判断"这个信号还对应最新的那次加载尝试吗"，加上 _failureHandledToken 确保同一次尝试的
+  // 失败只真正处理一次，两层保证叠加起来才是对的
+  handlePlaybackFailure(reason, myToken) {
+    if (myToken !== this._loadToken || this._failureHandledToken === myToken) return;
+    this._failureHandledToken = myToken;
+    console.warn('playback failure:', reason);
+    if (this._loadWatchdogTrackId != null && this._loadWatchdogTrackId === this.state.currentId) {
+      clearTimeout(this._loadWatchdogTimer);
+      this._loadWatchdogTimer = null;
+      this._loadWatchdogTrackId = null;
+    }
+    const track = this.state.queue.find(t => t.id === this.state.currentId);
+    if (track && this._playRetriedForId !== track.id) {
+      this._playRetriedForId = track.id;
+      track.audioUrl = null;
+      track.detailsLoaded = false;
+      track.scIsHLS = false;
+      this.showToast('播放失败，正在重试…');
+      this.armLoadWatchdog(track.id);
+      this.loadAndPlay(track, this.state.currentTime || 0);
+      return;
+    }
+    this.showToast('播放失败，请尝试其他音源');
+    this.patch({ playing: false, loadingTrackId: null });
+  }
+
   loadAndPlay(track, resumeAt = 0) {
     if (!track) return;
     const API = window.ListeningAPI;
     if (!API) { this.showToast('API 模块未加载'); return; }
+
+    // 给这次加载尝试编个号：handlePlaybackFailure 靠它分辨"这个失败信号还对应最新的这次尝试吗"——
+    // 一次真实失败常常会同时触发 error 事件和 play() 被拒绝两个信号，靠这个编号只处理一次、
+    // 也用来把重试之前那次尝试的滞后失败信号识别成"过期了，不用管"
+    this._loadToken = (this._loadToken || 0) + 1;
+    const myToken = this._loadToken;
 
     this.initAudio();
     const a = this._audio;
@@ -1482,13 +1516,16 @@ class Component extends DCLogic {
     // 如果已有播放链接就直接播放，否则加载详情
     const go = () => {
       if (!track.audioUrl) { this.showToast('暂无可用播放链接'); return; }
+      // _onError 是常驻监听器，不像这里其他回调能直接闭包捕获 myToken，靠这个字段告诉它
+      // "当前 audio 元素装的是哪次尝试的链接"
+      this._audioErrorToken = myToken;
       this.stopHLS();
       if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
 
       const startPlayback = () => {
         a.currentTime = resumeAt;
         a.volume = this.state.volume / 100;
-        a.play().catch(e => { console.error('play error:', e); this.showToast('播放失败'); });
+        a.play().catch(e => { console.error('play error:', e); this.handlePlaybackFailure('play() rejected: ' + e, myToken); });
       };
 
       if (track.scIsHLS && window.Hls && window.Hls.isSupported()) {
@@ -1502,7 +1539,7 @@ class Component extends DCLogic {
         hls.on(window.Hls.Events.ERROR, (_evt, data) => {
           if (data.fatal) {
             console.error('hls fatal error:', data);
-            this.showToast('播放失败，请尝试其他音源');
+            this.handlePlaybackFailure('hls fatal error: ' + data.type, myToken);
           }
         });
       } else {
@@ -1538,7 +1575,7 @@ class Component extends DCLogic {
       go();
     }).catch(e => {
       console.error('load details error:', e);
-      this.showToast('加载播放链接失败，请尝试其他音源');
+      this.handlePlaybackFailure('ensureTrackDetails failed: ' + e, myToken);
     });
   }
 
