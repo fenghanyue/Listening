@@ -26,6 +26,7 @@ var ListeningAPI = (() => {
     fetchQQDetails: () => fetchQQDetails,
     fetchSoundCloudDetails: () => fetchSoundCloudDetails,
     resolveNeteaseShortLink: () => resolveNeteaseShortLink,
+    resolveSoundCloudCacheUrl: () => resolveSoundCloudCacheUrl,
     searchAll: () => searchAll,
     searchNetease: () => searchNetease,
     searchQQ: () => searchQQ,
@@ -414,6 +415,10 @@ var ListeningAPI = (() => {
         scored.sort((a, b) => b.score - a.score);
         const best = scored[0];
         const isHLS = best.format?.protocol === "hls";
+        const bestProgressive = scored.find(
+          (tr) => tr.format?.protocol === "progressive" && tr.format?.mime_type?.includes("mpeg")
+        );
+        t.scProgressiveResolveUrl = bestProgressive ? `${bestProgressive.url}?client_id=${cid}` : null;
         const mediaUrl = `${best.url}?client_id=${cid}`;
         try {
           const resolved = await scFetchJson(mediaUrl);
@@ -449,6 +454,18 @@ var ListeningAPI = (() => {
       console.error("soundcloud detail:", e);
     }
     return t;
+  }
+  async function resolveSoundCloudCacheUrl(t) {
+    if (!t || !t.scProgressiveResolveUrl) return null;
+    try {
+      const resolved = await scFetchJson(t.scProgressiveResolveUrl);
+      if (!resolved || !resolved.url) return null;
+      const useProxy = await checkScProxy();
+      return useProxy ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
+    } catch (e) {
+      console.warn("soundcloud cache url resolve:", e);
+      return null;
+    }
   }
 
   // src/api/index.js

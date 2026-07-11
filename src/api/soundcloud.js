@@ -203,6 +203,15 @@ export async function fetchSoundCloudDetails(t) {
       scored.sort((a, b) => b.score - a.score);
       const best = scored[0];
       const isHLS = best.format?.protocol === 'hls';
+
+      // 播放走 HLS 时，另找一条 progressive mp3 转码，把它的 resolve 端点先存成字符串
+      // （不在这里内联解析，免得给起播多加一次请求）。供 resolveSoundCloudCacheUrl 后台解析出
+      // 整段 mp3 直链、下载进本地缓存——播放照旧用 HLS，缓存用 mp3，互不影响。找不到就置空。
+      const bestProgressive = scored.find(
+        tr => tr.format?.protocol === 'progressive' && tr.format?.mime_type?.includes('mpeg')
+      );
+      t.scProgressiveResolveUrl = bestProgressive ? `${bestProgressive.url}?client_id=${cid}` : null;
+
       // media resolve 只需要 ?client_id= 不需要 JWT
       const mediaUrl = `${best.url}?client_id=${cid}`;
 
@@ -210,7 +219,8 @@ export async function fetchSoundCloudDetails(t) {
         const resolved = await scFetchJson(mediaUrl);
         if (resolved.url) {
           if (isHLS) {
-            // HLS 播放：交给前端 hls.js 直接从 CDN 拉流（manifest+分片走代理成本太高）
+            // HLS 播放：交给前端 hls.js 直接从 CDN 拉流（manifest+分片走代理成本太高）。
+            // 本地缓存另走一条路：前端后台用 scProgressiveResolveUrl 解析出整段 mp3 存起来。
             t.audioUrl = resolved.url;
             t.scIsHLS = true;
           } else {
@@ -248,4 +258,27 @@ export async function fetchSoundCloudDetails(t) {
     console.error('soundcloud detail:', e);
   }
   return t;
+}
+
+/**
+ * 解析出一首 SoundCloud 曲目的 progressive mp3 缓存直链（供前端后台本地缓存用）。
+ * 播放本身走 HLS、不受影响；这里单独解析 progressive 转码，返回一个可直接 fetch 成 blob 的 URL：
+ * 代理可用时走同源 /stream（服务端抓取，绕开部分地区 CDN 的 403），否则退回 CDN 直连。
+ * 没有 progressive 转码、或解析失败时返回 null，调用方据此静默跳过缓存。
+ * @param {object} t - track 对象（需带 fetchSoundCloudDetails 设好的 scProgressiveResolveUrl）
+ * @returns {Promise<string|null>}
+ */
+export async function resolveSoundCloudCacheUrl(t) {
+  if (!t || !t.scProgressiveResolveUrl) return null;
+  try {
+    const resolved = await scFetchJson(t.scProgressiveResolveUrl);
+    if (!resolved || !resolved.url) return null;
+    const useProxy = await checkScProxy();
+    return useProxy
+      ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}`
+      : resolved.url;
+  } catch (e) {
+    console.warn('soundcloud cache url resolve:', e);
+    return null;
+  }
 }

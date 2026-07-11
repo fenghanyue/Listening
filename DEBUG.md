@@ -13,7 +13,6 @@
 ### 需要拿主意的问题
 
 - **本机开发环境下 SoundCloud 搜不出来、也放不了**：这台机器现在联网要走公司代理，但项目代码默认直连，所以只有 SoundCloud 会失败（网易云、QQ 不受影响，因为它俩是浏览器直接连 CDN，不需要经过项目自己的代理）。启动服务时加上环境变量 `CORP_PROXY_HOST=proxy.nioint.com` 就能解决，已经验证过。要不要把这个配置固定下来，还没定。
-- **SoundCloud 的歌大部分播完不会存到本地缓存**：网易云、QQ 的歌只要播过一次就会自动缓存到本地，下次播放不用再联网。SoundCloud 不一定——大部分歌默认走的是一种叫 HLS 的流媒体格式，现在的缓存逻辑没覆盖这种格式，只有少数走普通 mp3 格式的 SoundCloud 曲目才会被缓存。要解决的话有两个方向：一是把 SoundCloud 也强制改成走普通 mp3（代价是会重新出现一个已经修好的播放失败问题）；二是单独写一套逻辑把 HLS 格式的歌也存下来（工作量明显更大，还没验证可行性）。两个都还没做，需要再合计一下选哪个。
 - **线上偶发 SoundCloud 搜不出来/播放不了**：用户反馈线上 `https://listening-5bnv.onrender.com/` 手机和电脑都遇到过打不开，但排查时问题已经自己好了，没能现场复现。排查时确认了：Render 后端代理本身没问题（`/sc-client-id`、搜索接口当时都能正常拿到数据，响应 1-3 秒），线上部署的代码也和仓库源码一致，不是跑着旧版本。所以问题大概率出在用户设备到 SoundCloud 之间，而不是服务端。怀疑方向（都还没验证）：
   1. 播放走 HLS 格式时，音频分片是浏览器直接连 SoundCloud 的 CDN（`playback.media-streaming.soundcloud.cloud`），不经过 Render 转发——如果这个域名在用户当时所在的网络下不通，会导致播放失败，但不影响搜索。
   2. Render 免费实例冷启动：前端探测代理是否可用的超时只有 6 秒，如果刚好撞上实例刚从休眠唤醒、响应变慢，会误判代理不可用，退化成浏览器直连 SoundCloud（这条路在国内是不通的）。
@@ -39,6 +38,25 @@
 按时间倒序，只记做了什么，不记详细的排查过程（想看细节可以翻 git log / commit）。
 
 **2026-07-11**
+- 让 SoundCloud 的 HLS 曲目也能被本地缓存了（之前只有少数走 progressive mp3 的 SoundCloud 曲目会被缓存，
+  大部分歌走 HLS 分片流、不在缓存范围内，每次都要重新联网）。做法是"播 HLS / 后台缓存 mp3"：播放照旧走
+  可靠的 AAC HLS（完全没动格式选择，不会把之前修好的播放可靠性问题弄回来），但在后台顺手解析同一首歌的
+  progressive mp3、通过 `/stream` 代理下载存进现有的 IndexedDB 缓存；下次再播这首直接命中本地 mp3 blob，
+  不联网也不走 hls.js。具体改动：`src/api/soundcloud.js` 里 `fetchSoundCloudDetails` 选到 HLS 时顺带记下
+  progressive 转码的 resolve 端点（`scProgressiveResolveUrl`，只存字符串、不给起播加延迟），并新增导出
+  `resolveSoundCloudCacheUrl(t)`（后台按需解析出可直接 fetch 成 blob 的 mp3 直链，代理不可用/无 progressive
+  就返回 null）——改完 `src/api/*` 记得 `npm run build` 重新生成 `examples/api-bundle.js`（生成物，别手改）。
+  前端 `Listening Player.dc.html` 把缓存查询提到所有音源之前（HLS 命中也直接放本地 blob、绝不再构造 hls.js），
+  未命中且是 HLS 时后台缓存那条 mp3；`prefetchTrack` 同样覆盖 HLS。顺手加了两处健壮性：慢速缓存读回来时
+  加了竞态守卫（快速切歌不会让旧回调覆盖新链接）、以及"这次放的是本地缓存却失败了就先删掉这条坏缓存再重试"
+  的自愈逻辑（避免一条坏/截断的缓存把某首歌永久卡死）；还顺带修了一个潜在 bug：没有 MSE 的浏览器（如 Safari）
+  走原生 HLS 时，旧代码会把 m3u8 manifest 当整段文件缓存、污染缓存，现在这条路缓存的也是 progressive mp3。
+  已知局限：极少数只有 HLS、没有 progressive 转码的曲目（付费/试听受限那类）仍缓存不了，但照常能播、只是不省流量；
+  另外缓存这一步依赖 `/stream` 代理能抓到 mp3，线上（Render）服务端抓取能绕开地区 403，本机开发不配公司代理时
+  抓不到就静默不缓存（不影响播放）。用 Playwright 在真实浏览器里端到端验证了：HLS 曲目缓存命中直接放本地 blob
+  且完全不碰 hls.js/不发 m3u8 请求、未命中时（有/无 MSE 两种路径）都会把 progressive mp3 存进缓存、Safari 路径
+  存的确实是 mp3 而不是 manifest、自愈删缓存、prefetch 缓存 HLS 曲目，均符合预期。真机/线上真实 SoundCloud 曲目
+  上"刷新重播命中本地缓存、对 CDN 零请求"还需部署后再确认一次。
 - 修了"点一首歌会把播放队列顺序打乱"的问题：队列面板、歌单详情页、搜索结果里点一首歌播放，走的都是
   同一个 `playTrackAt(id)`，原来的逻辑不管这首歌在不在播放队列（`playOrder`）里，一律把它插到队列
   最前面（先从原队列过滤掉再插进去）。改成先判断这首歌是否已经在 `playOrder` 里：在的话直接播放、
@@ -111,6 +129,6 @@ Listening/
 
 **几个容易忘记的背景知识**
 
-- SoundCloud 播放优先走 HLS 格式，是为了绕开另一种格式（progressive mp3）在部分曲目上会被 CDN 拒绝访问的问题。
+- SoundCloud 播放优先走 HLS 格式，是为了绕开另一种格式（progressive mp3）在部分曲目上会被 CDN 拒绝访问的问题。本地缓存则反过来单独存 progressive mp3（播 HLS、缓存 mp3，两条路分开走）：HLS 是分片流没法当整段文件存，所以后台另外解析同一首歌的 progressive mp3 下载进 IndexedDB，下次播放直接命中本地 blob。只有 HLS、没有 progressive 转码的少数曲目缓存不了，但照常能播。
 - 本机如果所在网络需要走公司代理才能联网，启动服务要加 `CORP_PROXY_HOST=proxy.nioint.com` 环境变量，SoundCloud 相关功能才能用；线上部署（Render）不需要这个配置。
 - 列表/网格视图切换、酷我音源、JOOX 音源，都是评估过后用户决定不做/下线的，不是遗漏。

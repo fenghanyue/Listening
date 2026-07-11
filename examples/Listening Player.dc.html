@@ -637,8 +637,9 @@ function coverStyle(t) {
     : `background:${GRADIENTS[t.source] || GRADIENTS.netease};`;
 }
 
-// 歌曲浏览器本地缓存（IndexedDB 存 Blob）：网易云/QQ/SoundCloud progressive 的音频 CDN
-// 实测都支持 CORS，可以直接 fetch 到字节；HLS（SoundCloud 部分曲目）是分片流，不在这套缓存范围内。
+// 歌曲浏览器本地缓存（IndexedDB 存 Blob）：网易云/QQ/SoundCloud 的音频都能直接 fetch 成整段字节存下来。
+// SoundCloud 大部分曲目播放走 HLS 分片流（没法当整段文件存），但同一首歌一般还带一条 progressive mp3
+// 转码——播放照旧用 HLS，缓存则在后台单独把那条 mp3 下载存起来（见 resolveSoundCloudCacheUrl / cacheHlsMp3）。
 const AUDIO_CACHE_DB = 'listening-audio-cache';
 const AUDIO_CACHE_STORE = 'tracks';
 const AUDIO_CACHE_CAP_BYTES = 300 * 1024 * 1024; // 300MB 上限，好调的一个常量
@@ -723,6 +724,17 @@ async function evictAudioCacheIfOverCap() {
     }
   } catch (e) {
     console.warn('audio cache evict failed:', e);
+  }
+}
+
+// 删掉一条缓存：播放失败重试前如果这次放的是本地 blob，先把它删掉，避免坏/截断的缓存
+// （比如 /stream 返回了 200 但内容不完整）让这首歌一直用同一份坏数据、反复失败卡死
+async function deleteCachedAudio(key) {
+  try {
+    const db = await openAudioCacheDB();
+    db.transaction(AUDIO_CACHE_STORE, 'readwrite').objectStore(AUDIO_CACHE_STORE).delete(key);
+  } catch (e) {
+    console.warn('audio cache delete failed:', e);
   }
 }
 
@@ -1440,7 +1452,7 @@ class Component extends DCLogic {
     if (nextTrack) this.startTrack(nextTrack);
   }
 
-  // 提前给"接下来要放的下一首"解析播放链接 + (非 HLS 时)后台下载音频缓存，这样真正切到
+  // 提前给"接下来要放的下一首"解析播放链接 + 后台下载音频缓存，这样真正切到
   // 这首歌时 loadAndPlay 大概率直接命中已经解析好的 audioUrl / 已经缓存好的 blob，不用等到
   // ended 触发的那一刻才从零开始联网。纯粹是锦上添花的后台工作：失败/慢/没赶上都不影响正常
   // 播放路径，loadAndPlay 该走的完整流程照样会走一遍
@@ -1451,10 +1463,17 @@ class Component extends DCLogic {
     if (!API) return;
     try {
       if (!track.audioUrl) await API.ensureTrackDetails(track);
-      if (!track.audioUrl || track.scIsHLS) return; // HLS 分片流不纳入本地缓存范围
+      if (!track.audioUrl) return;
       const cacheKey = audioCacheKey(track);
-      const cached = await getCachedAudio(cacheKey);
-      if (!cached) cacheAudioInBackground(cacheKey, track.audioUrl);
+      if (await getCachedAudio(cacheKey)) return; // 已缓存，跳过
+      // HLS 曲目：audioUrl 是分片 manifest，不能当整段文件存；改解析同一首歌的 progressive mp3 来缓存。
+      // 非 HLS：audioUrl 本身就是整段文件，直接缓存。
+      if (track.scIsHLS) {
+        const url = API.resolveSoundCloudCacheUrl && await API.resolveSoundCloudCacheUrl(track);
+        if (url) cacheAudioInBackground(cacheKey, url);
+      } else {
+        cacheAudioInBackground(cacheKey, track.audioUrl);
+      }
     } catch (e) {
       console.warn('prefetch track failed:', e);
     }
@@ -1507,6 +1526,9 @@ class Component extends DCLogic {
     const track = this.state.queue.find(t => t.id === this.state.currentId);
     if (track && this._playRetriedForId !== track.id) {
       this._playRetriedForId = track.id;
+      // 这次放的是本地缓存 blob 却失败了，说明缓存本身可能坏了/不完整——删掉它，
+      // 让重试走联网重新解析+下载，而不是又命中同一份坏缓存把这首歌卡死
+      if (this._playingFromCache) deleteCachedAudio(audioCacheKey(track));
       track.audioUrl = null;
       track.detailsLoaded = false;
       track.scIsHLS = false;
@@ -1549,37 +1571,62 @@ class Component extends DCLogic {
         a.play().catch(e => { console.error('play error:', e); this.handlePlaybackFailure('play() rejected: ' + e, myToken); });
       };
 
-      if (track.scIsHLS && window.Hls && window.Hls.isSupported()) {
-        // SoundCloud AAC HLS 流：manifest + 分片都在 CDN 上，交给 hls.js 直接拉取解封装；
-        // 分片流不纳入本地缓存范围
-        const hls = new window.Hls({ enableWorker: false });
-        this._hls = hls;
-        hls.loadSource(track.audioUrl);
-        hls.attachMedia(a);
-        hls.on(window.Hls.Events.MANIFEST_PARSED, startPlayback);
-        hls.on(window.Hls.Events.ERROR, (_evt, data) => {
-          if (data.fatal) {
-            console.error('hls fatal error:', data);
-            this.handlePlaybackFailure('hls fatal error: ' + data.type, myToken);
+      // 统一先查本地缓存（IndexedDB）——所有音源、包括 HLS 曲目都一样：命中就直接放本地 blob，
+      // 不联网、也不构造 hls.js。缓存 key 跟音频格式无关（音源真实 id），所以一首歌哪怕这次解析成
+      // HLS，只要之前后台缓存过它的 mp3，照样命中
+      const cacheKey = audioCacheKey(track);
+      getCachedAudio(cacheKey).then(blob => {
+        // 慢速缓存读期间可能已经切到别的歌了：这个回调若不属于最新那次加载，直接丢弃，别覆盖新链接
+        if (myToken !== this._loadToken) return;
+
+        if (blob) {
+          this._playingFromCache = true;
+          this._objectUrl = URL.createObjectURL(blob);
+          a.src = this._objectUrl;
+          startPlayback();
+          touchCachedAudio(cacheKey);
+          return;
+        }
+
+        this._playingFromCache = false;
+        // 未命中且是 HLS 曲目：后台顺手解析同一首歌的 progressive mp3 存起来，下次就能命中本地 blob。
+        // 纯后台工作，失败/没有 progressive 都不影响这次的 HLS 播放
+        const cacheHlsMp3 = () => {
+          const API = window.ListeningAPI;
+          if (API && API.resolveSoundCloudCacheUrl) {
+            API.resolveSoundCloudCacheUrl(track)
+              .then(url => { if (url) cacheAudioInBackground(cacheKey, url); })
+              .catch(() => {});
           }
-        });
-      } else {
-        // 非 HLS：先查本地缓存（IndexedDB），命中就播本地 blob，不发网络请求；
-        // 没命中照常联网播放，同时后台拉取完整文件存起来，下次播放这首歌就能命中
-        const cacheKey = audioCacheKey(track);
-        getCachedAudio(cacheKey).then(blob => {
-          if (blob) {
-            this._objectUrl = URL.createObjectURL(blob);
-            a.src = this._objectUrl;
-            startPlayback();
-            touchCachedAudio(cacheKey);
-          } else {
-            a.src = track.audioUrl;
-            startPlayback();
-            cacheAudioInBackground(cacheKey, track.audioUrl);
-          }
-        });
-      }
+        };
+
+        if (track.scIsHLS && window.Hls && window.Hls.isSupported()) {
+          // SoundCloud AAC HLS 流：manifest + 分片都在 CDN 上，交给 hls.js 直接拉取解封装
+          const hls = new window.Hls({ enableWorker: false });
+          this._hls = hls;
+          hls.loadSource(track.audioUrl);
+          hls.attachMedia(a);
+          hls.on(window.Hls.Events.MANIFEST_PARSED, startPlayback);
+          hls.on(window.Hls.Events.ERROR, (_evt, data) => {
+            if (data.fatal) {
+              console.error('hls fatal error:', data);
+              this.handlePlaybackFailure('hls fatal error: ' + data.type, myToken);
+            }
+          });
+          cacheHlsMp3();
+        } else if (track.scIsHLS) {
+          // 没有 MSE（比如 Safari）：靠浏览器原生 HLS，直接把 m3u8 交给 audio 元素。
+          // 注意 audioUrl 是分片 manifest，绝不能当整段文件缓存，缓存仍走 progressive mp3
+          a.src = track.audioUrl;
+          startPlayback();
+          cacheHlsMp3();
+        } else {
+          // 非 HLS：audioUrl 本身就是整段文件，边播边后台拉完整文件存起来，下次播放这首歌就能命中
+          a.src = track.audioUrl;
+          startPlayback();
+          cacheAudioInBackground(cacheKey, track.audioUrl);
+        }
+      });
     };
 
     if (track.audioUrl) {

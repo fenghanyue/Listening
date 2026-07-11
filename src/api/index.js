@@ -104,4 +104,4 @@ export async function ensureTrackDetails(track) {
  */
 export { searchNetease, fetchNeteaseDetails, fetchNeteasePlaylist, resolveNeteaseShortLink } from './netease.js';
 export { searchQQ, fetchQQDetails } from './qq.js';
-export { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
+export { searchSoundCloud, fetchSoundCloudDetails, resolveSoundCloudCacheUrl } from './soundcloud.js';
