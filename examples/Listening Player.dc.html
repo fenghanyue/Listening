@@ -1642,15 +1642,16 @@ class Component extends DCLogic {
     this.persist();
   }
 
-  // 用户主动点某一首（搜索结果 / 歌单详情 / 队列面板）：插队到播放队列最前面再播放，
-  // 和 startTrack 的区别是这个会改 playOrder——按用户点击的意图重排"接下来听什么"
+  // 用户主动点某一首（搜索结果 / 歌单详情 / 队列面板）：这首歌已经在播放队列里就直接播放、
+  // 不打乱队列顺序；不在队列里才插到最前面——跟 startTrack 的区别是这个会按需要改 playOrder
   playTrackAt(id) {
     const s = this.state;
     const track = s.searchResults.find(t => t.id === id) || s.queue.find(t => t.id === id);
     if (!track) return;
     this.ensureQueued(id);
-    const playOrder = [id, ...s.playOrder.filter(pid => pid !== id)];
-    this.patch({ playOrder });
+    if (!s.playOrder.includes(id)) {
+      this.patch({ playOrder: [id, ...s.playOrder] });
+    }
     this.startTrack(track);
   }
 
