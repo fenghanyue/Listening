@@ -2,8 +2,15 @@
 <html>
 <head>
 <meta charset="utf-8">
+<title>听音乐</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1D1B20">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<link rel="apple-touch-icon" href="./icons/icon-512.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="听音乐">
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
@@ -493,6 +500,15 @@ if ('serviceWorker' in navigator) {
   <div class="dc-toast" key="toast-{{ v.toastKey }}" style="background:{{ v.c.inverse }};color:{{ v.c.onInverse }};padding:11px 20px;border-radius:24px;font-size:13px;font-weight:500;box-shadow:{{ v.c.e3 }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.toastText }}</div>
   </sc-if>
 
+  <sc-if value="{{ v.showBatteryHint }}">
+  <div class="dc-mobile-only" style="display:none;flex-direction:column;position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:150;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};border-radius:16px;padding:14px 16px;box-shadow:{{ v.c.e3 }};box-sizing:border-box;">
+    <div style="font-size:13px;line-height:1.5;">安卓锁屏后台要连续自动播放下一首，需要手动放行一次：设置 → 电池 → 找到浏览器（或本应用）→ 允许后台耗电/关闭省电限制。</div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+      <button onclick="{{ H.dismissBatteryHint }}" style="padding:6px 16px;border-radius:16px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:12.5px;font-weight:500;cursor:pointer;">知道了</button>
+    </div>
+  </div>
+  </sc-if>
+
   <sc-if value="{{ v.hasAddModal }}">
     <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
       <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
@@ -913,6 +929,18 @@ class Component extends DCLogic {
     window.addEventListener('resize', this._onResizeMeasureLyrics);
     setTimeout(() => this.measureLyricsViewport(), 0);
     this.syncThemeColorMeta();
+    // 安卓上锁屏后台要连续自动切歌，系统电池策略默认会限制——这不是这个页面能靠代码绕过的东西，
+    // 只能提示用户自己去系统设置放行。只在安卓上提示一次，点掉之后记住，不用每次打开都看到
+    try {
+      if (/Android/i.test(navigator.userAgent) && !localStorage.getItem('lsn-battery-hint-dismissed')) {
+        this.patch({ showBatteryHint: true });
+      }
+    } catch (e) { /* localStorage 不可用时就不提示，不影响播放主功能 */ }
+  }
+
+  dismissBatteryHint() {
+    try { localStorage.setItem('lsn-battery-hint-dismissed', '1'); } catch (e) { /* 存不下就下次还会提示 */ }
+    this.patch({ showBatteryHint: false });
   }
 
   measureLyricsViewport() {
@@ -1822,6 +1850,7 @@ class Component extends DCLogic {
         hasCreateModal: s.createModalOpen, createName: s.createName,
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
         hasToast: !!s.toast, toastText: s.toast || '', toastKey: s.toastKey,
+        showBatteryHint: !!s.showBatteryHint,
         // 手机端：歌单抽屉是否打开（控制遮罩层显隐）
         mobileSidebarOpen: s.mobileSidebarOpen,
         sidebarClass, nowPlayingClass,
@@ -1862,6 +1891,7 @@ class Component extends DCLogic {
         setImportPlaylistName: (e) => this.setImportPlaylistName(e),
         importKeyDown: (e) => this.importKeyDown(e),
         confirmImport: () => this.confirmImport(),
+        dismissBatteryHint: () => this.dismissBatteryHint(),
       },
     };
   }

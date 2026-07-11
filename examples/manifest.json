@@ -1,0 +1,15 @@
+{
+  "name": "听音乐",
+  "short_name": "听音乐",
+  "description": "网易云音乐 · QQ音乐 · SoundCloud 聚合播放器",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1D1B20",
+  "theme_color": "#1D1B20",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
