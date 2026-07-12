@@ -244,6 +244,10 @@ if ('serviceWorker' in navigator) {
           </button>
         </div>
         <div class="dc-scroll-area" style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
+          <!-- 这段 <sc-for> 播放列表行模板和移动端全屏播放器内的播放列表二级页面是手工保持一致的两份
+               相同代码（搜索 v.showQueueInPlayer 定位另一处）。原因：那个页面在 .dc-nowplaying 全屏
+               浮层内，z-index 盖住了这里，没法直接复用这份 DOM，只能整段复制。改这里队列行的字段/
+               样式/交互时，务必同步改那边，不要只改一处。 -->
           <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
             <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
               <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
@@ -444,6 +448,9 @@ if ('serviceWorker' in navigator) {
          </button>
        </div>
        <div style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
+         <!-- 这段 <sc-for> 播放列表行模板和桌面/中间栏的播放队列视图是手工保持一致的两份相同代码
+              （搜索 v.rightIsQueue 定位另一处）。改这里队列行的字段/样式/交互时，务必同步改那边，
+              不要只改一处。 -->
          <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
            <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
              <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
