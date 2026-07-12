@@ -72,6 +72,12 @@ if ('serviceWorker' in navigator) {
     .dc-input:focus { border-color: var(--ring) !important; }
     /* 全屏播放页的封面氛围背景只在手机端启用，桌面三栏保持原样 */
     .dc-ambient { display: none; }
+    /* 喜欢按钮的实心爱心：用 class 切换可变字体的 FILL 轴而不是每次内联拼新样式值，
+       部分安卓浏览器（如 Edge App）对内联动态改 font-variation-settings 不会重绘，
+       颜色等普通样式能刷新但字体填充效果不生效；class 切换是 Material Symbols 官方
+       推荐的做法，这个文件别处的动态 class（如 dc-pl-delete-btn）也一直是这样用 */
+    .dc-heart-icon { font-variation-settings: 'FILL' 0; }
+    .dc-heart-icon.dc-heart-filled { font-variation-settings: 'FILL' 1; }
     /* 搜索按钮桌面端显示文字，手机端（媒体查询里）收成纯图标 */
     .dc-search-btn-icon { display: none; }
     /* 歌词渐隐：靠近视口上下边缘的行淡出 */
@@ -364,7 +370,7 @@ if ('serviceWorker' in navigator) {
                   </div>
                 </div>
                 <button onclick="{{ t.onAdd }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.primaryActionIcon }}</span></button>
-                <button onclick="{{ t.onLike }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' {{ t.likeFill }};">{{ t.likeGlyph }}</span></button>
+                <button onclick="{{ t.onLike }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span class="{{ t.likeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.likeGlyph }}</span></button>
               </div>
             </sc-for>
           </div>
@@ -1966,7 +1972,7 @@ class Component extends DCLogic {
         titleColor: isCurrent ? c.onPrimaryContainer : c.onSurface,
         artistColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
         sourceLabelColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
-        likeGlyph: 'favorite', likeFill: liked ? 1 : 0,
+        likeGlyph: 'favorite', likeIconClass: liked ? 'dc-heart-icon dc-heart-filled' : 'dc-heart-icon',
         likeColor: liked ? c.heart : c.onSurfaceVariant,
         primaryActionIcon: isPlaylistView ? 'playlist_remove' : 'playlist_add',
         onPlay: () => this.playTrackAt(t.id),
