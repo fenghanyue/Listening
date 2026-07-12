@@ -430,12 +430,15 @@ if ('serviceWorker' in navigator) {
           <span style="font-family:'Material Symbols Outlined';font-size:19px;">queue_music</span>
           <span style="position:absolute;top:1px;right:1px;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px;">{{ v.queueCount }}</span>
         </button>
-        <div style="display:flex;align-items:center;gap:2px;">
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:2px;">
           <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
           <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" class="dc-play-btn" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;box-shadow:{{ v.c.e2 }};" style-active="transform:scale(0.94);"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span></button>
           <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
         </div>
-        <button onclick="{{ H.cycleMode }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <button onclick="{{ H.cycleMode }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
+          <button onclick="{{ H.toggleCurrentLike }}" disabled="{{ v.playDisabled }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.nowPlayingLikeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span class="{{ v.nowPlayingLikeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:19px;">favorite</span></button>
+        </div>
       </div>
 
       <div class="dc-desktop-only" style="width:100%;display:flex;align-items:center;gap:8px;margin-top:14px;flex-shrink:0;">
@@ -1897,6 +1900,7 @@ class Component extends DCLogic {
     const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]) || null;
     const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
     const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack), coverStyle: coverStyle(rawTrack) };
+    const nowPlayingLiked = !!s.liked[track.id];
     const duration = Math.max(track.duration || 0, 0.1);
     const progressPct = Math.min(100, (s.currentTime / duration) * 100);
 
@@ -2070,6 +2074,8 @@ class Component extends DCLogic {
         playIcon: isLoadingCurrent ? 'progress_activity' : (s.playing ? 'pause' : 'play_arrow'),
         playIconAnimStyle: isLoadingCurrent ? 'animation:iconSpin .9s linear infinite;display:inline-block;' : '',
         modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
+        nowPlayingLikeIconClass: nowPlayingLiked ? 'dc-heart-icon dc-heart-filled' : 'dc-heart-icon',
+        nowPlayingLikeColor: nowPlayingLiked ? c.heart : c.onSurfaceVariant,
         playlistsRender,
         hasAddModal: !!s.addModalId, playlistOptions,
         hasCreateModal: s.createModalOpen, createName: s.createName,
@@ -2100,6 +2106,7 @@ class Component extends DCLogic {
         seek: (e) => this.seek(e),
         setVolume: (e) => this.setVolume(e),
         cycleMode: () => this.cycleMode(),
+        toggleCurrentLike: () => this.toggleLike(track.id),
         dragEnd: () => this.dragEnd(),
         closeAddModal: () => this.closeAddModal(),
         openCreateModal: () => this.openCreateModal(),
