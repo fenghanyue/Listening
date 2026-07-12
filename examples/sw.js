@@ -1,11 +1,17 @@
 // 封面图片浏览器缓存：cache-first，命中直接返回，未命中联网后写入缓存。
 // 只拦截图片请求（黑胶大图/队列缩略图/歌单列表的 background-image 也会触发 image 类型请求），
 // 不碰音频、API 请求，避免影响播放和搜索逻辑。
-const CACHE_NAME = 'listening-covers-v1';
+const CACHE_NAME = 'listening-covers-v2';
 const MAX_ENTRIES = 500;
 
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
 
 self.addEventListener('fetch', event => {
   if (event.request.destination !== 'image') return;
