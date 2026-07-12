@@ -244,6 +244,10 @@ if ('serviceWorker' in navigator) {
           </button>
         </div>
         <div class="dc-scroll-area" style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
+          <!-- 这段 <sc-for> 播放列表行模板和移动端全屏播放器内的播放列表二级页面是手工保持一致的两份
+               相同代码（搜索 v.showQueueInPlayer 定位另一处）。原因：那个页面在 .dc-nowplaying 全屏
+               浮层内，z-index 盖住了这里，没法直接复用这份 DOM，只能整段复制。改这里队列行的字段/
+               样式/交互时，务必同步改那边，不要只改一处。 -->
           <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
             <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
               <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
@@ -444,6 +448,9 @@ if ('serviceWorker' in navigator) {
          </button>
        </div>
        <div style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
+         <!-- 这段 <sc-for> 播放列表行模板和桌面/中间栏的播放队列视图是手工保持一致的两份相同代码
+              （搜索 v.rightIsQueue 定位另一处）。改这里队列行的字段/样式/交互时，务必同步改那边，
+              不要只改一处。 -->
          <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
            <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
              <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
@@ -769,13 +776,90 @@ function normalizeTrack(t) {
 }
 
 // ====================== 歌单导出/导入字符串编解码 ======================
-// 导出字符串格式：固定前缀 + base64(UTF-8 安全) 的精简 JSON，
+// 导出字符串格式：固定前缀 + base64 编码的精简数据，
 // 不用原始 JSON 直接展示是为了让粘贴/复制体验干净（单行、无换行、无特殊字符冲突）。
 // 内部数字 id（normalizeTrack 分配）是本次会话临时的，不放进导出内容——
 // 只存各音源的真实 id（songid）+ 展示字段，导入时用 normalizeTrack 重新分配 id。
-const EXPORT_PREFIX = 'LSNPL1:';
+//
+// v1（LSNPL1:，旧格式，只读不再生成）：base64(UTF-8 JSON)，每条曲目是带完整字段名
+// 的对象——字段名（source/songid/title/artist/album/cover）在每条曲目上都重复一遍，
+// 歌单一长字符串就跟着线性变长。
+// v2（LSNPL2:，当前生成的格式）：曲目先压成定长位置数组（去掉重复字段名），整个
+// payload 再过一遍 CompressionStream('deflate-raw') 压缩，最后 base64——双重收缩后，
+// 长歌单能缩到 v1 的一个零头。CompressionStream 在极老的浏览器里不存在——导出字符串
+// 是要被复制到别处用的，宁可退化成 v1 也不要直接抛错，那种情况下退回不压缩的 v1 格式，
+// 保证 encodePlaylistExport 永远能返回一个可用的字符串。
+// 读取端两种前缀都认，用户之前分享/保存过的旧 LSNPL1: 字符串永远能正常导入。
+const EXPORT_PREFIX_V1 = 'LSNPL1:';
+const EXPORT_PREFIX_V2 = 'LSNPL2:';
 
-function encodePlaylistExport(name, tracks) {
+function isPlaylistExportString(str) {
+  return typeof str === 'string' && (str.startsWith(EXPORT_PREFIX_V2) || str.startsWith(EXPORT_PREFIX_V1));
+}
+
+// source 目前只有这 3 种取值，编成单个数字比重复写 "netease"/"soundcloud" 更省字节；
+// 万一以后出现没见过的取值，原样存字符串兜底，不强行报错
+const EXPORT_SOURCE_CODES = { netease: 0, qq: 1, soundcloud: 2 };
+const EXPORT_SOURCE_LIST = ['netease', 'qq', 'soundcloud'];
+
+// bytes -> base64。btoa 只认"每个字符码位 <= 255"的字符串，不能把整段 bytes 一次性
+// spread 进 String.fromCharCode（数组太大会撞上引擎单次调用的最大参数个数限制），
+// 按 8000 字节一片分批转换再拼接——这个上限留了远超实际需要的安全余量
+function bytesToBase64(bytes) {
+  const CHUNK = 8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(b64) {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+// UTF-8 文本 -> deflate-raw 压缩后的 bytes。CompressionStream 是流式 API，用
+// Blob(...).stream() 现成拿一个 ReadableStream 喂进 pipeThrough，再用 Response(...)
+// 收流转成 ArrayBuffer——全是 Web 平台原生对象，不用手写 reader 循环
+async function compressToBytes(text) {
+  const input = new TextEncoder().encode(text);
+  const stream = new Blob([input]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function decompressToText(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  const buf = await new Response(stream).arrayBuffer();
+  return new TextDecoder().decode(buf);
+}
+
+// track 对象 -> v2 的定长位置数组，字段顺序固定不能改：
+// [source, songid, title, artist, album, cover]
+function trackToExportTuple(t) {
+  const source = t.source;
+  const code = EXPORT_SOURCE_CODES[source] !== undefined ? EXPORT_SOURCE_CODES[source] : source;
+  return [
+    code,
+    String(source === 'qq' ? (t.qqId || t.songMid || t.songid) : t.songid),
+    t.title || '',
+    t.artist || '',
+    t.album || '',
+    t.cover || null,
+  ];
+}
+
+// 位置数组 -> 跟 v1 解出来的形状完全一致的 track 对象（source/songid/title/artist/album/cover），
+// normalizeTrack / applyImportedTracks / audioCacheKey / fetchXDetails 都只认这几个字段
+function exportTupleToTrack(arr) {
+  const [code, songid, title, artist, album, cover] = arr;
+  const source = typeof code === 'number' ? (EXPORT_SOURCE_LIST[code] || String(code)) : code;
+  return { source, songid, title, artist, album, cover };
+}
+
+function encodePlaylistExportV1(name, tracks) {
   const payload = {
     v: 1,
     name,
@@ -788,15 +872,38 @@ function encodePlaylistExport(name, tracks) {
       cover: t.cover || null,
     })),
   };
-  return EXPORT_PREFIX + btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  return EXPORT_PREFIX_V1 + btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
 }
 
-function decodePlaylistExport(str) {
-  if (!str.startsWith(EXPORT_PREFIX)) return null;
-  const json = decodeURIComponent(escape(atob(str.slice(EXPORT_PREFIX.length))));
-  const payload = JSON.parse(json);
-  if (!payload || payload.v !== 1 || !Array.isArray(payload.tracks)) throw new Error('bad payload');
-  return payload;
+async function encodePlaylistExport(name, tracks) {
+  if (typeof CompressionStream !== 'undefined') {
+    try {
+      const payload = { v: 2, name, tracks: tracks.map(trackToExportTuple) };
+      const compressed = await compressToBytes(JSON.stringify(payload));
+      return EXPORT_PREFIX_V2 + bytesToBase64(compressed);
+    } catch (e) {
+      console.error('playlist export compress error, falling back to v1 format:', e);
+    }
+  }
+  return encodePlaylistExportV1(name, tracks);
+}
+
+async function decodePlaylistExport(str) {
+  if (str.startsWith(EXPORT_PREFIX_V2)) {
+    const bytes = base64ToBytes(str.slice(EXPORT_PREFIX_V2.length));
+    const json = await decompressToText(bytes);
+    const payload = JSON.parse(json);
+    if (!payload || payload.v !== 2 || !Array.isArray(payload.tracks)) throw new Error('bad payload');
+    payload.tracks = payload.tracks.map(exportTupleToTrack);
+    return payload;
+  }
+  if (str.startsWith(EXPORT_PREFIX_V1)) {
+    const json = decodeURIComponent(escape(atob(str.slice(EXPORT_PREFIX_V1.length))));
+    const payload = JSON.parse(json);
+    if (!payload || payload.v !== 1 || !Array.isArray(payload.tracks)) throw new Error('bad payload');
+    return payload;
+  }
+  return null;
 }
 
 // ====================== 本地持久化（歌单 / 喜欢 / 队列 / 播放进度） ======================
@@ -1189,10 +1296,10 @@ class Component extends DCLogic {
     this.patch({ importModalOpen: false });
 
     // 先认本站自己的导出字符串格式，再走链接识别，避免误判
-    if (raw.startsWith(EXPORT_PREFIX)) {
+    if (isPlaylistExportString(raw)) {
       let payload;
       try {
-        payload = decodePlaylistExport(raw);
+        payload = await decodePlaylistExport(raw);
       } catch (e) {
         console.error('parse export string error:', e);
         this.showToast('导出内容解析失败，检查一下是不是完整复制的');
@@ -1323,7 +1430,7 @@ class Component extends DCLogic {
   }
 
   // "导出歌单"：把当前歌单的曲目编码成可复制粘贴的字符串，不动播放/曲库状态
-  exportPlaylist() {
+  async exportPlaylist() {
     const s = this.state;
     const pid = s.viewingPlaylistId;
     if (!pid) return;
@@ -1333,7 +1440,7 @@ class Component extends DCLogic {
     const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
     if (!tracks.length) { this.showToast('这个歌单还没有歌曲，没什么可导出的'); return; }
 
-    const text = encodePlaylistExport(pl.name, tracks);
+    const text = await encodePlaylistExport(pl.name, tracks);
     this.copyToClipboard(text).then(ok => {
       if (!ok) { this.showToast('复制失败，请手动复制'); return; }
       if (this._exportRevertTimer) clearTimeout(this._exportRevertTimer);
