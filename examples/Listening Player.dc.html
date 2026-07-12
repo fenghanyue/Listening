@@ -425,17 +425,19 @@ if ('serviceWorker' in navigator) {
         <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:28px;flex-shrink:0;">{{ v.durationStr }}</span>
       </div>
 
-      <div style="width:100%;display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-shrink:0;">
-        <button onclick="{{ H.toggleQueuePanel }}" class="dc-side-btn" style="position:relative;width:34px;height:34px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.queueBtnBg }};color:{{ v.queueBtnColor }};" style-active="transform:scale(0.9);">
-          <span style="font-family:'Material Symbols Outlined';font-size:19px;">queue_music</span>
-          <span style="position:absolute;top:1px;right:1px;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px;">{{ v.queueCount }}</span>
-        </button>
-        <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:2px;">
+      <div style="width:100%;display:flex;align-items:center;margin-top:14px;flex-shrink:0;">
+        <div style="flex:1;display:flex;align-items:center;">
+          <button onclick="{{ H.toggleQueuePanel }}" class="dc-side-btn" style="position:relative;width:34px;height:34px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.queueBtnBg }};color:{{ v.queueBtnColor }};" style-active="transform:scale(0.9);">
+            <span style="font-family:'Material Symbols Outlined';font-size:19px;">queue_music</span>
+            <span style="position:absolute;top:1px;right:1px;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px;">{{ v.queueCount }}</span>
+          </button>
+        </div>
+        <div style="flex-shrink:0;display:flex;align-items:center;gap:2px;">
           <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
           <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" class="dc-play-btn" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;box-shadow:{{ v.c.e2 }};" style-active="transform:scale(0.94);"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span></button>
           <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
         </div>
-        <div style="display:flex;align-items:center;gap:4px;">
+        <div style="flex:1;display:flex;align-items:center;justify-content:flex-end;gap:4px;">
           <button onclick="{{ H.cycleMode }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
           <button onclick="{{ H.toggleCurrentLike }}" disabled="{{ v.playDisabled }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.nowPlayingLikeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span class="{{ v.nowPlayingLikeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:19px;">favorite</span></button>
         </div>
