@@ -57,6 +57,19 @@
   检查确认没有引入语法错误。这台环境里外部 CDN（React 等）加载不稳定，没能在真实浏览器里点一遍
   导出/导入，需要部署后自己确认一下实际效果。
 
+**2026-07-13**
+- 深色模式下三个滚动列表（歌单曲目、搜索结果、播放队列面板）一直用的是浏览器默认滚动条样式，和整体
+  配色不搭。加了 `--scrollbar-thumb`/`--scrollbar-thumb-hover` 两个 CSS 变量，取当前主题的
+  `outlineVariant`/`outline` 色，配合 `::-webkit-scrollbar` 系列规则和 Firefox 的
+  `scrollbar-color`/`scrollbar-width`，滚动条颜色跟着亮暗主题联动。用无头浏览器验证过深浅两套主题下
+  CSS 变量都能正确解析到对应颜色；滚动条视觉本身受限于当前环境（headless Linux Chromium 用不占布局
+  空间的 overlay 样式）没法截图确认，样式是标准写法，正常桌面浏览器里没问题。
+- 同步了一版 README：功能表格里补上了"歌单导出"（之前只写了网易云导入，导出这个 07-12 就加上的功能一直没写进去），顺手注明 QQ 音乐分享链接导入暂不支持。
+
+**2026-07-12（补记）**
+- `examples/sw.js` 的 `CACHE_NAME` 版本号从没变过，导致 PWA 图标换新之后浏览器仍返回 Cache Storage
+  里的旧字节。bump 了版本号，并在 `activate` 阶段清理旧版本缓存，以后同类问题不用再让用户手动清缓存。
+
 **2026-07-11**
 - 让 SoundCloud 的 HLS 曲目也能被本地缓存了（之前只有少数走 progressive mp3 的 SoundCloud 曲目会被缓存，
   大部分歌走 HLS 分片流、不在缓存范围内，每次都要重新联网）。做法是"播 HLS / 后台缓存 mp3"：播放照旧走
