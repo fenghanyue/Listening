@@ -1939,6 +1939,19 @@ class Component extends DCLogic {
     const a = this._audio;
     if (!a) return;
     const s = this.state;
+    // state.playing=true 但 audio 元素其实已经停住了（a.ended 或 a.paused）：多半是自动切歌
+    // 没接上，卡在上一首播完（ended）或末尾 stall 的状态上。这时候走下面的暂停分支调 a.pause()
+    // 是个空操作——对已经停住的元素调 pause() 既不改变什么、也不触发 pause 事件，于是 _onPause
+    // 不执行、s.playing 永远翻不回 false，播放键就成了怎么点都没反应的死键（issue #13 的症状）。
+    // 识别出这种"说在播其实没在播"的错位后直接自愈：已经播完的接着走自动切歌逻辑切下一首，
+    // 只是卡住没播的就续播——等价于用户手动"上一首再下一首"那套操作，但落在他一直在点的这个键上。
+    if (s.playing && (a.ended || a.paused)) {
+      this.resumeAudioContext();
+      if (s.loadingTrackId != null) this.patch({ loadingTrackId: null });
+      if (a.ended) this.handleTrackEnd();
+      else a.play().catch(e => { console.error('play error:', e); });
+      return;
+    }
     if (s.playing) {
       a.pause();
       // 用户主动暂停：不管这首歌是不是还在加载中，都别再显示"加载中"的图标了——
