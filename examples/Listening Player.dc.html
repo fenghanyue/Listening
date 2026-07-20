@@ -362,7 +362,7 @@ if ('serviceWorker' in navigator) {
       <sc-if value="{{ v.showGroupChips }}">
       <div style="padding:0 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;flex-shrink:0;">
         <span style="color:{{ v.c.onSurfaceVariant }};font-weight:500;flex-shrink:0;">分组</span>
-        <sc-for list="{{ v.groupChipsRender }}" as="grp" hint-placeholder-count="4">
+        <sc-for list="{{ v.groupChipsRender }}" as="grp" hint-placeholder-count="3">
           <span onclick="{{ grp.onClick }}" style="{{ grp.chipStyle }}">
             <sc-if value="{{ grp.active }}"><span style="font-family:'Material Symbols Outlined';font-size:15px;">check</span></sc-if>
             {{ grp.label }}
@@ -1055,7 +1055,7 @@ class Component extends DCLogic {
       // 搜索后输入框仍有焦点却再也弹不出联想。suggestActiveIdx = 键盘高亮行（-1 无）；searchHistory 存 localStorage
       suggestions: [], searchFocused: false, suggestDismissed: false, suggestActiveIdx: -1,
       searchHistory: loadSearchHistory(),
-      // 搜索结果分组维度：none | artist | title | source（只作用于搜索结果视图，纯显示重排，不改 playOrder）
+      // 搜索结果分组维度：none | artist | source（只作用于搜索结果视图，纯显示重排，不改 playOrder）
       groupBy: 'none',
       sources: { netease: true, qq: true, soundcloud: true },
       liked: {},
@@ -2360,7 +2360,6 @@ class Component extends DCLogic {
     if (groupingActive) {
       const groupKeyOf = (r) => {
         if (s.groupBy === 'artist') { const a = (r.artist || '').trim(); return { k: 'a:' + (a || '?'), label: a || '未知歌手' }; }
-        if (s.groupBy === 'title') { const t = (r.title || '').trim(); return { k: 't:' + (t.toLowerCase() || '?'), label: t || '未知歌曲' }; }
         return { k: 's:' + r.source, label: SOURCE_LABELS[r.source] || r.source };
       };
       const order = [];
@@ -2370,7 +2369,7 @@ class Component extends DCLogic {
         if (!groups.has(k)) { groups.set(k, { label, items: [] }); order.push(k); }
         groups.get(k).items.push(r);
       }
-      const groupIcon = s.groupBy === 'artist' ? 'person' : (s.groupBy === 'title' ? 'music_note' : 'library_music');
+      const groupIcon = s.groupBy === 'artist' ? 'person' : 'library_music';
       const flat = [];
       for (const k of order) {
         const g = groups.get(k);
@@ -2382,7 +2381,7 @@ class Component extends DCLogic {
 
     // 搜索结果视图下的「分组」切换芯片
     const showGroupChips = !isPlaylistView && s.hasSearched;
-    const groupChipsRender = [['none', '不分组'], ['artist', '歌手'], ['title', '歌名'], ['source', '来源']].map(([key, label]) => {
+    const groupChipsRender = [['none', '不分组'], ['artist', '歌手'], ['source', '来源']].map(([key, label]) => {
       const active = s.groupBy === key;
       return {
         key, label, active,
