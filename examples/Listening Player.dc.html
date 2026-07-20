@@ -2121,7 +2121,6 @@ class Component extends DCLogic {
     const isPlaylistView = !!s.viewingPlaylistId;
     const activePlaylist = isPlaylistView ? s.playlists.find(p => p.id === s.viewingPlaylistId) : null;
     const q = s.appliedQuery;
-    const filteredSearch = s.searchResults.filter(t => !q || t.title.toLowerCase().includes(q.toLowerCase()) || t.artist.toLowerCase().includes(q.toLowerCase()));
     let displayTracks;
     if (isPlaylistView && activePlaylist) {
       const ids = activePlaylist.id === 'liked' ? likedIdsOrdered(s) : (activePlaylist.trackIds || []);
@@ -2129,7 +2128,11 @@ class Component extends DCLogic {
       // 跟歌单/喜欢自己的顺序是两回事，之前这里写成 filter 导致列表显示顺序对不上实际的 trackIds/likedOrder
       displayTracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
     } else if (s.hasSearched) {
-      displayTracks = filteredSearch;
+      // 直接用各平台搜索接口返回的结果，不再在客户端按关键词做子串过滤——
+      // 平台搜索本身是分词/模糊匹配（比如「明日方舟终末地」能搜到相关曲目，但标题/歌手里未必含这个完整子串），
+      // 之前那层 title/artist.includes(q) 的过滤会把这类结果全滤掉，导致顶部/空状态显示「找到 0 首」，
+      // 跟搜索完成时 toast 里的「找到 N 首」对不上
+      displayTracks = s.searchResults;
     } else {
       displayTracks = [];
     }
