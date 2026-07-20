@@ -359,6 +359,18 @@ if ('serviceWorker' in navigator) {
       </div>
       </sc-if>
 
+      <sc-if value="{{ v.showGroupChips }}">
+      <div style="padding:0 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;flex-shrink:0;">
+        <span style="color:{{ v.c.onSurfaceVariant }};font-weight:500;flex-shrink:0;">分组</span>
+        <sc-for list="{{ v.groupChipsRender }}" as="grp" hint-placeholder-count="4">
+          <span onclick="{{ grp.onClick }}" style="{{ grp.chipStyle }}">
+            <sc-if value="{{ grp.active }}"><span style="font-family:'Material Symbols Outlined';font-size:15px;">check</span></sc-if>
+            {{ grp.label }}
+          </span>
+        </sc-for>
+      </div>
+      </sc-if>
+
       <sc-if value="{{ v.showStatusText }}">
       <div style="padding:0 24px 14px;font-size:12px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ v.statusText }}</div>
       </sc-if>
@@ -386,23 +398,32 @@ if ('serviceWorker' in navigator) {
         <sc-if value="{{ v.viewIsList }}">
           <div style="display:flex;flex-direction:column;gap:2px;">
             <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
-              <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};transition:background .1s;" style-active="background:{{ v.c.press }};">
-                <div style="width:44px;height:44px;border-radius:8px;{{ t.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
-                  <sc-if value="{{ t.showCoverIcon }}">
-                    <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
-                  </sc-if>
+              <sc-if value="{{ t.isHeader }}">
+                <div class="dc-group-header" data-group-count="{{ t.groupCount }}" style="display:flex;align-items:center;gap:7px;padding:14px 6px 6px;">
+                  <span style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ t.groupIcon }}</span>
+                  <span style="font-size:12px;font-weight:700;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.groupLabel }}</span>
+                  <span style="font-size:11px;font-weight:500;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ t.groupCount }}</span>
                 </div>
-                <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
-                  <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
-                  <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
-                    <span style="width:6px;height:6px;border-radius:50%;background:{{ t.sourceDot }};flex-shrink:0;"></span>
-                    <span style="font-size:11px;font-weight:500;color:{{ t.sourceLabelColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
-                    <span style="font-size:11.5px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· {{ t.artistDisplay }}</span>
+              </sc-if>
+              <sc-if value="{{ t.isRow }}">
+                <div class="dc-result-row" style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};transition:background .1s;" style-active="background:{{ v.c.press }};">
+                  <div style="width:44px;height:44px;border-radius:8px;{{ t.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
+                    <sc-if value="{{ t.showCoverIcon }}">
+                      <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
+                    </sc-if>
                   </div>
+                  <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
+                    <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
+                    <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
+                      <span style="width:6px;height:6px;border-radius:50%;background:{{ t.sourceDot }};flex-shrink:0;"></span>
+                      <span style="font-size:11px;font-weight:500;color:{{ t.sourceLabelColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
+                      <span style="font-size:11.5px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· {{ t.artistDisplay }}</span>
+                    </div>
+                  </div>
+                  <button onclick="{{ t.onAdd }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.primaryActionIcon }}</span></button>
+                  <button onclick="{{ t.onLike }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span class="{{ t.likeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.likeGlyph }}</span></button>
                 </div>
-                <button onclick="{{ t.onAdd }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.primaryActionIcon }}</span></button>
-                <button onclick="{{ t.onLike }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span class="{{ t.likeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.likeGlyph }}</span></button>
-              </div>
+              </sc-if>
             </sc-for>
           </div>
         </sc-if>
@@ -1034,6 +1055,8 @@ class Component extends DCLogic {
       // 搜索后输入框仍有焦点却再也弹不出联想。suggestActiveIdx = 键盘高亮行（-1 无）；searchHistory 存 localStorage
       suggestions: [], searchFocused: false, suggestDismissed: false, suggestActiveIdx: -1,
       searchHistory: loadSearchHistory(),
+      // 搜索结果分组维度：none | artist | title | source（只作用于搜索结果视图，纯显示重排，不改 playOrder）
+      groupBy: 'none',
       sources: { netease: true, qq: true, soundcloud: true },
       liked: {},
       // likedOrder = "喜欢的音乐"的显示顺序（id 数组，最新点喜欢的排最前面），liked 本身只是个
@@ -1547,6 +1570,8 @@ class Component extends DCLogic {
     });
   }
   toggleSource(key) { this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] } })); }
+  // 切换搜索结果分组维度：再点当前维度即取消回「不分组」
+  setGroupBy(key) { this.patch(s => ({ groupBy: s.groupBy === key ? 'none' : key })); }
 
   // 简易 snackbar：连续调用会重置消失计时（而不是排队），跟原生 App 的 toast 行为一致——
   // 后一条提示总是完整展示 2.6s，不会被前一条的计时器提前打断
@@ -2308,11 +2333,12 @@ class Component extends DCLogic {
       displayTracks = [];
     }
     const showPrompt = !isPlaylistView && !s.hasSearched;
-    const tracksRender = displayTracks.map(t => {
+    const rowsRender = displayTracks.map(t => {
       const isCurrent = t.id === s.currentId;
       const liked = !!s.liked[t.id];
       return {
-        ...t, coverStyle: coverStyle(t), showCoverIcon: !t.cover, sourceLabel: SOURCE_LABELS[t.source],
+        ...t, isHeader: false, isRow: true,
+        coverStyle: coverStyle(t), showCoverIcon: !t.cover, sourceLabel: SOURCE_LABELS[t.source],
         sourceDot: SOURCE_COLORS[t.source] || SOURCE_COLORS.netease,
         artistDisplay: fmtArtistAlbum(t),
         cardBg: isCurrent ? c.primaryContainer : c.surface,
@@ -2325,6 +2351,43 @@ class Component extends DCLogic {
         onPlay: () => this.playTrackAt(t.id),
         onAdd: isPlaylistView ? (e) => { e.stopPropagation(); this.removeFromPlaylist(t.id); } : (e) => { e.stopPropagation(); this.openAddModal(t.id); },
         onLike: (e) => { e.stopPropagation(); this.toggleLike(t.id); },
+      };
+    });
+
+    // 分组只作用于搜索结果视图；歌单/喜欢视图保持扁平（避免打乱拖拽顺序 / 播放全部语义）
+    const groupingActive = !isPlaylistView && s.hasSearched && s.groupBy !== 'none';
+    let tracksRender = rowsRender;
+    if (groupingActive) {
+      const groupKeyOf = (r) => {
+        if (s.groupBy === 'artist') { const a = (r.artist || '').trim(); return { k: 'a:' + (a || '?'), label: a || '未知歌手' }; }
+        if (s.groupBy === 'title') { const t = (r.title || '').trim(); return { k: 't:' + (t.toLowerCase() || '?'), label: t || '未知歌曲' }; }
+        return { k: 's:' + r.source, label: SOURCE_LABELS[r.source] || r.source };
+      };
+      const order = [];
+      const groups = new Map();
+      for (const r of rowsRender) {
+        const { k, label } = groupKeyOf(r);
+        if (!groups.has(k)) { groups.set(k, { label, items: [] }); order.push(k); }
+        groups.get(k).items.push(r);
+      }
+      const groupIcon = s.groupBy === 'artist' ? 'person' : (s.groupBy === 'title' ? 'music_note' : 'library_music');
+      const flat = [];
+      for (const k of order) {
+        const g = groups.get(k);
+        flat.push({ isHeader: true, isRow: false, key: 'grp-' + k, groupLabel: g.label, groupCount: g.items.length, groupIcon });
+        for (const r of g.items) flat.push(r);
+      }
+      tracksRender = flat;
+    }
+
+    // 搜索结果视图下的「分组」切换芯片
+    const showGroupChips = !isPlaylistView && s.hasSearched;
+    const groupChipsRender = [['none', '不分组'], ['artist', '歌手'], ['title', '歌名'], ['source', '来源']].map(([key, label]) => {
+      const active = s.groupBy === key;
+      return {
+        key, label, active,
+        chipStyle: `display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;flex-shrink:0;cursor:pointer;background:${active ? c.secondaryContainer : 'transparent'};color:${active ? c.onSecondaryContainer : c.onSurfaceVariant};border:1px solid ${active ? 'transparent' : c.outlineVariant};`,
+        onClick: () => this.setGroupBy(key),
       };
     });
 
@@ -2436,6 +2499,7 @@ class Component extends DCLogic {
         queueBtnBg: rightIsQueue ? c.primaryContainer : 'transparent',
         queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
         sourcesRender,
+        showGroupChips, groupChipsRender,
         prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.playOrder.length - 1),
         playDisabled: !matchedTrack, hasTrack: !!matchedTrack,
         themeIcon: s.theme === 'dark' ? 'dark_mode' : 'light_mode',
