@@ -492,6 +492,7 @@ if ('serviceWorker' in navigator) {
         <div style="flex:1;display:flex;align-items:center;justify-content:flex-end;gap:4px;">
           <button onclick="{{ H.cycleMode }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
           <button onclick="{{ H.toggleCurrentLike }}" disabled="{{ v.playDisabled }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.nowPlayingLikeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span class="{{ v.nowPlayingLikeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:19px;">favorite</span></button>
+          <button onclick="{{ H.exportCurrent }}" title="{{ v.exportTooltip }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:{{ v.exportCursor }};color:{{ v.c.onSurfaceVariant }};opacity:{{ v.exportOpacity }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">download</span></button>
         </div>
       </div>
 
@@ -809,10 +810,27 @@ async function deleteCachedAudio(key) {
   }
 }
 
-function cacheAudioInBackground(key, url) {
+// onDone（可选）在整段音频真正落库成功后才回调——用来在"当前播放的这首歌后台缓存完成"时点亮导出按钮。
+// 预取下一首的调用不传 onDone，避免下一首缓存好了误点亮当前按钮。
+function cacheAudioInBackground(key, url, onDone) {
   fetch(url).then(r => (r.ok ? r.blob() : null)).then(blob => {
-    if (blob) putCachedAudio(key, blob);
+    if (blob) return putCachedAudio(key, blob).then(() => onDone && onDone());
   }).catch(e => console.warn('audio cache fetch failed:', e));
+}
+
+// 从缓存 blob 的 MIME 推断导出文件扩展名（音源基本都是 mp3，flac/m4a 等按类型兜底）
+function audioExtFromBlob(blob) {
+  const t = (blob && blob.type || '').toLowerCase();
+  if (t.includes('flac')) return 'flac';
+  if (t.includes('mp4') || t.includes('m4a') || t.includes('aac')) return 'm4a';
+  if (t.includes('ogg')) return 'ogg';
+  if (t.includes('wav')) return 'wav';
+  return 'mp3';
+}
+
+// 去掉文件名里的非法字符，压掉多余空白，限个长度，空了兜底成 audio
+function sanitizeFilename(name) {
+  return name.replace(/[\/\\:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 120) || 'audio';
 }
 
 const TILE_PALETTES = [
@@ -1069,6 +1087,8 @@ class Component extends DCLogic {
       // playOrder = 当前播放队列：驱动下一曲/上一曲和右侧队列面板的曲目 id 顺序，和曲库是两回事
       playOrder: [],
       currentId: null, currentTime: 0, seeking: false, volume: 70, adaptiveVolume: false, playing: false, playMode: 0, loadingTrackId: null,
+      // 当前曲目是否已整段缓存好（= 导出按钮是否可点）。运行时状态，不持久化，每次播放重新推导
+      exportReady: false,
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
       mobileSidebarOpen: false, mobileNowPlayingExpanded: false,
       toast: null, toastKey: 0,
@@ -1855,7 +1875,7 @@ class Component extends DCLogic {
     this._shufflePrefetchedNextId = null;
     this._playRetriedForId = null;
     this.armLoadWatchdog(track.id);
-    this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [], loadingTrackId: track.id });
+    this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [], loadingTrackId: track.id, exportReady: false });
     this.persist();
     // 已经初始化过 audio 元素时（自动切歌走的就是这条路径）直接同步调用，
     // 不经 setTimeout(0) 多绕一圈——切到后台的标签页正是最容易被浏览器限流延迟的场景，
@@ -1868,6 +1888,26 @@ class Component extends DCLogic {
         this.loadAndPlay(track, resumeAt);
       }, 0);
     }
+  }
+
+  // 把当前曲目已缓存的整段音频导出到本地文件。只在整段缓存好（IndexedDB 里有 blob）时才可用，
+  // 按钮的可点状态由 exportReady 控制；这里再查一次缓存兜底，缓存被 LRU 淘汰等极端情况也不会导出坏文件。
+  async exportCurrentTrack() {
+    const s = this.state;
+    const track = s.queue.find(t => t.id === s.currentId);
+    if (!track) return;
+    const blob = await getCachedAudio(audioCacheKey(track));
+    if (!blob) { this.showToast('这首歌还没缓存完，听一遍后再导出'); return; }
+    const base = sanitizeFilename(`${track.title || 'audio'}${track.artist ? ' - ' + track.artist : ''}`);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${base}.${audioExtFromBlob(blob)}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    this.showToast(`已导出 "${track.title}"`);
   }
 
   // 列表循环模式下"下一首"是谁：playOrder 里紧跟着 currentId 后面那个，到头了绕回队首。
@@ -2036,12 +2076,16 @@ class Component extends DCLogic {
         // 慢速缓存读期间可能已经切到别的歌了：这个回调若不属于最新那次加载，直接丢弃，别覆盖新链接
         if (myToken !== this._loadToken) return;
 
+        // 整段缓存完成（或本就命中）时点亮导出按钮，前提是当前还在放这首歌（没被切走）
+        const markExportReady = () => { if (myToken === this._loadToken) this.patch({ exportReady: true }); };
+
         if (blob) {
           this._playingFromCache = true;
           this._objectUrl = URL.createObjectURL(blob);
           a.src = this._objectUrl;
           startPlayback();
           touchCachedAudio(cacheKey);
+          markExportReady();
           return;
         }
 
@@ -2052,7 +2096,7 @@ class Component extends DCLogic {
           const API = window.ListeningAPI;
           if (API && API.resolveSoundCloudCacheUrl) {
             API.resolveSoundCloudCacheUrl(track)
-              .then(url => { if (url) cacheAudioInBackground(cacheKey, url); })
+              .then(url => { if (url) cacheAudioInBackground(cacheKey, url, markExportReady); })
               .catch(() => {});
           }
         };
@@ -2081,7 +2125,7 @@ class Component extends DCLogic {
           // 非 HLS：audioUrl 本身就是整段文件，边播边后台拉完整文件存起来，下次播放这首歌就能命中
           a.src = track.audioUrl;
           startPlayback();
-          cacheAudioInBackground(cacheKey, track.audioUrl);
+          cacheAudioInBackground(cacheKey, track.audioUrl, markExportReady);
         }
       });
     };
@@ -2430,6 +2474,8 @@ class Component extends DCLogic {
     const MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
     const modeActive = s.playMode !== 0;
     const isLoadingCurrent = s.loadingTrackId != null && s.loadingTrackId === s.currentId;
+    // 导出按钮是否可点：有当前曲目、且它已整段缓存好
+    const canExport = s.exportReady && !!matchedTrack;
 
     const playlistOptions = s.playlists.map(pl => ({ id: pl.id, name: pl.name, icon: pl.glyph, tileBg: pl.tileBg, onClick: () => this.confirmAdd(pl.id, pl.name) }));
 
@@ -2511,6 +2557,10 @@ class Component extends DCLogic {
         modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
         nowPlayingLikeIconClass: nowPlayingLiked ? 'dc-heart-icon dc-heart-filled' : 'dc-heart-icon',
         nowPlayingLikeColor: nowPlayingLiked ? c.heart : c.onSurfaceVariant,
+        // 导出按钮：未缓存完时 38% 不透明度置灰 + 默认指针 + 提示"听一遍之后可以导出"
+        exportOpacity: canExport ? '1' : '0.38',
+        exportCursor: canExport ? 'pointer' : 'default',
+        exportTooltip: canExport ? '导出这首歌到本地' : '听一遍之后可以导出',
         playlistsRender,
         hasAddModal: !!s.addModalId, playlistOptions,
         hasCreateModal: s.createModalOpen, createName: s.createName,
@@ -2547,6 +2597,7 @@ class Component extends DCLogic {
         toggleAdaptiveVolume: () => this.toggleAdaptiveVolume(),
         cycleMode: () => this.cycleMode(),
         toggleCurrentLike: () => this.toggleLike(track.id),
+        exportCurrent: () => this.exportCurrentTrack(),
         dragEnd: () => this.dragEnd(),
         closeAddModal: () => this.closeAddModal(),
         openCreateModal: () => this.openCreateModal(),
