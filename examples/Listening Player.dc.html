@@ -2053,8 +2053,7 @@ class Component extends DCLogic {
     if (!a) return;
 
     // 如果已有播放链接就直接播放，否则加载详情
-    const go = () => {
-      if (!track.audioUrl) { this.showToast('暂无可用播放链接'); return; }
+    const go = (onNeedDetails) => {
       // _onError 是常驻监听器，不像这里其他回调能直接闭包捕获 myToken，靠这个字段告诉它
       // "当前 audio 元素装的是哪次尝试的链接"
       this._audioErrorToken = myToken;
@@ -2086,9 +2085,17 @@ class Component extends DCLogic {
           startPlayback();
           touchCachedAudio(cacheKey);
           markExportReady();
+          // 音频已从缓存秒开、零联网；歌词若还没有就后台补一次（不阻塞、不弹「正在加载」），
+          // 避免命中缓存却退回默认歌词
+          if (!track.lrc) API.ensureTrackDetails(track).then(() => {
+            if (myToken !== this._loadToken) return;
+            if (track.lrc) this.parseAndSetLyrics(track.lrc);
+          }).catch(() => {});
           return;
         }
 
+        // 缓存未命中，这时才真正需要播放链接：没有就去解析详情（onNeedDetails），有就直接用
+        if (!track.audioUrl) { if (onNeedDetails) onNeedDetails(); else this.showToast('暂无可用播放链接'); return; }
         this._playingFromCache = false;
         // 未命中且是 HLS 曲目：后台顺手解析同一首歌的 progressive mp3 存起来，下次就能命中本地 blob。
         // 纯后台工作，失败/没有 progressive 都不影响这次的 HLS 播放
@@ -2137,21 +2144,20 @@ class Component extends DCLogic {
     // 看起来像是牛头不对马嘴的"别的歌词"
     if (track.lrc) this.parseAndSetLyrics(track.lrc);
 
-    if (track.audioUrl) {
-      go();
-      return;
-    }
-
-    this.showToast(`正在加载 "${track.title}" 的播放链接…`);
-    API.ensureTrackDetails(track).then(() => {
-      // 慢速详情请求期间可能已经切到别的曲目：这次结果连同它的歌词都已经过期，
-      // 不能再拿去覆盖当前曲目的 state.lyrics，否则会出现"歌词是上一首/下一首的"错乱
-      if (myToken !== this._loadToken) return;
-      if (track.lrc) this.parseAndSetLyrics(track.lrc);
-      go();
-    }).catch(e => {
-      console.error('load details error:', e);
-      this.handlePlaybackFailure('ensureTrackDetails failed: ' + e, myToken);
+    // 先让 go() 查本地缓存：命中就直接放 blob、完全跳过联网（哪怕对象上还没 audioUrl）；
+    // 未命中且没有播放链接时，才通过 onNeedDetails 走一次 ensureTrackDetails 解析详情后重放
+    go(() => {
+      this.showToast(`正在加载 "${track.title}" 的播放链接…`);
+      API.ensureTrackDetails(track).then(() => {
+        // 慢速详情请求期间可能已经切到别的曲目：这次结果连同它的歌词都已经过期，
+        // 不能再拿去覆盖当前曲目的 state.lyrics，否则会出现"歌词是上一首/下一首的"错乱
+        if (myToken !== this._loadToken) return;
+        if (track.lrc) this.parseAndSetLyrics(track.lrc);
+        go();
+      }).catch(e => {
+        console.error('load details error:', e);
+        this.handlePlaybackFailure('ensureTrackDetails failed: ' + e, myToken);
+      });
     });
   }
 
