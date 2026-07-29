@@ -813,7 +813,26 @@ async function deleteCachedAudio(key) {
 // onDone（可选）在整段音频真正落库成功后才回调——用来在"当前播放的这首歌后台缓存完成"时点亮导出按钮。
 // 预取下一首的调用不传 onDone，避免下一首缓存好了误点亮当前按钮。
 function cacheAudioInBackground(key, url, onDone) {
-  fetch(url).then(r => (r.ok ? r.blob() : null)).then(blob => {
+  fetch(url).then(r => {
+    if (!r.ok) return null;
+    // Content-Length 若可用，优先拿它跟实际下载到的字节数比对——不足说明这次下载中途被打断了
+    // （网络抖动/代理断流），得到的是截断的音频，绝不能拿去覆盖已有的完整缓存
+    const expectedSize = Number(r.headers.get('content-length')) || 0;
+    return r.blob().then(async blob => {
+      if (expectedSize > 0 && blob.size < expectedSize) {
+        console.warn('audio cache fetch incomplete, skip caching:', key, blob.size, '<', expectedSize);
+        return null;
+      }
+      // 跨域响应下 Content-Length 不一定会被 CORS 暴露给 JS，上面那道检查可能形同虚设——
+      // 再加一道兜底：不管有没有 Content-Length，都不允许用明显更小的 blob 覆盖已有缓存
+      const existing = await getCachedAudio(key);
+      if (existing && blob.size < existing.size * 0.7) {
+        console.warn('audio cache fetch suspiciously smaller than existing cache, skip:', key, blob.size, '<', existing.size);
+        return null;
+      }
+      return blob;
+    });
+  }).then(blob => {
     if (blob) return putCachedAudio(key, blob).then(() => onDone && onDone());
   }).catch(e => console.warn('audio cache fetch failed:', e));
 }
@@ -1257,9 +1276,28 @@ class Component extends DCLogic {
     };
     this._onMeta = () => {
       const dur = a.duration;
-      if (isFinite(dur) && dur > 0) this.patch(s => {
-        const track = s.queue.find(t => t.id === s.currentId);
-        if (track) track.duration = dur;
+      if (!isFinite(dur) || dur <= 0) return;
+      const track = this.state.queue.find(t => t.id === this.state.currentId);
+      // 命中本地缓存播放，但这次加载到的时长比之前记录的完整时长短很多——大概率是这首歌的缓存
+      // 被一次不完整的后台下载静默覆盖了（截断的 blob），而不是这首歌真的变短了。删掉这份坏缓存，
+      // 强制走联网重新拉取，避免往后一直命中同一份被腰斩的缓存。每首歌只自动重试一次
+      // （跟 handlePlaybackFailure 共享 _playRetriedForId，避免反复触发）
+      if (track && this._playingFromCache && track.duration > 0
+          && dur < track.duration * 0.7 && (track.duration - dur) > 15
+          && this._playRetriedForId !== track.id) {
+        this._playRetriedForId = track.id;
+        deleteCachedAudio(audioCacheKey(track));
+        track.audioUrl = null;
+        track.detailsLoaded = false;
+        track.scIsHLS = false;
+        this.showToast('检测到本地缓存不完整，正在重新下载…');
+        this.armLoadWatchdog(track.id);
+        this.loadAndPlay(track, 0);
+        return;
+      }
+      this.patch(s => {
+        const t = s.queue.find(t2 => t2.id === s.currentId);
+        if (t) t.duration = dur;
         return { currentTime: a.currentTime };
       });
     };
