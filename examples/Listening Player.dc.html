@@ -204,6 +204,9 @@ if ('serviceWorker' in navigator) {
       <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="background:{{ v.c.press }};">
         <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span><span class="dc-desktop-only" style="display:inline;">GitHub</span>
       </a>
+      <button onclick="{{ H.clearAudioCache }}" title="清空本地音频缓存" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
+        <span style="font-family:'Material Symbols Outlined';font-size:19px;">delete_sweep</span>
+      </button>
       <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
         <span style="position:absolute;top:2px;left:{{ v.switchThumbLeft }}px;width:24px;height:24px;border-radius:50%;background:{{ v.switchThumbBg }};display:flex;align-items:center;justify-content:center;transition:left .25s;box-shadow:0 1px 2px rgba(0,0,0,.35);">
           <span style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.switchIconColor }};">{{ v.themeIcon }}</span>
@@ -808,6 +811,18 @@ async function deleteCachedAudio(key) {
   } catch (e) {
     console.warn('audio cache delete failed:', e);
   }
+}
+
+// 一键清空整个音频缓存：旧版本 bug 写坏的缓存，自愈逻辑救不回来（连"真实时长"这个判断基准
+// 都被写坏了），只能整体清掉，逼所有歌下次播放都重新联网下载
+async function clearAllCachedAudio() {
+  const db = await openAudioCacheDB();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
+    tx.objectStore(AUDIO_CACHE_STORE).clear();
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 // onDone（可选）在整段音频真正落库成功后才回调——用来在"当前播放的这首歌后台缓存完成"时点亮导出按钮。
@@ -1473,6 +1488,17 @@ class Component extends DCLogic {
     this.patch(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }));
     this.persist();
     setTimeout(() => this.syncThemeColorMeta(), 0);
+  }
+
+  clearAudioCache() {
+    if (!confirm('确定要清空本地音频缓存吗？之后每首歌第一次播放都要重新联网下载。')) return;
+    clearAllCachedAudio().then(() => {
+      this.patch({ exportReady: false });
+      this.showToast('本地音频缓存已清空');
+    }).catch(e => {
+      console.warn('clear audio cache failed:', e);
+      this.showToast('清空缓存失败，请稍后再试');
+    });
   }
 
   // 手机浏览器地址栏/状态栏的着色（theme-color meta）跟着当前主题的 surfaceLow 走，
@@ -2617,6 +2643,7 @@ class Component extends DCLogic {
       },
       H: {
         toggleTheme: () => this.toggleTheme(),
+        clearAudioCache: () => this.clearAudioCache(),
         doSearch: () => this.doSearch(),
         setSearchQuery: (e) => this.setSearchQuery(e),
         searchKeyDown: (e) => this.searchKeyDown(e),
