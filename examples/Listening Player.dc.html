@@ -456,6 +456,7 @@ if ('serviceWorker' in navigator) {
           </div>
         </sc-if>
         <sc-if value="{{ v.mediaIsLyrics }}">
+          <sc-if value="{{ v.hasLyrics }}">
           <div class="dc-lyrics-mask" style="width:100%;height:100%;overflow:hidden;position:relative;">
             <div style="position:absolute;left:0;right:0;top:0;transform:translateY({{ v.lyricsOffset }}px);transition:transform .5s ease;">
               <sc-for list="{{ v.lyricsRender }}" as="line" hint-placeholder-count="6">
@@ -463,6 +464,17 @@ if ('serviceWorker' in navigator) {
               </sc-for>
             </div>
           </div>
+          </sc-if>
+          <sc-if value="{{ v.lyricsEmpty }}">
+          <div style="text-align:center;padding:40px 20px;color:{{ v.c.onSurfaceVariant }};">
+            <div style="display:flex;justify-content:center;margin-bottom:14px;">
+              <span style="width:64px;height:64px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;">
+                <span style="font-family:'Material Symbols Outlined';font-size:28px;{{ v.lyricsEmptyIconStyle }}">{{ v.lyricsEmptyIcon }}</span>
+              </span>
+            </div>
+            <div style="font-size:13px;">{{ v.lyricsEmptyText }}</div>
+          </div>
+          </sc-if>
         </sc-if>
       </div>
 
@@ -680,20 +692,6 @@ function makeQueue() {
     { id: 7, title: '纸间信件', artist: '林间信号', album: '灯塔笔记', source: 'netease', duration: 209 },
   ];
 }
-
-function makeLyrics() {
-  const lines = [
-    '灯光渐渐暗下来', '窗外的风还没停', '我数着路过的车灯', '想着还没说完的话',
-    '手心里握着一张车票', '通向没有名字的车站', '如果雨再下大一点', '我们就有理由多留一会',
-    '街角的钟走得很慢', '像是在等一个人回头', '我把耳机音量调高', '盖住犹豫不决的心跳',
-    '这条路走了很多遍', '却还是记不住尽头', '你说过要一起看海', '现在风还记得这句话',
-    '把过去折成纸船', '放进今晚安静的河', '灯塔的光转了一圈', '照见了没寄出的信',
-    '如果这首歌能被听到', '希望你也刚好想起我',
-  ];
-  return lines.map((text, i) => ({ time: i * 9, text }));
-}
-
-const LYRICS = makeLyrics();
 
 function fmtTime(s) {
   s = Math.max(0, Math.floor(s));
@@ -1114,8 +1112,9 @@ class Component extends DCLogic {
       // likedOrder = "喜欢的音乐"的显示顺序（id 数组，最新点喜欢的排最前面），liked 本身只是个
       // 无序的 id -> boolean 集合，不能拿它的 key 顺序当显示顺序
       likedOrder: [],
-      // 歌词解析结果，搜索播放时动态填充
-      lyrics: [],
+      // 歌词解析结果，搜索播放时动态填充；lyricsTrackId 记录这份歌词属于哪首曲目，
+      // 渲染时对不上当前曲目就当没有歌词，避免慢响应把上一首的歌词贴到这一首上
+      lyrics: [], lyricsTrackId: null, lyricsLoading: false,
       // queue = 曲库：所有搜过/导入过/收藏过的曲目数据，只增不减（歌单、喜欢的音乐都靠它按 id 解析内容）
       queue: [],
       // playOrder = 当前播放队列：驱动下一曲/上一曲和右侧队列面板的曲目 id 顺序，和曲库是两回事
@@ -1907,7 +1906,41 @@ class Component extends DCLogic {
     }
   }
 
-  toggleMediaView() { this.patch(s => ({ mediaView: s.mediaView === 'cover' ? 'lyrics' : 'cover' })); }
+  toggleMediaView() {
+    const next = this.state.mediaView === 'cover' ? 'lyrics' : 'cover';
+    this.patch({ mediaView: next });
+    // 刷新后恢复的曲目还没播放过时 state.lyrics 是空的（歌词不持久化），用户主动点开歌词页就顺手补一次
+    if (next === 'lyrics') this.ensureLyricsForCurrent();
+  }
+
+  // 歌词页按需拉取：只在当前曲目还没有一份"对得上号"的歌词时才出手，命中已挂在 track 上的 lrc
+  // 就直接同步解析、不联网；否则去后台补一次详情。同一首歌重复调用（比如来回切换歌词/封面）不会
+  // 重复发请求，靠 _lyricsFetchId 去重
+  ensureLyricsForCurrent() {
+    const s = this.state;
+    const track = s.queue.find(t => t.id === s.currentId);
+    if (!track) return;
+    // 已经给这首歌一个交代（找到歌词，或者确认过没有）就不再重复拉；lyricsLoading 说明已经有一次
+    // 请求（不管是这里发起的还是 loadAndPlay 后台发起的）正在飞，避免来回切歌词/封面时反复联网、
+    // 反复在"暂无歌词"和"加载中"之间闪烁
+    if (s.lyricsTrackId === track.id || s.lyricsLoading) return;
+    if (track.lrc) { this.parseAndSetLyrics(track.lrc, track.id); return; }
+    if (this._lyricsFetchId === track.id) return;
+    const API = window.ListeningAPI;
+    if (!API) return;
+    this._lyricsFetchId = track.id;
+    this.patch({ lyricsLoading: true });
+    API.ensureTrackDetails(track).then(() => {
+      if (this.state.currentId !== track.id) return;
+      if (track.lrc) this.parseAndSetLyrics(track.lrc, track.id);
+      else this.markLyricsUnavailable(track.id);
+    }).catch(() => {
+      if (this.state.currentId === track.id) this.markLyricsUnavailable(track.id);
+    }).finally(() => {
+      if (this._lyricsFetchId === track.id) this._lyricsFetchId = null;
+    });
+  }
+
   toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue' })); }
   closeQueuePanel() { this.patch({ rightPanel: 'browse' }); }
   // 手机端：左侧歌单栏改为滑入抽屉
@@ -1938,8 +1971,9 @@ class Component extends DCLogic {
     this._prefetchedForId = null;
     this._shufflePrefetchedNextId = null;
     this._playRetriedForId = null;
+    this._lyricsFetchId = null;
     this.armLoadWatchdog(track.id);
-    this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [], loadingTrackId: track.id, exportReady: false });
+    this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [], lyricsTrackId: null, lyricsLoading: false, loadingTrackId: track.id, exportReady: false });
     this.persist();
     // 已经初始化过 audio 元素时（自动切歌走的就是这条路径）直接同步调用，
     // 不经 setTimeout(0) 多绕一圈——切到后台的标签页正是最容易被浏览器限流延迟的场景，
@@ -2150,11 +2184,15 @@ class Component extends DCLogic {
           touchCachedAudio(cacheKey);
           markExportReady();
           // 音频已从缓存秒开、零联网；歌词若还没有就后台补一次（不阻塞、不弹「正在加载」），
-          // 避免命中缓存却退回默认歌词
-          if (!track.lrc) API.ensureTrackDetails(track).then(() => {
-            if (myToken !== this._loadToken) return;
-            if (track.lrc) this.parseAndSetLyrics(track.lrc);
-          }).catch(() => {});
+          // 期间歌词区显示"加载中"而不是把上一首的歌词留在屏幕上
+          if (!track.lrc) {
+            this.patch({ lyricsLoading: true });
+            API.ensureTrackDetails(track).then(() => {
+              if (myToken !== this._loadToken) return;
+              if (track.lrc) this.parseAndSetLyrics(track.lrc, track.id);
+              else this.markLyricsUnavailable(track.id);
+            }).catch(() => { if (myToken === this._loadToken) this.markLyricsUnavailable(track.id); });
+          }
           return;
         }
 
@@ -2204,28 +2242,30 @@ class Component extends DCLogic {
     // 歌词只要曲目对象上已经带着 lrc 原文就立刻同步展示，不依赖 audioUrl 是否已解析——
     // 曲目可能是被 prefetchTrack 提前 ensureTrackDetails 过的（lrc 已经挂在对象上但
     // 从没进过 state.lyrics），这种情况下面的 if (track.audioUrl) 分支会直接 go() 跳过
-    // 解析步骤，state.lyrics 就会一直是 startTrack() 清空后的 []，展示里退回占位歌词，
-    // 看起来像是牛头不对马嘴的"别的歌词"
-    if (track.lrc) this.parseAndSetLyrics(track.lrc);
+    // 解析步骤，state.lyrics 就会一直是 startTrack() 清空后的 []
+    if (track.lrc) this.parseAndSetLyrics(track.lrc, track.id);
 
     // 先让 go() 查本地缓存：命中就直接放 blob、完全跳过联网（哪怕对象上还没 audioUrl）；
     // 未命中且没有播放链接时，才通过 onNeedDetails 走一次 ensureTrackDetails 解析详情后重放
     go(() => {
       this.showToast(`正在加载 "${track.title}" 的播放链接…`);
+      if (!track.lrc) this.patch({ lyricsLoading: true });
       API.ensureTrackDetails(track).then(() => {
         // 慢速详情请求期间可能已经切到别的曲目：这次结果连同它的歌词都已经过期，
         // 不能再拿去覆盖当前曲目的 state.lyrics，否则会出现"歌词是上一首/下一首的"错乱
         if (myToken !== this._loadToken) return;
-        if (track.lrc) this.parseAndSetLyrics(track.lrc);
+        if (track.lrc) this.parseAndSetLyrics(track.lrc, track.id);
+        else this.markLyricsUnavailable(track.id);
         go();
       }).catch(e => {
         console.error('load details error:', e);
+        if (myToken === this._loadToken) this.markLyricsUnavailable(track.id);
         this.handlePlaybackFailure('ensureTrackDetails failed: ' + e, myToken);
       });
     });
   }
 
-  parseAndSetLyrics(lrcText) {
+  parseAndSetLyrics(lrcText, trackId) {
     try {
       const lines = lrcText.split(/\r?\n/);
       const reg = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/;
@@ -2241,8 +2281,14 @@ class Component extends DCLogic {
         if (text) out.push({ time, text });
       }
       out.sort((a, b) => a.time - b.time);
-      this.setState(s => ({ lyrics: out }));
-    } catch (e) { console.warn('parse lyrics error:', e); }
+      this.setState(s => ({ lyrics: out, lyricsTrackId: trackId, lyricsLoading: false }));
+    } catch (e) { console.warn('parse lyrics error:', e); this.markLyricsUnavailable(trackId); }
+  }
+
+  // 确实尝试过（同步已有 lrc 解析失败，或联网 ensureTrackDetails 完成）但这首歌就是没有歌词：
+  // 把 lyricsTrackId 钉在这首歌上，让界面从"加载中"落到"暂无歌词"，而不是无限转圈
+  markLyricsUnavailable(trackId) {
+    this.patch({ lyrics: [], lyricsTrackId: trackId, lyricsLoading: false });
   }
 
   togglePlay() {
@@ -2383,8 +2429,15 @@ class Component extends DCLogic {
     const thumbSize = s.seeking ? 16 : 12;
     const thumbStyle = `position:absolute;top:50%;left:${progressPct}%;width:${thumbSize}px;height:${thumbSize}px;border-radius:50%;background:${c.primary};transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.35);${s.seeking ? '' : 'transition:width .15s,height .15s;'}`;
 
-    // 动态歌词（从 API 解析的实时歌词）
-    const lyricsForRender = (s.lyrics && s.lyrics.length) ? s.lyrics : LYRICS;
+    // 动态歌词（从 API 解析的实时歌词）——必须和当前曲目对得上号才展示，对不上宁可显示"暂无歌词"，
+    // 也不能拿别的内容凑数（历史上这里曾经在没有歌词时回退到一段写死的示例歌词，会显示成"别的歌的歌词"）
+    const lyricsMatched = s.lyricsTrackId != null && s.lyricsTrackId === s.currentId;
+    const lyricsForRender = lyricsMatched ? s.lyrics : [];
+    const hasLyrics = lyricsForRender.length > 0;
+    // loadingTrackId 覆盖"刚点播放、详情还在路上"这段；lyricsLoading 覆盖"音频已从缓存秒开、
+    // 只有歌词还在后台补"和歌词页按需拉取这两种情况
+    const lyricsPending = !hasLyrics
+      && (s.lyricsLoading || (s.loadingTrackId != null && s.loadingTrackId === s.currentId));
     let curLyricIdx = 0;
     for (let i = 0; i < lyricsForRender.length; i++) { if (lyricsForRender[i].time <= s.currentTime) curLyricIdx = i; }
     const lineHeight = 48;
@@ -2582,6 +2635,10 @@ class Component extends DCLogic {
         currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, thumbStyle, volume: s.volume,
         adaptiveVolumeColor: s.adaptiveVolume ? c.primary : c.onSurfaceVariant,
         lyricsRender, lyricsOffset: offset,
+        hasLyrics, lyricsEmpty: !hasLyrics,
+        lyricsEmptyIcon: lyricsPending ? 'lyrics' : 'music_off',
+        lyricsEmptyText: lyricsPending ? '歌词加载中…' : '暂无歌词',
+        lyricsEmptyIconStyle: lyricsPending ? 'animation:searchPulse 1.2s ease-in-out infinite;' : '',
         queueRender, queueCount: s.playOrder.length, tracksRender,
         searchQuery: s.searchQuery,
         showSuggest, suggestIsHistory, suggestRender, showClear: !!s.searchQuery,
