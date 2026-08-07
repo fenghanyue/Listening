@@ -2367,10 +2367,12 @@ class Component extends DCLogic {
 
   stepTrack(dir) {
     const s = this.state;
-    const idx = s.playOrder.indexOf(s.currentId);
-    const ni = idx + dir;
-    if (ni < 0 || ni >= s.playOrder.length) return;
-    const track = s.queue.find(t => t.id === s.playOrder[ni]);
+    const order = s.playOrder;
+    const idx = order.indexOf(s.currentId);
+    if (idx < 0 || order.length === 0) return;
+    // 手动切歌允许在队首/队尾绕圈，跟自动播放到头时的列表循环行为保持一致
+    const ni = (idx + dir + order.length) % order.length;
+    const track = s.queue.find(t => t.id === order[ni]);
     if (track) this.startTrack(track);
   }
 
@@ -2672,7 +2674,7 @@ class Component extends DCLogic {
         queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
         sourcesRender,
         showGroupChips, groupChipsRender,
-        prevDisabled: !(idx > 0), nextDisabled: !(idx >= 0 && idx < s.playOrder.length - 1),
+        prevDisabled: !(idx >= 0 && s.playOrder.length > 1), nextDisabled: !(idx >= 0 && s.playOrder.length > 1),
         playDisabled: !matchedTrack, hasTrack: !!matchedTrack,
         themeIcon: s.theme === 'dark' ? 'dark_mode' : 'light_mode',
         switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
