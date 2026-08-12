@@ -66,6 +66,29 @@ npm start   # 等价于 node server.mjs，默认监听 :4444
 - Render 会自动注入 `PORT` 环境变量，`server.mjs` 会读取它监听对应端口
 
 <details>
+<summary>SoundCloud 搜不出结果时怎么办</summary>
+
+SoundCloud 的 `client_id` 是从它自己的网页里抓的，SoundCloud 会不定期轮换。服务端会自动抓取并校验，
+校验通过的缓存 6 小时，只抓到内置兜底值时只缓存 5 分钟（所以一次失败的冷启动最多 5 分钟就会自己重试）；
+客户端收到 401/403 也会主动要求服务端换一个。正常情况下不需要人工干预。
+
+先确认当前用的是什么：
+
+```bash
+curl https://<你的域名>/sc-client-id
+# {"client_id":"...","source":"assets","fetched_at":...}
+```
+
+`source` 的含义：`env` = 来自环境变量；`html` / `assets` = 从 SoundCloud 网页抓到的；
+`fallback` = 抓取失败，正在用内置的兜底值（这个值随时可能已经失效）。
+
+如果长期是 `fallback`，说明抓取逻辑跟不上 SoundCloud 的页面结构变化了。这时不用等改代码：
+从浏览器开发者工具里随便找一个 SoundCloud 请求，复制其中的 `client_id`，在部署平台上设成
+环境变量 `SC_CLIENT_ID` 再重启即可，它的优先级最高。
+
+</details>
+
+<details>
 <summary>防止免费实例休眠</summary>
 
 Render 免费层闲置约 15 分钟会自动休眠，下次请求要冷启动（几秒到几十秒不等）。项目内置两层保活，互相兜底：

@@ -1036,10 +1036,31 @@ function loadPersistedLibrary() {
   }
 }
 
+// 解析出来的播放链接全都带时效签名（SoundCloud 的 CDN 链接、QQ 的 token 链接，几分钟到几小时
+// 就过期），存进 localStorage 下次打开必然是坏的——第一次播放注定先失败一次再靠重试救回来。
+// 干脆不存：真正听过的歌 IndexedDB 里有整段音频，loadAndPlay 会先命中缓存，根本用不上这些字段；
+// 没听过的歌重新解析一次本来就是必须的。scTranscodings 也一起剥掉，它是 localStorage 的消耗大户
+// （每首歌好几条长 URL，而配额只有 5MB、超了这里是静默失败的），重新请求还能拿到新鲜的鉴权信息
+const VOLATILE_TRACK_FIELDS = [
+  'audioUrl', 'detailsLoaded', 'scIsHLS',
+  'scProgressiveResolveBase', 'scProgressiveResolveUrl',
+  'scTranscodings', 'scTrackAuth',
+];
+
+function stripVolatileFields(track) {
+  const out = { ...track };
+  for (const k of VOLATILE_TRACK_FIELDS) delete out[k];
+  return out;
+}
+
 function savePersistedLibrary(s) {
   try {
     const { playlists, liked, likedOrder, queue, playOrder, currentId, currentTime, volume, adaptiveVolume, playMode } = s;
-    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({ playlists, liked, likedOrder, queue, playOrder, currentId, currentTime, volume, adaptiveVolume, playMode }));
+    // 曲目对象只存在于 queue 里（playlists 存的是 trackIds、liked 存的是布尔），剥这一处就够
+    localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify({
+      playlists, liked, likedOrder, queue: (queue || []).map(stripVolatileFields),
+      playOrder, currentId, currentTime, volume, adaptiveVolume, playMode,
+    }));
   } catch (e) {
     console.warn('保存本地歌单数据失败:', e);
   }
@@ -1081,8 +1102,10 @@ function likedIdsOrdered(s) {
 // ====================== 自动切歌可靠性相关的可调参数 ======================
 const PREFETCH_LEAD_SECONDS = 12; // 离当前曲目结束还剩多少秒开始预取下一首
 const LOAD_WATCHDOG_MS = 12000;   // 一首歌从发起加载到超时判定卡死的等待时长：给慢速移动网络 +
-                                    // SoundCloud 最坏情况下的多跳解析留够余量（各 fetchXDetails 内部
-                                    // 吞掉自己的错误，外层 promise 实际上很少真的 reject，只能靠超时兜底）
+                                    // SoundCloud 最坏情况下的多跳解析留够余量
+const LOAD_WATCHDOG_DETAILS_MS = 25000; // 还在解析播放链接（ensureTrackDetails 在飞）那段用更长的窗口：
+                                    // 服务端代理自己的请求超时就有 15 秒，Render 冷启动还要再加几秒，
+                                    // 12 秒的看门狗永远先于它触发，结果就是冷启动时连跳三首然后停死
 const MAX_CONSECUTIVE_LOAD_FAILURES = 2; // 连续几首都卡死超时就不再自动切歌，停在当前这首上，
                                             // 避免离线时以 12s/首的速度把整条队列跳穿
 
@@ -1198,6 +1221,9 @@ class Component extends DCLogic {
   componentDidMount() {
     // DC framework runs this method after the component is mounted
     setTimeout(() => this.initAudio(), 0);
+    // 线上跑在 Render 免费实例上，闲置十几分钟就休眠，冷启动要几秒到几十秒。趁用户还在浏览界面
+    // 先打一发把它叫醒，等真的按下播放时服务端已经热了。纯后台预热，失败与否都不影响任何流程
+    fetch('/sc-client-id').catch(() => {});
     // 播放进度（currentTime）随 timeupdate 高频变化，不逐帧写 localStorage，改为定期落盘
     clearInterval(this._progressSaveTimer);
     this._progressSaveTimer = setInterval(() => {
@@ -1971,6 +1997,7 @@ class Component extends DCLogic {
     this._prefetchedForId = null;
     this._shufflePrefetchedNextId = null;
     this._playRetriedForId = null;
+    this._scFallbackTriedForId = null;
     this._lyricsFetchId = null;
     this.armLoadWatchdog(track.id);
     this.patch({ currentId: track.id, currentTime: resumeAt, playing: true, lyrics: [], lyricsTrackId: null, lyricsLoading: false, loadingTrackId: track.id, exportReady: false });
@@ -2073,15 +2100,16 @@ class Component extends DCLogic {
     }
   }
 
-  armLoadWatchdog(trackId) {
+  armLoadWatchdog(trackId, ms = LOAD_WATCHDOG_MS) {
     clearTimeout(this._loadWatchdogTimer);
     this._loadWatchdogTrackId = trackId;
-    this._loadWatchdogTimer = setTimeout(() => this.handleLoadTimeout(trackId), LOAD_WATCHDOG_MS);
+    this._loadWatchdogTimer = setTimeout(() => this.handleLoadTimeout(trackId), ms);
   }
 
-  // 加载卡死兜底：一首歌从发起加载到 LOAD_WATCHDOG_MS 毫秒后还没产生任何真实播放进度，
-  // 大概率是网络问题卡住了 ensureTrackDetails 或音频流请求——各音源 fetchXDetails 会把自己的
-  // 错误都吞掉，外层 promise 实际上很少真的 reject，只能靠这道超时来发现
+  // 加载卡死兜底：一首歌从发起加载到超时还没产生任何真实播放进度，大概率是网络问题卡住了
+  // ensureTrackDetails 或音频流请求。SoundCloud 现在解析失败会正常 reject（走 handlePlaybackFailure
+  // 的重试阶梯），但网易云/QQ 仍然把自己的错误吞掉、外层 promise 很少真的 reject，
+  // 而且"请求没报错只是一直不返回"这种情况哪个源都可能发生，所以这道超时仍然必要
   handleLoadTimeout(trackId) {
     if (this.state.currentId !== trackId) return; // 早就换到别的曲目了，这个计时器已经过期
     this._consecutiveLoadFailures = (this._consecutiveLoadFailures || 0) + 1;
@@ -2097,11 +2125,13 @@ class Component extends DCLogic {
     }
   }
 
-  // 播放失败的统一入口（_onError / HLS fatal error / play() 被拒绝 / ensureTrackDetails 失败都会走这里）：
-  // 先重试一次——QQ音乐/SoundCloud 拿到的是源站直链，带时效性 token，之前解析过的链接过一阵子会失效；
-  // 网易云走的是第三方 meting 代理，也可能临时抽风。不管哪种，清掉这首歌已经解析过的播放信息
-  // （audioUrl/detailsLoaded/scIsHLS），逼 loadAndPlay 重新问一次源站要新链接，比直接用同一个大概率
-  // 还是坏的链接重试更有意义。同一首歌只重试一次，避免源站真的没有可用链接时无限重试
+  // 播放失败的统一入口（_onError / HLS fatal error / play() 被拒绝 / ensureTrackDetails 失败都会走这里）。
+  // 这里是一道阶梯，从"最可能有用且最便宜"往下退：
+  //   ① SoundCloud 的 HLS 流放不动 → 换同一首歌的 progressive mp3（换 CDN + 换协议 + 走同源代理）
+  //   ② 通用重试 → 清掉已解析的播放信息，逼 loadAndPlay 重新问源站要新链接。QQ音乐/SoundCloud
+  //      拿到的是带时效 token 的源站直链，过一阵子会失效；网易云走第三方 meting 代理也会临时抽风，
+  //      重新解析一次比拿同一个大概率还是坏的链接再撞一次有意义
+  //   ③ 都不行才提示用户换音源。每一级对同一首歌都只走一次，避免源站真的没有可用链接时无限打转
   //
   // myToken 是这次失败信号所属的那次 loadAndPlay 调用的编号（见 loadAndPlay 里的 this._loadToken）。
   // 一次真实失败经常会同时触发两个信号——audio 元素的 error 事件和 play() 被拒绝的 rejection，两个
@@ -2118,21 +2148,59 @@ class Component extends DCLogic {
       this._loadWatchdogTrackId = null;
     }
     const track = this.state.queue.find(t => t.id === this.state.currentId);
-    if (track && this._playRetriedForId !== track.id) {
-      this._playRetriedForId = track.id;
-      // 这次放的是本地缓存 blob 却失败了，说明缓存本身可能坏了/不完整——删掉它，
-      // 让重试走联网重新解析+下载，而不是又命中同一份坏缓存把这首歌卡死
-      if (this._playingFromCache) deleteCachedAudio(audioCacheKey(track));
-      track.audioUrl = null;
-      track.detailsLoaded = false;
-      track.scIsHLS = false;
-      this.showToast('播放失败，正在重试…');
+
+    // SoundCloud 的 HLS 流放不动时，先换音源再说：同一首歌通常还有一条 progressive mp3 转码，
+    // 它走同源 /stream 转发（服务端抓取），CDN 被区域封锁、hls.js 没加载成功、分片 403 这些
+    // 情况下往往还通。这一级排在通用重试之前，是因为通用重试只会重新跑一遍同样的打分逻辑、
+    // 再次选中同一条 HLS 转码，撞的是同一堵墙；而换 progressive 同时换掉了 CDN 和协议。
+    // 三个条件各有用途：放的是本地缓存却失败属于缓存坏了，该交给下面的通用重试去删缓存；
+    // 非 HLS 曲目没有东西可退；每首歌只兜底一次，避免来回打转
+    if (track && track.source === 'soundcloud' && track.scIsHLS && !this._playingFromCache
+        && this._scFallbackTriedForId !== track.id) {
+      this._scFallbackTriedForId = track.id;
+      this.stopHLS(); // 让濒死的 hls 实例闭嘴，别再往外发失败信号
+      this.showToast('HLS 流不可用，改用 mp3 重试…');
+      // 解析可能挂住，先把看门狗武装上，不能让 UI 一直转
       this.armLoadWatchdog(track.id);
-      this.loadAndPlay(track, this.state.currentTime || 0);
+      const API = window.ListeningAPI;
+      const fallback = API && API.resolveSoundCloudCacheUrl
+        ? API.resolveSoundCloudCacheUrl(track, 6000)  // 压到 6 秒：默认 10 秒只给看门狗留 2 秒余量
+        : Promise.resolve(null);
+      fallback.then(url => {
+        // 解析期间可能已经切歌了，这次结果作废
+        if (myToken !== this._loadToken || this.state.currentId !== track.id) return;
+        if (!url) { this.retryWithFreshUrl(track); return; } // 没有 progressive 转码，退回通用重试
+        track.audioUrl = url;
+        track.scIsHLS = false;
+        // 上面那次武装已经被解析耗掉一部分了，重新计时，别让起播只剩几秒窗口
+        this.armLoadWatchdog(track.id);
+        this.loadAndPlay(track, this.state.currentTime || 0);
+      }).catch(() => {
+        if (myToken === this._loadToken && this.state.currentId === track.id) this.retryWithFreshUrl(track);
+      });
+      return;
+    }
+
+    if (track && this._playRetriedForId !== track.id) {
+      this.retryWithFreshUrl(track);
       return;
     }
     this.showToast('播放失败，请尝试其他音源');
     this.patch({ playing: false, loadingTrackId: null });
+  }
+
+  // 通用重试：清掉这首歌已经解析过的播放信息，逼 loadAndPlay 重新问一次源站要新链接
+  retryWithFreshUrl(track) {
+    this._playRetriedForId = track.id;
+    // 这次放的是本地缓存 blob 却失败了，说明缓存本身可能坏了/不完整——删掉它，
+    // 让重试走联网重新解析+下载，而不是又命中同一份坏缓存把这首歌卡死
+    if (this._playingFromCache) deleteCachedAudio(audioCacheKey(track));
+    track.audioUrl = null;
+    track.detailsLoaded = false;
+    track.scIsHLS = false;
+    this.showToast('播放失败，正在重试…');
+    this.armLoadWatchdog(track.id);
+    this.loadAndPlay(track, this.state.currentTime || 0);
   }
 
   loadAndPlay(track, resumeAt = 0) {
@@ -2214,14 +2282,28 @@ class Component extends DCLogic {
           // SoundCloud AAC HLS 流：manifest + 分片都在 CDN 上，交给 hls.js 直接拉取解封装
           const hls = new window.Hls({ enableWorker: false });
           this._hls = hls;
+          // hls.js 标成 fatal 的错误里有相当一部分是它自己就能恢复的（丢一个分片、解码器状态乱了）。
+          // 这两个计数器放在 go() 的闭包里，每次重新加载自然归零
+          let netRecovers = 0;
+          let mediaRecovers = 0;
           hls.loadSource(track.audioUrl);
           hls.attachMedia(a);
           hls.on(window.Hls.Events.MANIFEST_PARSED, startPlayback);
           hls.on(window.Hls.Events.ERROR, (_evt, data) => {
-            if (data.fatal) {
-              console.error('hls fatal error:', data);
-              this.handlePlaybackFailure('hls fatal error: ' + data.type, myToken);
+            if (!data.fatal) return;
+            console.error('hls fatal error:', data);
+            // manifest 本身就拉不到（区域封锁 / CDN 403 / hls.js 没加载成功）时，startLoad()
+            // 只会原地再撞一次同一堵墙，白等一轮——直接去走 progressive 兜底
+            const manifestDead = data.details && String(data.details).startsWith('manifest');
+            if (!manifestDead && data.type === window.Hls.ErrorTypes.NETWORK_ERROR && netRecovers++ < 1) {
+              hls.startLoad();
+              return;
             }
+            if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR && mediaRecovers++ < 2) {
+              hls.recoverMediaError();
+              return;
+            }
+            this.handlePlaybackFailure('hls fatal: ' + data.type + '/' + data.details, myToken);
           });
           cacheHlsMp3();
         } else if (track.scIsHLS) {
@@ -2250,12 +2332,18 @@ class Component extends DCLogic {
     go(() => {
       this.showToast(`正在加载 "${track.title}" 的播放链接…`);
       if (!track.lrc) this.patch({ lyricsLoading: true });
+      // 解析播放链接这一段给更长的窗口：服务端代理自己就有 15 秒超时，Render 冷启动还要再加几秒，
+      // 按 12 秒算的话看门狗永远抢在前面跳歌，冷启动时表现为连闪三首然后停死。
+      // 下面 go() 拿到链接后会按常规时长重新武装
+      this.armLoadWatchdog(track.id, LOAD_WATCHDOG_DETAILS_MS);
       API.ensureTrackDetails(track).then(() => {
         // 慢速详情请求期间可能已经切到别的曲目：这次结果连同它的歌词都已经过期，
         // 不能再拿去覆盖当前曲目的 state.lyrics，否则会出现"歌词是上一首/下一首的"错乱
         if (myToken !== this._loadToken) return;
         if (track.lrc) this.parseAndSetLyrics(track.lrc, track.id);
         else this.markLyricsUnavailable(track.id);
+        // 链接已经到手，后面就是纯播放了，把窗口收回常规时长
+        this.armLoadWatchdog(track.id);
         go();
       }).catch(e => {
         console.error('load details error:', e);

@@ -104,9 +104,9 @@ var ListeningAPI = (() => {
     try {
       for (let i = 0; i < 3; i++) {
         const res = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5e3) });
-        const location = res.headers.get("x-proxy-location");
-        if (!location) break;
-        url = new URL(location, url).toString();
+        const location2 = res.headers.get("x-proxy-location");
+        if (!location2) break;
+        url = new URL(location2, url).toString();
         if (/music\.163\.com/.test(url)) return url;
       }
     } catch (e) {
@@ -269,6 +269,7 @@ var ListeningAPI = (() => {
   var scProxyCheckedAt = 0;
   var SC_PROXY_NEGATIVE_TTL = 3e4;
   async function checkScProxy() {
+    if (typeof location !== "undefined" && /^https?:$/.test(location.protocol)) return true;
     if (scProxyAvailable === true) return true;
     if (scProxyAvailable === false && Date.now() - scProxyCheckedAt < SC_PROXY_NEGATIVE_TTL) return false;
     try {
@@ -281,80 +282,100 @@ var ListeningAPI = (() => {
     return scProxyAvailable;
   }
   async function scFetchJson(url, timeout = 1e4) {
-    if (await checkScProxy()) {
-      const r2 = await fetch(`${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
-      if (!r2.ok) throw new Error(`proxy ${r2.status}`);
-      return r2.json();
+    const viaProxy = await checkScProxy();
+    const target = viaProxy ? `${SC_PROXY}/proxy?url=${encodeURIComponent(url)}` : url;
+    const r = await fetch(target, { signal: AbortSignal.timeout(timeout) });
+    if (!r.ok) {
+      const err = new Error(`${viaProxy ? "proxy" : "direct"} ${r.status}`);
+      err.status = r.status;
+      throw err;
     }
-    const r = await fetch(url, { signal: AbortSignal.timeout(timeout) });
-    if (!r.ok) throw new Error(`direct ${r.status}`);
     return r.json();
-  }
-  var scClientId = null;
-  async function scrapeClientIdFromPage() {
-    try {
-      const html = await (await fetch("https://soundcloud.com", {
-        signal: AbortSignal.timeout(1e4)
-      })).text();
-      const m = html.match(/"([A-Za-z0-9]{32})"/);
-      if (m) return m[1];
-    } catch (e) {
-    }
-    return null;
   }
   var SC_FALLBACK_IDS = [
     "O7atZypwLvuWSY9hWnnQ3vrLTHH7wqMe"
     // 2025-07 从 soundcloud.com 提取
   ];
-  async function getSCClientId() {
-    if (scClientId) return scClientId;
+  var SC_ID_RE = /client_id\s*[:=]\s*["']([A-Za-z0-9]{32})["']/;
+  var SC_CID_TTL = 30 * 60 * 1e3;
+  var SC_CID_NEG_TTL = 60 * 1e3;
+  var scClientId = null;
+  var scClientIdAt = 0;
+  var scClientIdIsFallback = false;
+  async function validateSCClientId(id) {
+    try {
+      const r = await fetch(
+        `https://api-v2.soundcloud.com/search/tracks?q=a&client_id=${id}&limit=1`,
+        { signal: AbortSignal.timeout(5e3) }
+      );
+      return r.ok;
+    } catch (e) {
+      return false;
+    }
+  }
+  async function scrapeClientIdFromPage() {
+    try {
+      const html = await (await fetch("https://soundcloud.com", {
+        signal: AbortSignal.timeout(1e4)
+      })).text();
+      const inline = html.match(SC_ID_RE);
+      if (inline) return inline[1];
+      const scripts = [...html.matchAll(/<script[^>]+src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map((m) => m[1]);
+      for (const src of scripts.slice(-4).reverse()) {
+        try {
+          const js = await (await fetch(src, { signal: AbortSignal.timeout(1e4) })).text();
+          const m = js.match(SC_ID_RE);
+          if (m) return m[1];
+        } catch (e) {
+        }
+      }
+    } catch (e) {
+    }
+    return null;
+  }
+  async function getSCClientId({ refresh = false, stale = null } = {}) {
+    const ttl = scClientIdIsFallback ? SC_CID_NEG_TTL : SC_CID_TTL;
+    if (!refresh && scClientId && Date.now() - scClientIdAt < ttl) return scClientId;
+    if (refresh) scClientId = null;
+    const remember = (id, isFallback) => {
+      scClientId = id;
+      scClientIdAt = Date.now();
+      scClientIdIsFallback = isFallback;
+      return id;
+    };
     if (await checkScProxy()) {
       try {
-        const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(5e3) });
+        const q = refresh ? `?refresh=1${stale ? `&stale=${encodeURIComponent(stale)}` : ""}` : "";
+        const r = await fetch(`${SC_PROXY}/sc-client-id${q}`, {
+          signal: AbortSignal.timeout(refresh ? 15e3 : 8e3)
+        });
         const j = await r.json();
-        if (j.client_id) {
-          scClientId = j.client_id;
-          return scClientId;
-        }
+        if (j.client_id) return remember(j.client_id, j.source === "fallback");
       } catch (e) {
       }
     }
     const scraped = await scrapeClientIdFromPage();
-    if (scraped) {
-      try {
-        const r = await fetch(
-          `https://api-v2.soundcloud.com/tracks/1?client_id=${scraped}`,
-          { signal: AbortSignal.timeout(5e3) }
-        );
-        if (r.ok) {
-          scClientId = scraped;
-          return scClientId;
-        }
-      } catch (e) {
-      }
-    }
+    if (scraped && await validateSCClientId(scraped)) return remember(scraped, false);
     for (const id of SC_FALLBACK_IDS) {
-      try {
-        const r = await fetch(
-          `https://api-v2.soundcloud.com/tracks/1?client_id=${id}`,
-          { signal: AbortSignal.timeout(5e3) }
-        );
-        if (r.ok) {
-          scClientId = id;
-          return scClientId;
-        }
-      } catch (e) {
-      }
+      if (await validateSCClientId(id)) return remember(id, false);
     }
-    scClientId = SC_FALLBACK_IDS[0];
-    return scClientId;
+    return remember(SC_FALLBACK_IDS[0], true);
+  }
+  async function scFetchWithAuthRetry(buildUrl, timeout) {
+    const cid = await getSCClientId();
+    try {
+      return await scFetchJson(buildUrl(cid), timeout);
+    } catch (e) {
+      if (e.status !== 401 && e.status !== 403) throw e;
+      const fresh = await getSCClientId({ refresh: true, stale: cid });
+      if (!fresh || fresh === cid) throw e;
+      return scFetchJson(buildUrl(fresh), timeout);
+    }
   }
   async function searchSoundCloud(kw, limit) {
-    const cid = await getSCClientId();
-    const url = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}&linked_partitioning=1`;
     const results = [];
     try {
-      const json = await scFetchJson(url);
+      const json = await scFetchWithAuthRetry((cid) => `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(kw)}&client_id=${cid}&limit=${limit}&linked_partitioning=1`);
       const tracks = json.collection || [];
       tracks.forEach((it, idx) => {
         const username = it.user?.username || "Unknown";
@@ -388,77 +409,81 @@ var ListeningAPI = (() => {
     }
     return results;
   }
-  async function fetchSoundCloudDetails(t) {
+  function canPlayHls() {
+    if (typeof window === "undefined") return true;
+    if (window.Hls && window.Hls.isSupported && window.Hls.isSupported()) return true;
     try {
-      const cid = await getSCClientId();
-      const useProxy = await checkScProxy();
-      let transcodings = t.scTranscodings || null;
-      if (!transcodings) {
-        const d = await scFetchJson(`https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`);
-        transcodings = d.media?.transcodings || [];
-        t.cover = d.artwork_url || d.user?.avatar_url || t.cover;
-        t.title = d.title || t.title;
-        t.artist = d.user?.username || t.artist;
-      }
-      if (transcodings && transcodings.length > 0) {
-        const scored = transcodings.map((tr) => {
-          let score = 0;
-          const proto = tr.format?.protocol || "";
-          const mime = tr.format?.mime_type || "";
-          if (proto === "hls" && mime.includes("mp4")) score += 100;
-          if (proto === "progressive" && mime.includes("mpeg")) score += 60;
-          if (proto === "hls" && !mime.includes("mp4")) score += 40;
-          if (tr.preset?.includes("160")) score += 10;
-          if (tr.preset?.includes("sq")) score += 5;
-          return { ...tr, score };
-        });
-        scored.sort((a, b) => b.score - a.score);
-        const best = scored[0];
-        const isHLS = best.format?.protocol === "hls";
-        const bestProgressive = scored.find(
-          (tr) => tr.format?.protocol === "progressive" && tr.format?.mime_type?.includes("mpeg")
-        );
-        t.scProgressiveResolveUrl = bestProgressive ? `${bestProgressive.url}?client_id=${cid}` : null;
-        const mediaUrl = `${best.url}?client_id=${cid}`;
-        try {
-          const resolved = await scFetchJson(mediaUrl);
-          if (resolved.url) {
-            if (isHLS) {
-              t.audioUrl = resolved.url;
-              t.scIsHLS = true;
-            } else {
-              t.audioUrl = useProxy ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
-              t.scIsHLS = false;
-            }
-          }
-        } catch (e) {
-          console.error("soundcloud media resolve:", e);
-          t.audioUrl = mediaUrl;
-          t.scIsHLS = isHLS;
-        }
-        if (t.audioUrl && best.preset) {
-          const m = best.preset.match(/(\d+)/);
-          t.quality = m ? m[1] + "k" : "128k";
-          t.qualityLabel = best.preset.replace(/_/g, " ").toUpperCase();
-        }
-      }
-      if (!t.audioUrl && t.scStreamUrl) {
-        t.audioUrl = `${t.scStreamUrl}?client_id=${cid}`;
-      }
-      if (t.audioUrl && !t.quality) {
-        t.quality = "128k";
-        t.qualityLabel = "128K";
-      }
-      t.detailsLoaded = true;
+      return !!document.createElement("audio").canPlayType("application/vnd.apple.mpegurl");
     } catch (e) {
-      console.error("soundcloud detail:", e);
+      return false;
     }
+  }
+  async function fetchSoundCloudDetails(t) {
+    const useProxy = await checkScProxy();
+    let transcodings = t.scTranscodings || null;
+    if (!transcodings) {
+      const d = await scFetchWithAuthRetry(
+        (cid) => `https://api-v2.soundcloud.com/tracks/${t.songid}?client_id=${cid}`
+      );
+      transcodings = d.media?.transcodings || [];
+      t.cover = d.artwork_url || d.user?.avatar_url || t.cover;
+      t.title = d.title || t.title;
+      t.artist = d.user?.username || t.artist;
+    }
+    if (transcodings && transcodings.length > 0) {
+      const hlsOk = canPlayHls();
+      const scored = transcodings.map((tr) => {
+        let score = 0;
+        const proto = tr.format?.protocol || "";
+        const mime = tr.format?.mime_type || "";
+        if (hlsOk && proto === "hls" && mime.includes("mp4")) score += 100;
+        if (proto === "progressive" && mime.includes("mpeg")) score += 60;
+        if (hlsOk && proto === "hls" && !mime.includes("mp4")) score += 40;
+        if (tr.preset?.includes("160")) score += 10;
+        if (tr.preset?.includes("sq")) score += 5;
+        return { ...tr, score };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      const isHLS = best.format?.protocol === "hls";
+      const bestProgressive = scored.find(
+        (tr) => tr.format?.protocol === "progressive" && tr.format?.mime_type?.includes("mpeg")
+      );
+      t.scProgressiveResolveBase = bestProgressive ? bestProgressive.url : null;
+      t.scProgressiveResolveUrl = null;
+      const resolved = await scFetchWithAuthRetry((cid) => `${best.url}?client_id=${cid}`);
+      if (resolved.url) {
+        if (isHLS) {
+          t.audioUrl = resolved.url;
+          t.scIsHLS = true;
+        } else {
+          t.audioUrl = useProxy ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
+          t.scIsHLS = false;
+        }
+      }
+      if (t.audioUrl && best.preset) {
+        const m = best.preset.match(/(\d+)/);
+        t.quality = m ? m[1] + "k" : "128k";
+        t.qualityLabel = best.preset.replace(/_/g, " ").toUpperCase();
+      }
+    }
+    if (!t.audioUrl && t.scStreamUrl) {
+      t.audioUrl = `${t.scStreamUrl}?client_id=${await getSCClientId()}`;
+    }
+    if (t.audioUrl && !t.quality) {
+      t.quality = "128k";
+      t.qualityLabel = "128K";
+    }
+    if (!t.audioUrl) throw new Error(`soundcloud: no playable url for ${t.songid}`);
+    t.detailsLoaded = true;
     return t;
   }
-  async function resolveSoundCloudCacheUrl(t) {
-    if (!t || !t.scProgressiveResolveUrl) return null;
+  async function resolveSoundCloudCacheUrl(t, timeout) {
+    if (!t) return null;
+    const base = t.scProgressiveResolveBase || t.scProgressiveResolveUrl;
+    if (!base) return null;
     try {
-      const resolved = await scFetchJson(t.scProgressiveResolveUrl);
+      const resolved = base.includes("client_id=") ? await scFetchJson(base, timeout) : await scFetchWithAuthRetry((cid) => `${base}?client_id=${cid}`, timeout);
       if (!resolved || !resolved.url) return null;
       const useProxy = await checkScProxy();
       return useProxy ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
