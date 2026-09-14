@@ -12,8 +12,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="听音乐">
 <style>
-  /* 这两个色值是 THEMES.dark.bg / THEMES.light.bg 的副本。改 THEMES 的时候记得同步
-     这里——首屏脚本跑在 dc-script 之前，拿不到那个对象 */
+  /* 下面四个色值是从 dc-script 里的 THEMES 复制出来的（dark/light 的 bg 与 surfaceLow）。
+     改 THEMES 的时候记得同步这里——首屏脚本跑在 dc-script 之前，拿不到那个对象 */
   /* 属性名特意避开 dc-runtime 用的那个：它的 helmet 把 documentElement.dataset.theme
      当作画布宿主的明暗主题在读写（support.js 里的 __dc_theme），同名会互相覆盖 */
   html[data-app-theme="dark"]  { --app-bg: #141218; color-scheme: dark; }
@@ -35,13 +35,14 @@
   }
 </style>
 <script>
-// 首屏防闪：在任何渲染之前按上次存的主题定好 <html data-app-theme>，
-// 否则挂载前会先看到一帧白底再跳回真正的主题色。
-// theme-color 不用在这里算——顶栏恒定深色，上面那个静态 meta 就是最终值
+// 首屏防闪：在任何渲染之前按上次存的主题定好 <html data-app-theme> 和 theme-color，
+// 否则打开时会先看到一帧白底 + 写死的深色状态栏，再跳回真正的主题色
 (function () {
   var t = 'dark';
   try { if (localStorage.getItem('listening-player-theme-v1') === 'light') t = 'light'; } catch (e) { /* 隐私模式下读不到就用默认夜间 */ }
   document.documentElement.setAttribute('data-app-theme', t);
+  var m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute('content', t === 'dark' ? '#1D1B20' : '#F7F2FA');
 })();
 </script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -229,17 +230,17 @@ if ('serviceWorker' in navigator) {
 
 <div class="dc-app-shell" style="width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;--ring:{{ v.c.primary }};--glass:{{ v.c.glass }};--scrollbar-thumb:{{ v.c.outlineVariant }};--scrollbar-thumb-hover:{{ v.c.outline }};">
 
-  <div class="dc-topbar" style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;background:{{ v.bar.surfaceLow }};border-bottom:1px solid {{ v.bar.outlineVariant }};box-sizing:border-box;">
+  <div class="dc-topbar" style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;background:{{ v.c.surfaceLow }};border-bottom:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
     <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-      <span style="font-size:14px;font-weight:600;color:{{ v.bar.onSurface }};white-space:nowrap;">封寒月</span>
-      <span style="width:3px;height:3px;border-radius:50%;background:{{ v.bar.outline }};flex-shrink:0;"></span>
-      <span style="font-size:14px;font-weight:600;color:{{ v.bar.onSurfaceVariant }};white-space:nowrap;">听音乐</span>
+      <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;">封寒月</span>
+      <span style="width:3px;height:3px;border-radius:50%;background:{{ v.c.outline }};flex-shrink:0;"></span>
+      <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">听音乐</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.bar.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.bar.hover }};color:{{ v.bar.onSurface }};" style-active="background:{{ v.bar.press }};">
+      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="background:{{ v.c.press }};">
         <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span><span class="dc-desktop-only" style="display:inline;">GitHub</span>
       </a>
-      <button onclick="{{ H.clearAudioCache }}" title="清空本地音频缓存" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.bar.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.bar.hover }};color:{{ v.bar.onSurface }};" style-active="transform:scale(0.9);">
+      <button onclick="{{ H.clearAudioCache }}" title="清空本地音频缓存" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
         <span style="font-family:'Material Symbols Outlined';font-size:19px;">delete_sweep</span>
       </button>
       <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
@@ -1586,14 +1587,17 @@ class Component extends DCLogic {
     });
   }
 
-  // 把 data-app-theme 写到 <html> 上：body 底色（整页回弹露出的颜色）和 color-scheme
-  // （原生滚动条、输入框、光标的明暗）由 <head> 里的静态 CSS 按这个属性接管——这两个在
-  // React 挂载前就得是对的，不能靠重渲染。
-  // theme-color meta 这里不再动：安装版 PWA 的状态栏取 manifest 的 theme_color、运行时改
-  // meta 无效；顶栏已经钉死成同色的 #1D1B20，标签页的地址栏也跟着恒定，免得两种打开方式
-  // 一个变色一个不变。所以 meta 保持 <head> 里那个静态值就行
+  // 系统 UI 的着色：手机浏览器地址栏 / 安卓安装版的状态栏跟着 theme-color meta 走，
+  // 不然切到浅色主题后顶部还留着深色地址栏，看着像没切干净。
+  // 同时把 data-app-theme 写到 <html> 上，body 底色（整页回弹露出的颜色）和 color-scheme
+  // （原生滚动条、输入框、光标的明暗）由 <head> 里的静态 CSS 接管——这两个在 React 挂载前
+  // 就得是对的，不能靠重渲染。<head> 的防闪脚本已经按 localStorage 设过一遍，这里挂载后和
+  // 每次切主题时再按 THEMES 的真值校准一次，防止那边写死的副本和 THEMES 漂移
   syncThemeChrome(theme) {
-    document.documentElement.setAttribute('data-app-theme', theme || this.state.theme);
+    const t = theme || this.state.theme;
+    document.documentElement.setAttribute('data-app-theme', t);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', THEMES[t].surfaceLow);
   }
   setSearchQuery(e) {
     const val = e.target.value;
@@ -2546,10 +2550,6 @@ class Component extends DCLogic {
   renderVals() {
     const s = this.state;
     const c = THEMES[s.theme];
-    // 顶栏固定走深色调色板，不跟主题切。原因：安装版 PWA（WebAPK）的系统状态栏颜色取
-    // manifest.json 的 theme_color，页面运行时改 <meta name="theme-color"> 不会重绘它，
-    // 所以状态栏永远是 #1D1B20。要让状态栏和顶栏看起来是连续的一块，只能把顶栏也钉死成同色
-    const bar = THEMES.dark;
     const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]) || null;
     const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
     const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack), coverStyle: coverStyle(rawTrack) };
@@ -2765,7 +2765,7 @@ class Component extends DCLogic {
 
     return {
       v: {
-        c, bar, track,
+        c, track,
         currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, thumbStyle, volume: s.volume,
         adaptiveVolumeColor: s.adaptiveVolume ? c.primary : c.onSurfaceVariant,
         lyricsRender, lyricsOffset: offset,
@@ -2809,12 +2809,10 @@ class Component extends DCLogic {
         prevDisabled: !(idx >= 0 && s.playOrder.length > 1), nextDisabled: !(idx >= 0 && s.playOrder.length > 1),
         playDisabled: !matchedTrack, hasTrack: !!matchedTrack,
         themeIcon: s.theme === 'dark' ? 'dark_mode' : 'light_mode',
-        // 开关长在恒定深色的顶栏上，配色跟着 bar（深色盘）算而不是跟着当前主题；
-        // 浅色态的滑块/图标要相对深色底反过来配，否则白天模式下整个开关糊在顶栏里看不见
-        switchTrackBg: s.theme === 'dark' ? bar.primary : bar.outlineVariant,
-        switchThumbBg: s.theme === 'dark' ? bar.onPrimary : bar.onSurfaceVariant,
+        switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
+        switchThumbBg: s.theme === 'dark' ? c.onPrimary : c.surfaceLow,
         switchThumbLeft: s.theme === 'dark' ? 26 : 2,
-        switchIconColor: s.theme === 'dark' ? bar.primary : bar.surfaceLow,
+        switchIconColor: s.theme === 'dark' ? c.primary : c.onSurfaceVariant,
         playIcon: isLoadingCurrent ? 'progress_activity' : (s.playing ? 'pause' : 'play_arrow'),
         playIconAnimStyle: isLoadingCurrent ? 'animation:iconSpin .9s linear infinite;display:inline-block;' : '',
         modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
