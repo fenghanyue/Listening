@@ -9,8 +9,42 @@
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-512.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="听音乐">
+<style>
+  /* 下面四个色值是从 dc-script 里的 THEMES 复制出来的（dark/light 的 bg 与 surfaceLow）。
+     改 THEMES 的时候记得同步这里——首屏脚本跑在 dc-script 之前，拿不到那个对象 */
+  /* 属性名特意避开 dc-runtime 用的那个：它的 helmet 把 documentElement.dataset.theme
+     当作画布宿主的明暗主题在读写（support.js 里的 __dc_theme），同名会互相覆盖 */
+  html[data-app-theme="dark"]  { --app-bg: #141218; color-scheme: dark; }
+  html[data-app-theme="light"] { --app-bg: #FFFBFE; color-scheme: light; }
+  /* 整页回弹露出的底色 / React 挂载前的底色，不能放 <helmet>：
+     那里的样式是 dc-runtime 挂载时才注入的，晚了一拍会先闪一帧白底 */
+  html, body { background: var(--app-bg, #141218); }
+  /* 100dvh 走 class 而不是内联：内联 style 会被 support.js 的 cssToObj 转成对象，
+     重复属性会被后者吃掉，写不了 100vh 的降级兜底 */
+  .dc-app-shell { height: 100vh; height: 100dvh; }
+  /* 顶栏通知栏避让：总高撑成 48px + 安全区，安全区用 padding-top 吃掉，内容区仍是 48px。
+     安卓 PWA / 浏览器标签页 / 桌面端这个 inset 都是 0，渲染和改动前逐像素一致；
+     留着它是为了以后真要做 iOS 沉浸时布局已经是对的。同样用两遍声明兜住不认 env() 的浏览器 */
+  .dc-topbar {
+    height: 48px;
+    height: calc(48px + env(safe-area-inset-top, 0px));
+    padding: 0 20px;
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+</style>
+<script>
+// 首屏防闪：在任何渲染之前按上次存的主题定好 <html data-app-theme> 和 theme-color，
+// 否则打开时会先看到一帧白底 + 写死的深色状态栏，再跳回真正的主题色
+(function () {
+  var t = 'dark';
+  try { if (localStorage.getItem('listening-player-theme-v1') === 'light') t = 'light'; } catch (e) { /* 隐私模式下读不到就用默认夜间 */ }
+  document.documentElement.setAttribute('data-app-theme', t);
+  var m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute('content', t === 'dark' ? '#1D1B20' : '#F7F2FA');
+})();
+</script>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
@@ -51,7 +85,7 @@ if ('serviceWorker' in navigator) {
 }
 </style>
   <style>
-    body { margin: 0; background: #EAE6EE; font-family: 'Plus Jakarta Sans', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; }
+    body { margin: 0; font-family: 'Plus Jakarta Sans', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; }
     /* App 化的触感细节：去掉移动端点击灰块，控件文字（含 Material Symbols 连字图标）不可长按选中，输入框除外 */
     html, body { -webkit-tap-highlight-color: transparent; }
     body { -webkit-user-select: none; user-select: none; }
@@ -106,7 +140,8 @@ if ('serviceWorker' in navigator) {
     @media (max-width: 860px) {
       .dc-sidebar {
         position: fixed !important;
-        top: 48px !important;
+        /* 顶栏在有安全区的环境下会长高一截，抽屉顶边贴着顶栏底边，要跟着走 */
+        top: calc(48px + env(safe-area-inset-top, 0px)) !important;
         bottom: 0 !important;
         left: 0 !important;
         width: 78vw !important;
@@ -193,9 +228,9 @@ if ('serviceWorker' in navigator) {
   </style>
 </helmet>
 
-<div style="height:100vh;width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;--ring:{{ v.c.primary }};--glass:{{ v.c.glass }};--scrollbar-thumb:{{ v.c.outlineVariant }};--scrollbar-thumb-hover:{{ v.c.outline }};">
+<div class="dc-app-shell" style="width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;--ring:{{ v.c.primary }};--glass:{{ v.c.glass }};--scrollbar-thumb:{{ v.c.outlineVariant }};--scrollbar-thumb-hover:{{ v.c.outline }};">
 
-  <div style="height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:{{ v.c.surfaceLow }};border-bottom:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
+  <div class="dc-topbar" style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;background:{{ v.c.surfaceLow }};border-bottom:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
     <div style="display:flex;align-items:center;gap:8px;min-width:0;">
       <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;">封寒月</span>
       <span style="width:3px;height:3px;border-radius:50%;background:{{ v.c.outline }};flex-shrink:0;"></span>
@@ -1071,6 +1106,28 @@ function savePersistedLibrary(s) {
   }
 }
 
+// ====================== 主题（和歌单库存档分开存） ======================
+// 单独一个 key、不并进 LIBRARY_STORAGE_KEY 那份 JSON：<head> 里的首屏防闪脚本要在 dc-runtime
+// 之前同步读到它，并进去的话那段脚本就得复制一份歌单库的解析逻辑，两边迟早走散。
+// 另外歌单库每 5 秒跟着播放进度落盘一次，主题只是个 UI 偏好，没必要跟着高频写
+const THEME_STORAGE_KEY = 'listening-player-theme-v1';
+
+function loadTheme() {
+  try {
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+  } catch (e) {
+    return 'dark';
+  }
+}
+
+function saveTheme(theme) {
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch (e) {
+    /* 隐私模式下存不了就下次打开回到默认夜间，不影响播放主功能 */
+  }
+}
+
 // ====================== 搜索历史（最近搜过的关键词，和歌单库存档分开存） ======================
 const SEARCH_HISTORY_KEY = 'listening-player-search-history-v1';
 const SEARCH_HISTORY_MAX = 8;
@@ -1124,7 +1181,7 @@ const SILENCE_RMS_FLOOR = Math.pow(10, -50 / 20); // 低于此 RMS（约 -50dBFS
 class Component extends DCLogic {
   state = (() => {
     const base = {
-      theme: 'dark', searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
+      theme: loadTheme(), searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
       searchResults: [],
       // 搜索联想 / 历史：suggestions = 逐字联想的曲目（只查网易云）；searchFocused 跟随输入框真实焦点；
       // suggestDismissed = 主动收起下拉（Esc / 已发起搜索），输入或重新聚焦时复位；两者分开，避免
@@ -1235,7 +1292,7 @@ class Component extends DCLogic {
     this._onResizeMeasureLyrics = () => this.measureLyricsViewport();
     window.addEventListener('resize', this._onResizeMeasureLyrics);
     setTimeout(() => this.measureLyricsViewport(), 0);
-    this.syncThemeColorMeta();
+    this.syncThemeChrome();
     // 安卓上锁屏后台要连续自动切歌，系统电池策略默认会限制——这不是这个页面能靠代码绕过的东西，
     // 只能提示用户自己去系统设置放行。只在安卓上提示一次，点掉之后记住，不用每次打开都看到
     try {
@@ -1511,9 +1568,12 @@ class Component extends DCLogic {
   stop(e) { e.stopPropagation(); }
 
   toggleTheme() {
-    this.patch(s => ({ theme: s.theme === 'dark' ? 'light' : 'dark' }));
-    this.persist();
-    setTimeout(() => this.syncThemeColorMeta(), 0);
+    const next = this.state.theme === 'dark' ? 'light' : 'dark';
+    this.patch({ theme: next });
+    // 主题存自己的 key，不走 persist()——那个只管歌单库，theme 从来就不在它的字段里
+    saveTheme(next);
+    // 直接把 next 传进去：patch 是异步的，这里读 this.state.theme 会拿到切换前的旧值
+    this.syncThemeChrome(next);
   }
 
   clearAudioCache() {
@@ -1527,11 +1587,17 @@ class Component extends DCLogic {
     });
   }
 
-  // 手机浏览器地址栏/状态栏的着色（theme-color meta）跟着当前主题的 surfaceLow 走，
-  // 不然切到浅色主题后顶部还留着深色地址栏，看着像没切干净
-  syncThemeColorMeta() {
+  // 系统 UI 的着色：手机浏览器地址栏 / 安卓安装版的状态栏跟着 theme-color meta 走，
+  // 不然切到浅色主题后顶部还留着深色地址栏，看着像没切干净。
+  // 同时把 data-app-theme 写到 <html> 上，body 底色（整页回弹露出的颜色）和 color-scheme
+  // （原生滚动条、输入框、光标的明暗）由 <head> 里的静态 CSS 接管——这两个在 React 挂载前
+  // 就得是对的，不能靠重渲染。<head> 的防闪脚本已经按 localStorage 设过一遍，这里挂载后和
+  // 每次切主题时再按 THEMES 的真值校准一次，防止那边写死的副本和 THEMES 漂移
+  syncThemeChrome(theme) {
+    const t = theme || this.state.theme;
+    document.documentElement.setAttribute('data-app-theme', t);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', THEMES[this.state.theme].surfaceLow);
+    if (meta) meta.setAttribute('content', THEMES[t].surfaceLow);
   }
   setSearchQuery(e) {
     const val = e.target.value;
