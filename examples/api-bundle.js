@@ -25,12 +25,14 @@ var ListeningAPI = (() => {
     fetchNeteasePlaylist: () => fetchNeteasePlaylist,
     fetchQQDetails: () => fetchQQDetails,
     fetchSoundCloudDetails: () => fetchSoundCloudDetails,
+    officialSongUrl: () => officialSongUrl,
     resolveNeteaseShortLink: () => resolveNeteaseShortLink,
     resolveSoundCloudCacheUrl: () => resolveSoundCloudCacheUrl,
     searchAll: () => searchAll,
     searchNetease: () => searchNetease,
     searchQQ: () => searchQQ,
-    searchSoundCloud: () => searchSoundCloud
+    searchSoundCloud: () => searchSoundCloud,
+    shareText: () => shareText
   });
 
   // src/api/utils.js
@@ -466,6 +468,53 @@ var ListeningAPI = (() => {
       console.warn("soundcloud cache url resolve:", e);
       return null;
     }
+  }
+
+  // src/api/share.js
+  var URL_TEMPLATES = {
+    // 服务端渲染的移动分享页。PC 端那个 /song?id= 是 hash 路由 SPA，
+    // '#' 后面的内容根本不会发给服务器，拿不到歌曲信息
+    netease: (id) => `https://music.163.com/m/song?id=${id}`,
+    // 仅在 track.pageUrl（接口直接给的 h5 分享链接）缺失时兜底
+    qq: (mid) => `https://y.qq.com/n/ryqq/songDetail/${mid}`
+  };
+  function officialSongUrl(track) {
+    if (!track) return null;
+    switch (track.source) {
+      case "netease": {
+        const id = String(track.songid ?? "").trim();
+        return /^\d+$/.test(id) ? URL_TEMPLATES.netease(id) : null;
+      }
+      case "qq": {
+        const pageUrl = String(track.pageUrl ?? "").trim();
+        if (/^https?:\/\//.test(pageUrl)) return pageUrl;
+        const mid = String(track.songMid || track.qqId || track.songid || "").trim();
+        return mid ? URL_TEMPLATES.qq(encodeURIComponent(mid)) : null;
+      }
+      case "soundcloud": {
+        const permalink = String(track.scPermalink ?? "").trim();
+        return /^https?:\/\//.test(permalink) ? permalink : null;
+      }
+      default:
+        return null;
+    }
+  }
+  function shareText(track) {
+    if (!track) return "";
+    const lines = [];
+    const title = (track.title || "").trim();
+    const artist = (track.artist || "").trim();
+    if (title && artist) lines.push(`\u300A${title}\u300B\u2014 ${artist}`);
+    else if (title) lines.push(`\u300A${title}\u300B`);
+    else if (artist) lines.push(artist);
+    const album = (track.album || "").trim();
+    if (album) lines.push(`\u4E13\u8F91\uFF1A${album}`);
+    const url = officialSongUrl(track);
+    if (url) {
+      if (lines.length) lines.push("");
+      lines.push(url);
+    }
+    return lines.join("\n");
   }
 
   // src/api/index.js
