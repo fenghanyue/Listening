@@ -440,7 +440,7 @@ if ('serviceWorker' in navigator) {
      <sc-if value="{{ v.showNowPlayingBody }}">
      <div class="dc-ambient" style="{{ v.ambientStyle }}"></div>
      <div class="dc-ambient" style="{{ v.ambientOverlayStyle }}"></div>
-     <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;" style-active="transform:scale(0.92);">
+     <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};z-index:2;" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.92);">
        <span style="font-family:'Material Symbols Outlined';font-size:20px;">expand_more</span>
      </button>
      <sc-if value="{{ v.hasTrack }}">
