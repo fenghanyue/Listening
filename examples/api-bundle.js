@@ -518,7 +518,7 @@ var ListeningAPI = (() => {
   }
 
   // src/api/index.js
-  async function searchAll({ keyword, sources = ["netease", "qq", "soundcloud"], limit = 10 } = {}) {
+  async function searchAll({ keyword, sources = ["netease", "qq"], limit = 10 } = {}) {
     if (!keyword) throw new Error("keyword is required");
     const tasks = [];
     if (sources.includes("netease")) {

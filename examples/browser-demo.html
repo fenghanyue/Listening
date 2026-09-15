@@ -57,7 +57,8 @@
 
       let results = [];
       try {
-        results = await searchAll({ keyword: kw, sources: ['netease', 'qq', 'soundcloud'], limit: 5 });
+        // soundcloud 已从搜索下掉，要手动试就把它加回 sources（分支没删）
+        results = await searchAll({ keyword: kw, sources: ['netease', 'qq'], limit: 5 });
       } catch (e) {
         status.innerHTML = `<span class="error">请求失败: ${e.message}</span>`;
         console.error(e);

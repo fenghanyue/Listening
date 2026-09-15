@@ -4,7 +4,7 @@
 
 # Listening
 
-**网易云音乐 · QQ音乐 · SoundCloud 聚合播放器**
+**网易云音乐 · QQ音乐聚合播放器**
 
 跨平台聚合搜索 · 歌单管理 · 离线缓存 · 可安装为 PWA，单文件 Node 服务一键部署
 
@@ -21,7 +21,7 @@
 
 > ⚠️ **本项目仅供学习交流使用，请勿用于任何商业用途。**
 
-**Listening** 是一个把网易云音乐、QQ音乐、SoundCloud 三个源聚合到一起搜索和播放的音乐播放器。前端页面和 CORS 代理被合并成了一个 Node 进程，没有任何第三方依赖，克隆下来就能跑，也能直接扔到 Render 这类平台上部署成公网可访问的实例。
+**Listening** 是一个把网易云音乐、QQ音乐聚合到一起搜索和播放的音乐播放器。前端页面和 CORS 代理被合并成了一个 Node 进程，没有任何第三方依赖，克隆下来就能跑，也能直接扔到 Render 这类平台上部署成公网可访问的实例。
 
 **在线体验**：[listening-5bnv.onrender.com](https://listening-5bnv.onrender.com)（Render 免费实例，长时间无人访问会休眠，首次打开可能要等几十秒冷启动）
 
@@ -39,7 +39,7 @@
 
 | | |
 |---|---|
-| 🔍 **聚合搜索** | 网易云音乐 / QQ音乐 / SoundCloud 并行搜索，按源交错排列结果，可单独勾选/取消某个源 |
+| 🔍 **聚合搜索** | 网易云音乐 / QQ音乐并行搜索，按源交错排列结果，可单独勾选/取消某个源。SoundCloud 已从搜索下掉，见[下方说明](#soundcloud-已从搜索下掉) |
 | ▶️ **播放** | 进度条、音量、三种播放模式（列表循环 / 随机 / 单曲循环）、歌词滚动 |
 | 🗂️ **歌单管理** | 新建歌单、加入/移出歌单、拖拽调整播放队列顺序 |
 | 📥 **歌单导入 / 导出** | 网易云分享链接一键导入整份歌单（整段分享文本也行），可选导入到新建歌单或直接并入「喜欢的音乐」；歌单也能导出成一段字符串，粘贴回去即可原样恢复，方便备份/分享（覆盖式：同名歌单直接替换，留空则整体替换「喜欢的音乐」）。**不支持 QQ 音乐歌单链接导入**，目前没有计划支持 |
@@ -85,7 +85,7 @@ Listening/
 │   ├── index.js                    # 聚合入口：searchAll / ensureTrackDetails
 │   ├── netease.js                  # 网易云音乐（qijieya meting 代理），含单曲搜索和歌单拉取
 │   ├── qq.js                       # QQ音乐（tang api 代理）
-│   ├── soundcloud.js               # SoundCloud（api-v2，需配合 server.mjs 代理）
+│   ├── soundcloud.js               # SoundCloud（api-v2，需配合 server.mjs 代理）——已从搜索下掉，代码保留
 │   └── utils.js                    # LRC 歌词解析
 ├── examples/
 │   ├── Listening Player.dc.html    # 播放器主应用（唯一的生产页面，根路径 / 直接返回它）
@@ -113,7 +113,7 @@ import { searchAll, ensureTrackDetails } from './src/api/index.js';
 
 const tracks = await searchAll({
   keyword: '周杰伦',
-  sources: ['netease', 'qq', 'soundcloud'],
+  sources: ['netease', 'qq'],   // 默认值就是这两个；想试 SoundCloud 得自己把 'soundcloud' 加进来
   limit: 10,
 });
 // 返回按源交错排列的 track 数组
@@ -180,7 +180,31 @@ const playlistTracks = await fetchNeteasePlaylist('36420739'); // 歌单分享�
 |------|-----------|------|
 | 网易云 | meting 代理 | api.qijieya.cn |
 | QQ音乐 | tang 代理 | tang.api.s01s.cn |
-| SoundCloud | api-v2（浏览器端需经 `server.mjs` 的 `/proxy` `/stream` `/sc-client-id` 转发，否则会被 CORS 拦截） | api-v2.soundcloud.com |
+| SoundCloud | api-v2（浏览器端需经 `server.mjs` 的 `/proxy` `/stream` `/sc-client-id` 转发，否则会被 CORS 拦截）——**已从搜索下掉**，仅用于老曲目播放和手动排查 | api-v2.soundcloud.com |
+
+### SoundCloud 已从搜索下掉
+
+这个源实际上用不了（`client_id` 反复失效、HLS 流打不开），前后修了好几次都没修好，就不再继续修了。现在的处理是**从搜索侧隐藏，而不是把代码删干净**：
+
+- 搜索筛选芯片里不再出现 SoundCloud，聚合搜索也不再请求它
+- **已经在歌单 / 播放队列 / 「喜欢的音乐」里的 SoundCloud 曲目一个都没动**——照旧显示歌名、来源标签和来源色点，想自己删就删、想一直留着也行、点播放也随意（播不了就走现有的播放失败重试逻辑）；歌单导出 / 导入也照旧能原样往返
+- 详情拉取、分享链接、离线缓存、`server.mjs` 的三个代理路由全部保留，一行没删
+
+**想恢复的话**，只有两个入口：
+
+| 位置 | 改什么 |
+|---|---|
+| `SEARCH_SOURCES`（`examples/Listening Player.dc.html`） | 把 `'soundcloud'` 加回这个数组。筛选芯片、`state.sources` 初值、`doSearch` 真正发出去的源三处都从它推导 |
+| `searchAll` 的默认 `sources`（`src/api/index.js`） | 同样加回 `'soundcloud'`，然后跑 `npm run build` |
+
+识别 `soundcloud` 的分支和 `searchSoundCloud` 导出都没删，所以**不改代码也能单独试一下它还活不活**：
+
+```js
+// 浏览器控制台（页面已加载）
+await ListeningAPI.searchAll({ keyword: 'lofi', sources: ['soundcloud'] });
+```
+
+`examples/search-test.html` 是不走 `src/api` 的独立手测页，这次没动，正好留着当以后排查 SoundCloud 的探针。
 
 ## 开发相关
 
