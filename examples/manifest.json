@@ -1,7 +1,7 @@
 {
   "name": "听音乐",
   "short_name": "听音乐",
-  "description": "网易云音乐 · QQ音乐 · SoundCloud 聚合播放器",
+  "description": "网易云音乐 · QQ音乐聚合播放器",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

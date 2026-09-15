@@ -422,7 +422,7 @@ if ('serviceWorker' in navigator) {
           <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
             <div style="display:flex;justify-content:center;margin-bottom:16px;"><span style="width:72px;height:72px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:32px;">search</span></span></div>
             <div style="font-size:15px;font-weight:600;color:{{ v.c.onSurface }};">想听点什么？</div>
-            <div style="font-size:12.5px;margin-top:6px;">支持网易云音乐 · QQ音乐 · SoundCloud，也可以导入歌单</div>
+            <div style="font-size:12.5px;margin-top:6px;">支持网易云音乐 · QQ音乐，也可以导入歌单</div>
           </div>
         </sc-if>
         <sc-if value="{{ v.isSearching }}">
@@ -738,6 +738,16 @@ const THEMES = {
 
 const SOURCE_COLORS = { netease: '#ff6b6b', qq: '#4dd0e1', soundcloud: '#ff8800' };
 const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', soundcloud: 'SoundCloud' };
+
+// 可搜索的音源。SoundCloud 反复修不好（client_id 失效 / HLS 流打不开），已从搜索里下掉：
+// 不出现在筛选芯片里，也不参与聚合搜索。但它仍然是一个合法的 source 取值——已经在歌单 /
+// 播放队列里的 SoundCloud 曲目照旧显示、照旧能试着播放，详情 / 分享 / 缓存那套代码一行没删，
+// 所以上面 SOURCE_COLORS / SOURCE_LABELS 和下面 GRADIENTS 里的 soundcloud 条目都得留着。
+// 特别注意：千万不要拿这份数组去 DRY 下面的 EXPORT_SOURCE_CODES / EXPORT_SOURCE_LIST——
+// 那两个是歌单导出串的位置相关编码，少了 soundcloud 会把用户已经存下的导出串解错。
+// 想恢复搜索：把 'soundcloud' 加回这个数组即可（筛选芯片和 state.sources 都从这里推导），
+// 另外 src/api/index.js 里 searchAll 的默认 sources 也同步去掉了 soundcloud。
+const SEARCH_SOURCES = ['netease', 'qq'];
 const GRADIENTS = {
   netease: 'linear-gradient(135deg, rgba(255,107,107,.55), rgba(255,107,107,.14))',
   qq: 'linear-gradient(135deg, rgba(77,208,225,.55), rgba(77,208,225,.14))',
@@ -1193,7 +1203,7 @@ class Component extends DCLogic {
       searchHistory: loadSearchHistory(),
       // 搜索结果分组维度：none | artist | source（只作用于搜索结果视图，纯显示重排，不改 playOrder）
       groupBy: 'none',
-      sources: { netease: true, qq: true, soundcloud: true },
+      sources: Object.fromEntries(SEARCH_SOURCES.map(k => [k, true])),
       liked: {},
       // likedOrder = "喜欢的音乐"的显示顺序（id 数组，最新点喜欢的排最前面），liked 本身只是个
       // 无序的 id -> boolean 集合，不能拿它的 key 顺序当显示顺序
@@ -1730,7 +1740,10 @@ class Component extends DCLogic {
     const seq = this._searchSeq;
     this.patch({ appliedQuery: q, hasSearched: true, isSearching: true, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
     this.showToast(`正在搜索 "${q}" …`);
-    const sources = Object.keys(this.state.sources).filter(k => this.state.sources[k]);
+    // 从 SEARCH_SOURCES 而不是 state.sources 的 key 出发：让可搜索源只有这一个卡口，即使
+    // state.sources 里残留了已下掉的源（部分回退 / 手改 / 以后改成持久化）也注不进搜索；
+    // 顺带把交错排列的优先顺序固定成这份显式数组，不再依赖对象 key 的插入顺序
+    const sources = SEARCH_SOURCES.filter(k => this.state.sources[k]);
     API.searchAll({ keyword: q, sources, limit: 10 }).then(tracks => {
       if (seq !== this._searchSeq) return;   // 已有更新的搜索发出，丢弃这次的结果
       // 给每个 track 分配内部 id
@@ -2692,7 +2705,7 @@ class Component extends DCLogic {
       };
     });
 
-    const sourcesRender = ['netease', 'qq', 'soundcloud'].map(key => {
+    const sourcesRender = SEARCH_SOURCES.map(key => {
       const checked = s.sources[key];
       return {
         key, label: SOURCE_LABELS[key], dot: SOURCE_COLORS[key], checked,

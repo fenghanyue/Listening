@@ -13,9 +13,11 @@ async function main() {
 
   console.log(`搜索: "${keyword}"\n`);
 
+  // soundcloud 不在这里：那个源已经从搜索里下掉了（见 src/api/index.js 的 searchAll 注释）。
+  // 想实际试试它还活不活，把 'soundcloud' 加进下面这个数组就行，分支还在
   const results = await searchAll({
     keyword,
-    sources: ['netease', 'qq', 'soundcloud'],
+    sources: ['netease', 'qq'],
     limit: 3,
   });
 

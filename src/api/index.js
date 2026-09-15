@@ -1,6 +1,7 @@
 /**
  * 聚合跨平台音乐搜索
- * 并行调用网易云 / QQ / SoundCloud，按源交错排列结果
+ * 并行调用网易云 / QQ，按源交错排列结果
+ * SoundCloud 不在默认源里（已从搜索下掉，见 searchAll 注释），但显式点名仍能搜
  */
 
 import { searchNetease, fetchNeteaseDetails, fetchNeteasePlaylist, resolveNeteaseShortLink } from './netease.js';
@@ -11,11 +12,14 @@ import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
  * 聚合搜索（多源并行）
  * @param {object} options
  * @param {string} options.keyword - 搜索关键词
- * @param {string[]} [options.sources=['netease','qq','soundcloud']] - 启用的音乐源
+ * @param {string[]} [options.sources=['netease','qq']] - 启用的音乐源。
+ *   'soundcloud' 已从默认值里去掉（这个源反复修不好：client_id 失效 / HLS 流打不开），
+ *   下面识别它的分支没删，显式传 sources: ['soundcloud'] 仍然会去搜，方便以后手动排查。
+ *   播放器页面另有一份 SEARCH_SOURCES（examples/Listening Player.dc.html）控制筛选芯片
  * @param {number} [options.limit=10] - 每源取多少首
  * @returns {Promise<Array>} 按源交错排列的 track 数组
  */
-export async function searchAll({ keyword, sources = ['netease', 'qq', 'soundcloud'], limit = 10 } = {}) {
+export async function searchAll({ keyword, sources = ['netease', 'qq'], limit = 10 } = {}) {
   if (!keyword) throw new Error('keyword is required');
 
   const tasks = [];
@@ -32,7 +36,7 @@ export async function searchAll({ keyword, sources = ['netease', 'qq', 'soundclo
       searchQQ(keyword, limit).then(tracks => ({ source: 'qq', tracks }))
     );
   }
-  // SoundCloud
+  // SoundCloud：不在默认源里，只有调用方显式点名才走到这里
   if (sources.includes('soundcloud')) {
     tasks.push(
       searchSoundCloud(keyword, limit).then(tracks => ({ source: 'soundcloud', tracks }))
