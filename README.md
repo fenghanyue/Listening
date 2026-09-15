@@ -97,6 +97,8 @@ Listening/
 │   ├── browser-demo.html           # API 层的浏览器端最小示例（不含播放器 UI）
 │   ├── node-demo.mjs               # API 层的 Node 端最小示例
 │   └── search-test.html            # 手动测试用页面
+├── docs/
+│   └── mobile-status-bar.md        # 手机端状态栏能做什么/不能做什么（含两条已验证走不通的路）
 └── .github/workflows/keep-alive.yml
 ```
 
@@ -183,6 +185,7 @@ const playlistTracks = await fetchNeteasePlaylist('36420739'); // 歌单分享�
 ## 开发相关
 
 - 改了 `src/api/*` 之后记得跑 `npm run build` 重新生成 `examples/api-bundle.js`——浏览器端用的是这个打包产物，不是 ES module 源码，源码改了不重新构建不会生效
+- 想动手机端状态栏 / 通知栏沉浸之前，**先看 [`docs/mobile-status-bar.md`](docs/mobile-status-bar.md)**——纯 PWA 做不到沉浸，状态栏颜色也不受页面控制，里面记了两条已经真机验证过走不通的路，以及以后真要做时的正确入口
 
 ---
 

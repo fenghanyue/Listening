@@ -25,8 +25,11 @@
      重复属性会被后者吃掉，写不了 100vh 的降级兜底 */
   .dc-app-shell { height: 100vh; height: 100dvh; }
   /* 顶栏通知栏避让：总高撑成 48px + 安全区，安全区用 padding-top 吃掉，内容区仍是 48px。
-     安卓 PWA / 浏览器标签页 / 桌面端这个 inset 都是 0，渲染和改动前逐像素一致；
-     留着它是为了以后真要做 iOS 沉浸时布局已经是对的。同样用两遍声明兜住不认 env() 的浏览器 */
+     注意：当前所有平台上 safe-area-inset-top 恒为 0，所以这几行现在是死代码，渲染结果和
+     没写完全一样——网页不拥有 Android 窗口，视口从哪开始由浏览器决定，压根没有 inset 可报。
+     留着是因为一旦套上原生壳、或 Chromium 把安装版 PWA 的 edge-to-edge 修好，它就是现成的
+     正确布局，不用再改（.dc-sidebar 的 top 也跟着这个值走）。
+     来龙去脉见 docs/mobile-status-bar.md。同样用两遍声明兜住不认 env() 的浏览器 */
   .dc-topbar {
     height: 48px;
     height: calc(48px + env(safe-area-inset-top, 0px));
@@ -1587,8 +1590,10 @@ class Component extends DCLogic {
     });
   }
 
-  // 系统 UI 的着色：手机浏览器地址栏 / 安卓安装版的状态栏跟着 theme-color meta 走，
-  // 不然切到浅色主题后顶部还留着深色地址栏，看着像没切干净。
+  // theme-color meta：**只对手机浏览器标签页的地址栏着色有效**，切到浅色主题后顶部不会
+  // 还留着深色地址栏。对安装版 PWA 的系统状态栏**无效**——实测那条状态栏跟的是手机系统的
+  // 深浅色设置，既不看这个 meta 也不看 manifest 的 theme_color。别再试图从这里控制它，
+  // 详见 docs/mobile-status-bar.md。
   // 同时把 data-app-theme 写到 <html> 上，body 底色（整页回弹露出的颜色）和 color-scheme
   // （原生滚动条、输入框、光标的明暗）由 <head> 里的静态 CSS 接管——这两个在 React 挂载前
   // 就得是对的，不能靠重渲染。<head> 的防闪脚本已经按 localStorage 设过一遍，这里挂载后和
