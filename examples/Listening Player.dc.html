@@ -246,6 +246,9 @@ if ('serviceWorker' in navigator) {
       <button onclick="{{ H.clearAudioCache }}" title="清空本地音频缓存" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
         <span style="font-family:'Material Symbols Outlined';font-size:19px;">delete_sweep</span>
       </button>
+      <button onclick="{{ H.copyDiagLog }}" title="复制切歌诊断记录" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
+        <span style="font-family:'Material Symbols Outlined';font-size:19px;">bug_report</span>
+      </button>
       <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
         <span style="position:absolute;top:2px;left:{{ v.switchThumbLeft }}px;width:24px;height:24px;border-radius:50%;background:{{ v.switchThumbBg }};display:flex;align-items:center;justify-content:center;transition:left .25s;box-shadow:0 1px 2px rgba(0,0,0,.35);">
           <span style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.switchIconColor }};">{{ v.themeIcon }}</span>
@@ -897,10 +900,20 @@ async function clearAllCachedAudio() {
   });
 }
 
+// 正在进行中的缓存下载：key → Promise<是否落库>。预取下一首还没下完就切到这首时，loadAndPlay 会对
+// 同一首再发起一次缓存下载——一首歌动辄几十 MB（QQ 默认挑无损），多开一路就是跟播放器自己的边播边下
+// 抢网速、白花一份流量。同一首已经在下就不再新开，只把 onDone 挂到那一次的结果上
+const audioCacheInflight = new Map();
+
 // onDone（可选）在整段音频真正落库成功后才回调——用来在"当前播放的这首歌后台缓存完成"时点亮导出按钮。
 // 预取下一首的调用不传 onDone，避免下一首缓存好了误点亮当前按钮。
 function cacheAudioInBackground(key, url, onDone) {
-  fetch(url).then(r => {
+  const inflight = audioCacheInflight.get(key);
+  if (inflight) {
+    if (onDone) inflight.then(ok => { if (ok) onDone(); });
+    return;
+  }
+  const job = fetch(url).then(r => {
     if (!r.ok) return null;
     // Content-Length 若可用，优先拿它跟实际下载到的字节数比对——不足说明这次下载中途被打断了
     // （网络抖动/代理断流），得到的是截断的音频，绝不能拿去覆盖已有的完整缓存
@@ -920,8 +933,14 @@ function cacheAudioInBackground(key, url, onDone) {
       return blob;
     });
   }).then(blob => {
-    if (blob) return putCachedAudio(key, blob).then(() => onDone && onDone());
-  }).catch(e => console.warn('audio cache fetch failed:', e));
+    if (blob) return putCachedAudio(key, blob).then(() => true);
+    return false;
+  }).catch(e => {
+    console.warn('audio cache fetch failed:', e);
+    return false;
+  }).finally(() => audioCacheInflight.delete(key));
+  audioCacheInflight.set(key, job);
+  if (onDone) job.then(ok => { if (ok) onDone(); });
 }
 
 // 从缓存 blob 的 MIME 推断导出文件扩展名（音源基本都是 mp3，flac/m4a 等按类型兜底）
@@ -1179,8 +1198,40 @@ const PREFETCH_LEAD_SECONDS = 12; // 离当前曲目结束还剩多少秒开始�
 const LOAD_WATCHDOG_MS = 12000;   // 一首歌从发起加载到超时判定卡死的等待时长：给慢速移动网络 +
                                     // SoundCloud 最坏情况下的多跳解析留够余量（各 fetchXDetails 内部
                                     // 吞掉自己的错误，外层 promise 实际上很少真的 reject，只能靠超时兜底）
-const MAX_CONSECUTIVE_LOAD_FAILURES = 2; // 连续几首都卡死超时就不再自动切歌，停在当前这首上，
-                                            // 避免离线时以 12s/首的速度把整条队列跳穿
+const MAX_CONSECUTIVE_LOAD_FAILURES = 2; // 连续几首都卡死超时 / 重试后仍播放失败，就不再自动切歌，
+                                            // 停在当前这首上，避免离线时把整条队列跳穿
+
+// ====================== 切歌诊断记录 ======================
+// 只存在本机 localStorage、不上传，顶栏按钮一键复制出来。用来在真机上分辨"切歌卡住"卡在哪一步：
+// 是页面在后台被系统冻住了（看门狗迟到很多、出现"页面被冻结"），还是链接失效 / 接口慢（失败、重试、
+// 要链接耗时）。前者只能靠原生壳（APK）解决，后者改网页就行
+const DIAG_STORAGE_KEY = 'listening-diag-log-v1';
+const DIAG_MAX_ENTRIES = 200;
+
+function diagLog(ev, data) {
+  try {
+    const list = JSON.parse(localStorage.getItem(DIAG_STORAGE_KEY) || '[]');
+    list.push({ t: Date.now(), ev, bg: document.visibilityState !== 'visible', off: !navigator.onLine, ...data });
+    if (list.length > DIAG_MAX_ENTRIES) list.splice(0, list.length - DIAG_MAX_ENTRIES);
+    localStorage.setItem(DIAG_STORAGE_KEY, JSON.stringify(list));
+  } catch (e) { /* 记不下就算了：诊断记录绝不能影响播放 */ }
+}
+
+function readDiagLog() {
+  try { return JSON.parse(localStorage.getItem(DIAG_STORAGE_KEY) || '[]'); } catch (e) { return []; }
+}
+
+// 一行一条："月-日 时:分:秒.毫秒 前台/后台 [断网] 事件 字段=值……"，复制出来直接能看
+function formatDiagLog(list) {
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  const lines = list.map(e => {
+    const d = new Date(e.t);
+    const { t, ev, bg, off, ...rest } = e;
+    const fields = Object.entries(rest).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${v}`).join(' ');
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)} ${bg ? '后台' : '前台'}${off ? ' 断网' : ''} ${ev}${fields ? ' ' + fields : ''}`;
+  });
+  return [`# 听音乐 切歌诊断记录（${list.length} 条）`, `# ${navigator.userAgent}`, ...lines].join('\n');
+}
 
 // ====================== 自适应音量（Web Audio AGC）可调参数 ======================
 const ADAPTIVE_LOOP_INTERVAL_MS = 150;   // 增益控制循环的采样/调整周期
@@ -1267,6 +1318,11 @@ class Component extends DCLogic {
     clearTimeout(this._loadWatchdogTimer);
     clearTimeout(this._toastTimer);
     window.removeEventListener('resize', this._onResizeMeasureLyrics);
+    document.removeEventListener('visibilitychange', this._onDiagVisibility);
+    document.removeEventListener('freeze', this._onDiagFreeze);
+    document.removeEventListener('resume', this._onDiagResume);
+    window.removeEventListener('online', this._onDiagOnline);
+    window.removeEventListener('offline', this._onDiagOffline);
     clearInterval(this._adaptiveLoopTimer);
     if (this._audioCtx) { try { this._audioCtx.close(); } catch (e) {} }
   }
@@ -1306,6 +1362,17 @@ class Component extends DCLogic {
     window.addEventListener('resize', this._onResizeMeasureLyrics);
     setTimeout(() => this.measureLyricsViewport(), 0);
     this.syncThemeChrome();
+    // 诊断记录：前后台切换、页面被系统冻结 / 恢复、网络断开 / 恢复——后台切歌卡住时拿这些时间点对照
+    this._onDiagVisibility = () => diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' });
+    this._onDiagFreeze = () => diagLog('页面被冻结', { 在播: this.state.playing ? '是' : '否' });
+    this._onDiagResume = () => diagLog('页面恢复');
+    this._onDiagOnline = () => diagLog('网络恢复');
+    this._onDiagOffline = () => diagLog('网络断开');
+    document.addEventListener('visibilitychange', this._onDiagVisibility);
+    document.addEventListener('freeze', this._onDiagFreeze);
+    document.addEventListener('resume', this._onDiagResume);
+    window.addEventListener('online', this._onDiagOnline);
+    window.addEventListener('offline', this._onDiagOffline);
     // 安卓上锁屏后台要连续自动切歌，系统电池策略默认会限制——这不是这个页面能靠代码绕过的东西，
     // 只能提示用户自己去系统设置放行。只在安卓上提示一次，点掉之后记住，不用每次打开都看到
     try {
@@ -1348,6 +1415,7 @@ class Component extends DCLogic {
         this._loadWatchdogTrackId = null;
         this._consecutiveLoadFailures = 0;
         if (this.state.loadingTrackId != null) this.patch({ loadingTrackId: null });
+        diagLog('出声', { 距切歌ms: this._diagTrackStartAt ? Date.now() - this._diagTrackStartAt : null });
       }
 
       // 快放完时提前预取下一首：列表循环模式下一首是确定的；随机模式在这个时间点提前"掷一次骰子"
@@ -1597,6 +1665,15 @@ class Component extends DCLogic {
     }).catch(e => {
       console.warn('clear audio cache failed:', e);
       this.showToast('清空缓存失败，请稍后再试');
+    });
+  }
+
+  // 顶栏按钮：把切歌诊断记录（见 diagLog）复制到剪贴板，方便贴出来排查
+  copyDiagLog() {
+    const list = readDiagLog();
+    if (!list.length) { this.showToast('还没有诊断记录'); return; }
+    this.copyToClipboard(formatDiagLog(list)).then(ok => {
+      this.showToast(ok ? `已复制 ${list.length} 条诊断记录` : '复制失败，请稍后再试');
     });
   }
 
@@ -2103,6 +2180,10 @@ class Component extends DCLogic {
   // 导航时用这个，避免每次自动切歌都把当前曲目重新挪到队首、把播放顺序搅乱
   startTrack(track, resumeAt = 0) {
     if (!track) return;
+    const auto = this._diagAutoAdvance;
+    this._diagAutoAdvance = false;
+    this._diagTrackStartAt = Date.now();
+    diagLog('切歌', { 方式: auto ? '自动' : '手动', 来源: track.source, 歌: (track.title || '').slice(0, 20) });
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: track.title || '',
@@ -2173,7 +2254,7 @@ class Component extends DCLogic {
     if (mode === 2) {
       // 单曲循环
       if (cur) { cur.currentTime = 0; cur.play(); }
-      return;
+      return !!cur;
     }
 
     let nextTrack = null;
@@ -2189,7 +2270,11 @@ class Component extends DCLogic {
       // 列表循环
       nextTrack = this.nextListLoopTrack();
     }
-    if (nextTrack) this.startTrack(nextTrack);
+    if (nextTrack) {
+      this._diagAutoAdvance = true; // 让 startTrack 的诊断记录分清自动切歌和手动点歌
+      this.startTrack(nextTrack);
+    }
+    return !!nextTrack; // 有没有真的切到下一首：handlePlaybackFailure 靠它决定跳不跳得过去
   }
 
   // 提前给"接下来要放的下一首"解析播放链接 + 后台下载音频缓存，这样真正切到
@@ -2201,11 +2286,19 @@ class Component extends DCLogic {
     this._prefetchedForId = track.id;
     const API = window.ListeningAPI;
     if (!API) return;
+    const note = result => diagLog('预加载', { 来源: track.source, 歌: (track.title || '').slice(0, 20), 结果: result });
     try {
-      if (!track.audioUrl) await API.ensureTrackDetails(track);
-      if (!track.audioUrl) return;
+      // QQ 直链带时效 token，而播放队列是连链接一起存在本地的——隔一阵子再轮到这首，身上的旧链接多半
+      // 已经失效，切过去得先失败一次、再走 handlePlaybackFailure 重新要链接，白白拉长切歌空档（后台
+      // 最怕的就是这段空档）。所以没缓存过的 QQ 曲目在预取时一律重新要一次链接；fetchQQDetails
+      // 拿不到新链接时会保留原值，不会比不刷新更糟
+      const refreshQQ = track.source === 'qq' && !!API.fetchQQDetails && !(await getCachedAudio(audioCacheKey(track)));
+      if (refreshQQ) await API.fetchQQDetails(track);
+      else if (!track.audioUrl) await API.ensureTrackDetails(track);
+      if (!track.audioUrl) { note('没拿到播放链接'); return; }
       const cacheKey = audioCacheKey(track);
-      if (await getCachedAudio(cacheKey)) return; // 已缓存，跳过
+      if (await getCachedAudio(cacheKey)) { note('已缓存'); return; } // 已缓存，跳过
+      note(refreshQQ ? '已换新链接，开始下载' : '开始下载');
       // HLS 曲目：audioUrl 是分片 manifest，不能当整段文件存；改解析同一首歌的 progressive mp3 来缓存。
       // 非 HLS：audioUrl 本身就是整段文件，直接缓存。
       if (track.scIsHLS) {
@@ -2222,6 +2315,8 @@ class Component extends DCLogic {
   armLoadWatchdog(trackId) {
     clearTimeout(this._loadWatchdogTimer);
     this._loadWatchdogTrackId = trackId;
+    // 诊断用：记下武装时间，触发时算比预期晚了多少——晚很多说明页面在后台被系统冻住 / 手机睡着了
+    this._loadWatchdogArmedAt = Date.now();
     this._loadWatchdogTimer = setTimeout(() => this.handleLoadTimeout(trackId), LOAD_WATCHDOG_MS);
   }
 
@@ -2230,13 +2325,16 @@ class Component extends DCLogic {
   // 错误都吞掉，外层 promise 实际上很少真的 reject，只能靠这道超时来发现
   handleLoadTimeout(trackId) {
     if (this.state.currentId !== trackId) return; // 早就换到别的曲目了，这个计时器已经过期
+    const late = Date.now() - this._loadWatchdogArmedAt - LOAD_WATCHDOG_MS;
     this._consecutiveLoadFailures = (this._consecutiveLoadFailures || 0) + 1;
     if (this._consecutiveLoadFailures <= MAX_CONSECUTIVE_LOAD_FAILURES) {
+      diagLog('看门狗', { 迟到ms: late, 处理: '跳过' });
       // 重新武装一次：handleTrackEnd() 的单曲循环分支不会调 startTrack()，不会自动重新武装计时器，
       // 这里统一先兜底武装（列表循环/随机分支里 startTrack() 紧接着就会用新 trackId 覆盖它，不冲突）
       this.armLoadWatchdog(trackId);
       this.handleTrackEnd();
     } else {
+      diagLog('看门狗', { 迟到ms: late, 处理: '停止' });
       // 连续卡死超过阈值，大概率整个网络都不通，不再往后跳，停在这首上，
       // 避免离线状态下把整条队列每首等 12 秒就跳一次这种失控的快速跳歌
       this.patch({ playing: false, loadingTrackId: null });
@@ -2264,7 +2362,9 @@ class Component extends DCLogic {
       this._loadWatchdogTrackId = null;
     }
     const track = this.state.queue.find(t => t.id === this.state.currentId);
+    const why = String(reason).slice(0, 80);
     if (track && this._playRetriedForId !== track.id) {
+      diagLog('播放失败', { 原因: why, 处理: '重试' });
       this._playRetriedForId = track.id;
       // 这次放的是本地缓存 blob 却失败了，说明缓存本身可能坏了/不完整——删掉它，
       // 让重试走联网重新解析+下载，而不是又命中同一份坏缓存把这首歌卡死
@@ -2276,6 +2376,19 @@ class Component extends DCLogic {
       this.armLoadWatchdog(track.id);
       this.loadAndPlay(track, this.state.currentTime || 0);
       return;
+    }
+    // 重试过仍失败：跟看门狗超时（handleLoadTimeout）共用同一个连续失败计数和上限——没超上限就跳到
+    // 下一首，后台自动连播不会停在一首坏歌上没了声音；超了上限（大概率整个网络不通）才停下，避免把
+    // 队列跳穿。单曲循环下 handleTrackEnd() 只会原地重放同一首，跳了也是白试，直接停
+    this._consecutiveLoadFailures = (this._consecutiveLoadFailures || 0) + 1;
+    if (this.state.playMode !== 2 && this._consecutiveLoadFailures <= MAX_CONSECUTIVE_LOAD_FAILURES) {
+      diagLog('播放失败', { 原因: why, 处理: '跳过' });
+      if (this.handleTrackEnd()) {
+        this.showToast(`${track && track.title ? `《${track.title}》` : '这首歌'}播放失败，已跳过`);
+        return;
+      }
+    } else {
+      diagLog('播放失败', { 原因: why, 处理: '停止' });
     }
     this.showToast('播放失败，请尝试其他音源');
     this.patch({ playing: false, loadingTrackId: null });
@@ -2323,6 +2436,7 @@ class Component extends DCLogic {
         const markExportReady = () => { if (myToken === this._loadToken) this.patch({ exportReady: true }); };
 
         if (blob) {
+          diagLog('音源', { 走: '本地缓存' });
           this._playingFromCache = true;
           this._objectUrl = URL.createObjectURL(blob);
           a.src = this._objectUrl;
@@ -2343,7 +2457,13 @@ class Component extends DCLogic {
         }
 
         // 缓存未命中，这时才真正需要播放链接：没有就去解析详情（onNeedDetails），有就直接用
-        if (!track.audioUrl) { if (onNeedDetails) onNeedDetails(); else this.showToast('暂无可用播放链接'); return; }
+        if (!track.audioUrl) {
+          diagLog('音源', { 走: onNeedDetails ? '现场要链接' : '没有链接' });
+          if (onNeedDetails) onNeedDetails(); else this.showToast('暂无可用播放链接');
+          return;
+        }
+        // onNeedDetails 只在第一次 go() 时传：带着它走到这里 = 身上本来就有链接；不带 = 刚现场要到的
+        diagLog('音源', { 走: onNeedDetails ? '已有链接' : '新链接' });
         this._playingFromCache = false;
         // 未命中且是 HLS 曲目：后台顺手解析同一首歌的 progressive mp3 存起来，下次就能命中本地 blob。
         // 纯后台工作，失败/没有 progressive 都不影响这次的 HLS 播放
@@ -2396,10 +2516,12 @@ class Component extends DCLogic {
     go(() => {
       this.showToast(`正在加载 "${track.title}" 的播放链接…`);
       if (!track.lrc) this.patch({ lyricsLoading: true });
+      const detailsStartAt = Date.now();
       API.ensureTrackDetails(track).then(() => {
         // 慢速详情请求期间可能已经切到别的曲目：这次结果连同它的歌词都已经过期，
         // 不能再拿去覆盖当前曲目的 state.lyrics，否则会出现"歌词是上一首/下一首的"错乱
         if (myToken !== this._loadToken) return;
+        diagLog('链接到手', { 耗时ms: Date.now() - detailsStartAt, 拿到: track.audioUrl ? '是' : '否' });
         if (track.lrc) this.parseAndSetLyrics(track.lrc, track.id);
         else this.markLyricsUnavailable(track.id);
         go();
@@ -2856,6 +2978,7 @@ class Component extends DCLogic {
       H: {
         toggleTheme: () => this.toggleTheme(),
         clearAudioCache: () => this.clearAudioCache(),
+        copyDiagLog: () => this.copyDiagLog(),
         doSearch: () => this.doSearch(),
         setSearchQuery: (e) => this.setSearchQuery(e),
         searchKeyDown: (e) => this.searchKeyDown(e),
