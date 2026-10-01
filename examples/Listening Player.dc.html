@@ -242,8 +242,13 @@ if ('serviceWorker' in navigator) {
       <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="background:{{ v.c.press }};">
         <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span><span class="dc-desktop-only" style="display:inline;">GitHub</span>
       </a>
-      <button onclick="{{ H.clearAudioCache }}" title="清空本地音频缓存" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
-        <span style="font-family:'Material Symbols Outlined';font-size:19px;">delete_sweep</span>
+      <sc-if value="{{ v.showOfflineChip }}">
+      <button onclick="{{ H.openStoragePanel }}" title="{{ v.offlineChipText }}" style="height:28px;padding:0 10px;border-radius:14px;border:none;background:{{ v.c.secondaryContainer }};color:{{ v.c.onSecondaryContainer }};display:flex;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;font-size:12px;font-weight:600;font-family:inherit;" style-active="transform:scale(0.94);">
+        <span style="font-family:'Material Symbols Outlined';font-size:16px;">{{ v.offlineChipIcon }}</span><span class="dc-desktop-only" style="display:inline;">{{ v.offlineChipText }}</span>
+      </button>
+      </sc-if>
+      <button onclick="{{ H.openStoragePanel }}" title="缓存与离线" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
+        <span style="font-family:'Material Symbols Outlined';font-size:19px;">download_for_offline</span>
       </button>
       <button onclick="{{ H.copyDiagLog }}" title="复制切歌诊断记录" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
         <span style="font-family:'Material Symbols Outlined';font-size:19px;">bug_report</span>
@@ -328,6 +333,7 @@ if ('serviceWorker' in navigator) {
                 <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
                 <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artistDisplay }} · {{ item.sourceLabel }}</div>
               </div>
+              <sc-if value="{{ item.isCached }}"><span title="已缓存，断网也能播" style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.c.primary }};flex-shrink:0;">download_done</span></sc-if>
               <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
               <button onclick="{{ item.onRemove }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
                 <span style="font-family:'Material Symbols Outlined';font-size:16px;">close</span>
@@ -381,13 +387,18 @@ if ('serviceWorker' in navigator) {
         <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">{{ v.playlistHeaderName }}</span>
       </div>
       <sc-if value="{{ v.showPlayAll }}">
-      <div style="padding:0 24px 18.75px;flex-shrink:0;display:flex;gap:8px;">
+      <div style="padding:0 24px 18.75px;flex-shrink:0;display:flex;flex-wrap:wrap;gap:8px;">
         <button onclick="{{ H.playAllInPlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
           <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;">play_arrow</span>播放全部
         </button>
         <button onclick="{{ H.exportPlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
           <span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ v.exportBtnIcon }}</span>{{ v.exportBtnLabel }}
         </button>
+        <sc-if value="{{ v.showCacheAll }}">
+        <button onclick="{{ H.cachePlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
+          <span style="font-family:'Material Symbols Outlined';font-size:18px;{{ v.cacheAllIconStyle }}">{{ v.cacheAllIcon }}</span>{{ v.cacheAllLabel }}
+        </button>
+        </sc-if>
       </div>
       </sc-if>
       </sc-if>
@@ -450,7 +461,7 @@ if ('serviceWorker' in navigator) {
                 </div>
               </sc-if>
               <sc-if value="{{ t.isRow }}">
-                <div class="dc-result-row" style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};transition:background .1s;" style-active="background:{{ v.c.press }};">
+                <div class="dc-result-row" style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};opacity:{{ t.rowOpacity }};transition:background .1s;" style-active="background:{{ v.c.press }};">
                   <div style="width:44px;height:44px;border-radius:8px;{{ t.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
                     <sc-if value="{{ t.showCoverIcon }}">
                       <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
@@ -461,6 +472,7 @@ if ('serviceWorker' in navigator) {
                     <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
                       <span style="width:6px;height:6px;border-radius:50%;background:{{ t.sourceDot }};flex-shrink:0;"></span>
                       <span style="font-size:11px;font-weight:500;color:{{ t.sourceLabelColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
+                      <sc-if value="{{ t.isCached }}"><span title="已缓存，断网也能播" style="font-family:'Material Symbols Outlined';font-size:13px;color:{{ t.cachedColor }};flex-shrink:0;">download_done</span></sc-if>
                       <span style="font-size:11.5px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· {{ t.artistDisplay }}</span>
                     </div>
                   </div>
@@ -598,6 +610,7 @@ if ('serviceWorker' in navigator) {
                <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
                <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artistDisplay }} · {{ item.sourceLabel }}</div>
              </div>
+             <sc-if value="{{ item.isCached }}"><span title="已缓存，断网也能播" style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.c.primary }};flex-shrink:0;">download_done</span></sc-if>
              <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
              <button onclick="{{ item.onRemove }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
                <span style="font-family:'Material Symbols Outlined';font-size:16px;">close</span>
@@ -708,6 +721,44 @@ if ('serviceWorker' in navigator) {
     </div>
   </sc-if>
 
+  <sc-if value="{{ v.storagePanelOpen }}">
+    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeStoragePanel }}">
+      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
+        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">缓存与离线</div>
+        <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">{{ v.netStatusText }}</div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:13px;color:{{ v.c.onSurface }};">
+          <span>已缓存 {{ v.cachedCount }} 首</span>
+          <span style="color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">{{ v.cacheUsageText }}</span>
+        </div>
+        <sc-if value="{{ v.showCacheBar }}">
+        <div style="height:6px;border-radius:3px;background:{{ v.c.outlineVariant }};margin-top:8px;overflow:hidden;">
+          <div style="height:100%;border-radius:3px;background:{{ v.c.primary }};width:{{ v.cacheUsagePct }}%;"></div>
+        </div>
+        </sc-if>
+        <div style="font-size:13px;font-weight:500;color:{{ v.c.onSurface }};margin:18px 0 8px;">缓存上限</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <sc-for list="{{ v.capChoicesRender }}" as="cap" hint-placeholder-count="5">
+            <span onclick="{{ cap.onClick }}" style="{{ cap.chipStyle }}">{{ cap.label }}</span>
+          </sc-for>
+        </div>
+        <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-top:8px;">超过上限时自动删掉最久没听的歌。无损音质一首大约 30MB</div>
+        <div onclick="{{ H.toggleOfflineOnly }}" style="display:flex;align-items:center;gap:12px;margin-top:18px;cursor:pointer;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:500;color:{{ v.c.onSurface }};">只播已缓存的歌</div>
+            <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-top:2px;">断网时自动按这个来；联网时打开可以省流量</div>
+          </div>
+          <span style="width:44px;height:24px;border-radius:12px;position:relative;flex-shrink:0;background:{{ v.offlineSwitchBg }};transition:background .2s;">
+            <span style="position:absolute;top:2px;left:{{ v.offlineThumbLeft }}px;width:20px;height:20px;border-radius:50%;background:{{ v.offlineThumbBg }};transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,.35);"></span>
+          </span>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:space-between;margin-top:22px;">
+          <button onclick="{{ H.clearAudioCache }}" style="padding:10px 16px;border-radius:20px;border:none;background:none;color:{{ v.c.heart }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">清空缓存</button>
+          <button onclick="{{ H.closeStoragePanel }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">完成</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
 </div>
 
 </x-dc>
@@ -750,6 +801,9 @@ const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', soundcloud: 'Sound
 // 想恢复搜索：把 'soundcloud' 加回这个数组即可（筛选芯片和 state.sources 都从这里推导），
 // 另外 src/api/index.js 里 searchAll 的默认 sources 也同步去掉了 soundcloud。
 const SEARCH_SOURCES = ['netease', 'qq'];
+
+// 侧栏「已缓存」那一项的 id。它不是真歌单，不进持久化的 playlists；起个不会和 'liked' / 'pl_…' 撞的名字
+const CACHED_VIEW_ID = '__cached';
 const GRADIENTS = {
   netease: 'linear-gradient(135deg, rgba(255,107,107,.55), rgba(255,107,107,.14))',
   qq: 'linear-gradient(135deg, rgba(77,208,225,.55), rgba(77,208,225,.14))',
@@ -779,11 +833,41 @@ function fmtArtistAlbum(t) {
   return t.album ? `${t.artist} - ${t.album}` : t.artist;
 }
 
-// 缩略图/卡片背景：优先用 track.cover 真实封面图，缺失时回退音源渐变色
+// 缩略图/卡片背景：优先用 track.cover 真实封面图，缺失时回退音源渐变色。
+// 已缓存的歌如果存了封面字节，用本地那份（coverSrc），断网时列表和播放页也有图
 function coverStyle(t) {
-  return t.cover
-    ? `background-image:url('${t.cover}');background-size:cover;background-position:center;`
+  const src = coverSrc(t.cover);
+  return src
+    ? `background-image:url('${src}');background-size:cover;background-position:center;`
     : `background:${GRADIENTS[t.source] || GRADIENTS.netease};`;
+}
+
+// 运行在 APK（Capacitor 原生壳）里还是普通浏览器里。原生壳会在页面任何脚本之前注入 window.Capacitor，
+// 普通浏览器里没有这个对象。原生相关的分支一律靠它判断，网页版走原来的逻辑
+const IS_NATIVE = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+
+// 取一个原生插件（Capacitor 注入的代理对象）；网页版、或者 APK 里没装这个插件时返回 null
+function nativePlugin(name) {
+  const cap = window.Capacitor;
+  return (IS_NATIVE && cap && cap.Plugins && cap.Plugins[name]) || null;
+}
+
+// APK 里用原生 HTTP 拉二进制：不受 CORS 限制（QQ 封面就靠这个），带连接/读取超时，返回 Blob，失败返回 null。
+// CapacitorHttp 是 Capacitor 自带的插件，这里只是显式调用它，并没有打开"接管全部 fetch"的开关——
+// 那个开关会让几十 MB 的音频也走原生 HTTP、再转成 base64 过桥，内存和速度都扛不住
+async function nativeFetchBlob(url, timeoutMs) {
+  const Http = nativePlugin('CapacitorHttp');
+  if (!Http) return null;
+  const res = await Http.request({ url, method: 'GET', responseType: 'blob', connectTimeout: timeoutMs, readTimeout: timeoutMs });
+  if (!res || res.status < 200 || res.status >= 300 || typeof res.data !== 'string') return null;
+  const headers = res.headers || {};
+  const typeKey = Object.keys(headers).find(k => k && k.toLowerCase() === 'content-type');
+  const type = String((typeKey && headers[typeKey]) || 'application/octet-stream').split(';')[0].trim();
+  // 原生那边用 Base64.DEFAULT 编码，每 76 个字符带一个换行；atob 会忽略空白，直接解
+  const bin = atob(res.data);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type });
 }
 
 // 歌曲浏览器本地缓存（IndexedDB 存 Blob）：网易云/QQ/SoundCloud 的音频都能直接 fetch 成整段字节存下来。
@@ -791,7 +875,53 @@ function coverStyle(t) {
 // 转码——播放照旧用 HLS，缓存则在后台单独把那条 mp3 下载存起来（见 resolveSoundCloudCacheUrl / cacheHlsMp3）。
 const AUDIO_CACHE_DB = 'listening-audio-cache';
 const AUDIO_CACHE_STORE = 'tracks';
-const AUDIO_CACHE_CAP_BYTES = 300 * 1024 * 1024; // 300MB 上限，好调的一个常量
+
+// 缓存上限：在「缓存与离线」面板里选，存 localStorage，单位 MB，0 表示不限。
+// 网页版默认保持原来的 300MB；APK 默认 2GB——QQ 默认挑无损，一首 25~35MB，300MB 只够十来首，
+// 满了就按"最久没听"静默删，断网时就会出现"明明听过却放不了"
+const CACHE_CAP_STORAGE_KEY = 'listening-cache-cap-mb-v1';
+const CACHE_CAP_CHOICES_MB = [300, 1024, 2048, 5120, 0];
+const DEFAULT_CACHE_CAP_MB = IS_NATIVE ? 2048 : 300;
+
+function loadCacheCapMB() {
+  try {
+    const raw = localStorage.getItem(CACHE_CAP_STORAGE_KEY);
+    // 0（不限）也是合法值，不能拿 Number(null) === 0 当成"存过"
+    if (raw !== null && CACHE_CAP_CHOICES_MB.includes(Number(raw))) return Number(raw);
+  } catch (e) { /* 读不到就用默认值 */ }
+  return DEFAULT_CACHE_CAP_MB;
+}
+
+function saveCacheCapMB(mb) {
+  try { localStorage.setItem(CACHE_CAP_STORAGE_KEY, String(mb)); } catch (e) { /* 存不下就下次回到默认值 */ }
+}
+
+function audioCacheCapBytes() {
+  const mb = loadCacheCapMB();
+  return mb > 0 ? mb * 1024 * 1024 : Infinity;
+}
+
+function capLabel(mb) {
+  if (mb === 0) return '不限';
+  return mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`;
+}
+
+function formatBytes(n) {
+  if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  if (n >= 1024 * 1024) return Math.round(n / (1024 * 1024)) + ' MB';
+  return Math.max(0, Math.round(n / 1024)) + ' KB';
+}
+
+// 「只播已缓存」开关：断网时不管开没开都按已缓存来挑歌；联网时打开可以省流量。单独一个 key 存
+const OFFLINE_ONLY_STORAGE_KEY = 'listening-offline-only-v1';
+
+function loadOfflineOnly() {
+  try { return localStorage.getItem(OFFLINE_ONLY_STORAGE_KEY) === '1'; } catch (e) { return false; }
+}
+
+function saveOfflineOnly(on) {
+  try { localStorage.setItem(OFFLINE_ONLY_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* 存不下就下次回到关闭 */ }
+}
 
 // 缓存 key 得用音源自己的真实曲目 id（哪个字段算"真实 id"跟 fetchQQDetails 的取值优先级保持一致），
 // 不能用 t.id——那是 normalizeTrack 每次分配的临时内部 id，同一首歌重新搜索/重新导入一次就会变，
@@ -801,17 +931,116 @@ function audioCacheKey(t) {
   return `${t.source}:${stableId || t.id}`;
 }
 
+// 连接只开一次、之后复用：原来每次读写都 indexedDB.open 一个新连接，缓存操作多了（已缓存列表要整表读）
+// 就是一堆没人关的连接。别的标签页要升级库版本时主动让出（onversionchange），下次用到再重开
+let _audioCacheDbPromise = null;
 function openAudioCacheDB() {
+  if (!_audioCacheDbPromise) {
+    _audioCacheDbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(AUDIO_CACHE_DB, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(AUDIO_CACHE_STORE)) {
+          req.result.createObjectStore(AUDIO_CACHE_STORE, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => { db.close(); _audioCacheDbPromise = null; };
+        db.onclose = () => { _audioCacheDbPromise = null; };
+        resolve(db);
+      };
+      req.onerror = () => reject(req.error);
+    }).catch(e => { _audioCacheDbPromise = null; throw e; });
+  }
+  return _audioCacheDbPromise;
+}
+
+// 缓存了哪首歌的"说明书"：歌名/歌手/专辑/封面地址/时长/歌词这些（trackCacheMeta），外加封面图字节。
+// 曲库（localStorage）里哪怕已经没有这首歌、或者断网拿不到封面，「已缓存」列表也能完整显示、照常播放。
+// 单独放一个库，不跟音频记录挤在一起：补写歌词/时长/封面时不用把几十 MB 的音频记录整条读出来再写回去；
+// 另开库也不用给音频库升版本号（升版本会被还开着旧页面的标签页卡住）。音频记录删掉时这边跟着删
+const AUDIO_META_DB = 'listening-audio-meta';
+const AUDIO_META_STORE = 'meta';
+
+let _audioMetaDbPromise = null;
+function openAudioMetaDB() {
+  if (!_audioMetaDbPromise) {
+    _audioMetaDbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(AUDIO_META_DB, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(AUDIO_META_STORE)) {
+          req.result.createObjectStore(AUDIO_META_STORE, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => { db.close(); _audioMetaDbPromise = null; };
+        db.onclose = () => { _audioMetaDbPromise = null; };
+        resolve(db);
+      };
+      req.onerror = () => reject(req.error);
+    }).catch(e => { _audioMetaDbPromise = null; throw e; });
+  }
+  return _audioMetaDbPromise;
+}
+
+function idbDone(tx) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(AUDIO_CACHE_DB, 1);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(AUDIO_CACHE_STORE)) {
-        req.result.createObjectStore(AUDIO_CACHE_STORE, { keyPath: 'id' });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
   });
+}
+
+// 缓存有增删（写入 / 淘汰 / 删除 / 清空 / 补了封面）时广播一下，组件收到后重读已缓存索引
+function notifyAudioCacheChanged() {
+  try { window.dispatchEvent(new Event('listening:cache-changed')); } catch (e) { /* 广播失败只影响角标刷新，不影响播放 */ }
+}
+
+// 写进 meta 的字段：能把这首歌原样重建出来（trackFromCacheMeta）、能重新解析播放链接就够了
+function trackCacheMeta(t) {
+  return {
+    source: t.source,
+    songid: t.songid != null ? String(t.songid) : '',
+    qqId: t.qqId || '',
+    songMid: t.songMid || '',
+    keyword: t.qqSearchKey || t.keyword || '',
+    title: t.title || '',
+    artist: t.artist || '',
+    album: t.album || '',
+    cover: t.cover || null,
+    duration: t.duration || 0,
+    lrc: t.lrc || null,
+    pageUrl: t.pageUrl || '',
+    scPermalink: t.scPermalink || '',
+  };
+}
+
+// trackCacheMeta 的反向：重建出来的对象和搜索/导入来的长得一样，normalizeTrack 之后就能进曲库，
+// audioCacheKey 算出来的 key 也和当初存进去的一致（QQ 认 qqId，其它认 songid）
+function trackFromCacheMeta(m) {
+  const t = {
+    uid: `${m.source}-${m.songid}`,
+    source: m.source,
+    songid: m.songid,
+    title: m.title || '',
+    artist: m.artist || '',
+    album: m.album || '',
+    cover: m.cover || null,
+    duration: m.duration || 0,
+    lrc: m.lrc || null,
+    audioUrl: null,
+    detailsLoaded: false,
+  };
+  if (m.source === 'qq') {
+    t.qqId = m.qqId || m.songid;
+    t.songMid = m.songMid || m.songid;
+    t.qqSearchKey = m.keyword || '';
+    t.keyword = m.keyword || '';
+  }
+  if (m.pageUrl) t.pageUrl = m.pageUrl;
+  if (m.scPermalink) t.scPermalink = m.scPermalink;
+  return t;
 }
 
 async function getCachedAudio(key) {
@@ -839,22 +1068,60 @@ async function touchCachedAudio(key) {
   } catch (e) { /* 命中计时更新失败不影响播放，静默跳过 */ }
 }
 
-async function putCachedAudio(key, blob) {
+// evict=false：写入后不按上限淘汰。一键缓存歌单时用——边下边按"最久没听"删，删掉的可能就是同一批
+// 刚下完的歌；批量下载自己在每首之前查上限、快满了就停（见 cachePlaylist）
+async function putCachedAudio(key, blob, { evict = true } = {}) {
   try {
     const db = await openAudioCacheDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
-      tx.objectStore(AUDIO_CACHE_STORE).put({ id: key, blob, size: blob.size, lastAccessed: Date.now() });
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-    evictAudioCacheIfOverCap();
+    const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
+    tx.objectStore(AUDIO_CACHE_STORE).put({ id: key, blob, size: blob.size, lastAccessed: Date.now() });
+    await idbDone(tx);
   } catch (e) {
     console.warn('audio cache write failed:', e);
+    return false;
+  }
+  if (evict) await evictAudioCacheIfOverCap();
+  notifyAudioCacheChanged();
+  return true;
+}
+
+// 合并写入一条元数据（新字段覆盖旧字段，没给的保留）；coverBlob 给了才替换封面
+async function putCachedMeta(key, meta, coverBlob) {
+  try {
+    const db = await openAudioMetaDB();
+    const tx = db.transaction(AUDIO_META_STORE, 'readwrite');
+    const store = tx.objectStore(AUDIO_META_STORE);
+    const req = store.get(key);
+    req.onsuccess = () => {
+      const old = req.result || { id: key, meta: null, coverBlob: null };
+      store.put({
+        id: key,
+        meta: meta ? { ...(old.meta || {}), ...meta } : old.meta,
+        coverBlob: coverBlob || old.coverBlob || null,
+      });
+    };
+    await idbDone(tx);
+  } catch (e) {
+    console.warn('audio cache meta write failed:', e);
+  }
+}
+
+async function deleteCachedMeta(keys) {
+  if (!keys.length) return;
+  try {
+    const db = await openAudioMetaDB();
+    const tx = db.transaction(AUDIO_META_STORE, 'readwrite');
+    const store = tx.objectStore(AUDIO_META_STORE);
+    for (const k of keys) store.delete(k);
+    await idbDone(tx);
+  } catch (e) {
+    console.warn('audio cache meta delete failed:', e);
   }
 }
 
 async function evictAudioCacheIfOverCap() {
+  const cap = audioCacheCapBytes();
+  if (!isFinite(cap)) return 0;
   try {
     const db = await openAudioCacheDB();
     const all = await new Promise((resolve, reject) => {
@@ -863,16 +1130,24 @@ async function evictAudioCacheIfOverCap() {
       req.onerror = () => reject(req.error);
     });
     let total = all.reduce((sum, r) => sum + (r.size || 0), 0);
-    if (total <= AUDIO_CACHE_CAP_BYTES) return;
+    if (total <= cap) return 0;
     all.sort((a, b) => (a.lastAccessed || 0) - (b.lastAccessed || 0));
-    const store = db.transaction(AUDIO_CACHE_STORE, 'readwrite').objectStore(AUDIO_CACHE_STORE);
+    const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
+    const store = tx.objectStore(AUDIO_CACHE_STORE);
+    const removed = [];
     for (const rec of all) {
-      if (total <= AUDIO_CACHE_CAP_BYTES) break;
+      if (total <= cap) break;
       store.delete(rec.id);
+      removed.push(rec.id);
       total -= (rec.size || 0);
     }
+    await idbDone(tx);
+    await deleteCachedMeta(removed);
+    if (removed.length) notifyAudioCacheChanged();
+    return removed.length;
   } catch (e) {
     console.warn('audio cache evict failed:', e);
+    return 0;
   }
 }
 
@@ -881,7 +1156,11 @@ async function evictAudioCacheIfOverCap() {
 async function deleteCachedAudio(key) {
   try {
     const db = await openAudioCacheDB();
-    db.transaction(AUDIO_CACHE_STORE, 'readwrite').objectStore(AUDIO_CACHE_STORE).delete(key);
+    const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
+    tx.objectStore(AUDIO_CACHE_STORE).delete(key);
+    await idbDone(tx);
+    await deleteCachedMeta([key]);
+    notifyAudioCacheChanged();
   } catch (e) {
     console.warn('audio cache delete failed:', e);
   }
@@ -891,27 +1170,117 @@ async function deleteCachedAudio(key) {
 // 都被写坏了），只能整体清掉，逼所有歌下次播放都重新联网下载
 async function clearAllCachedAudio() {
   const db = await openAudioCacheDB();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
-    tx.objectStore(AUDIO_CACHE_STORE).clear();
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
+  const tx = db.transaction(AUDIO_CACHE_STORE, 'readwrite');
+  tx.objectStore(AUDIO_CACHE_STORE).clear();
+  await idbDone(tx);
+  try {
+    const mdb = await openAudioMetaDB();
+    const mtx = mdb.transaction(AUDIO_META_STORE, 'readwrite');
+    mtx.objectStore(AUDIO_META_STORE).clear();
+    await idbDone(mtx);
+  } catch (e) {
+    console.warn('audio cache meta clear failed:', e);
+  }
+  notifyAudioCacheChanged();
+}
+
+// 已缓存的全部记录：音频库里的 key / 大小 / 最近播放时间，拼上元数据库里的 meta 和封面。
+// 只读字段，不碰音频 blob 本身的内容。元数据库里音频已经不在的孤儿记录顺手清掉
+async function listCachedRecords() {
+  try {
+    const db = await openAudioCacheDB();
+    const audio = await new Promise((resolve, reject) => {
+      const out = [];
+      const req = db.transaction(AUDIO_CACHE_STORE, 'readonly').objectStore(AUDIO_CACHE_STORE).openCursor();
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) { resolve(out); return; }
+        const v = cur.value;
+        out.push({ id: v.id, size: v.size || 0, lastAccessed: v.lastAccessed || 0 });
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+    let metas = [];
+    try {
+      const mdb = await openAudioMetaDB();
+      metas = await new Promise((resolve, reject) => {
+        const req = mdb.transaction(AUDIO_META_STORE, 'readonly').objectStore(AUDIO_META_STORE).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { /* 元数据读不到就只按 key 反查曲库 */ }
+    const metaById = new Map(metas.map(m => [m.id, m]));
+    const ids = new Set(audio.map(a => a.id));
+    const orphans = metas.filter(m => !ids.has(m.id)).map(m => m.id);
+    if (orphans.length) deleteCachedMeta(orphans);
+    return audio.map(a => {
+      const m = metaById.get(a.id);
+      return { ...a, meta: (m && m.meta) || null, coverBlob: (m && m.coverBlob) || null };
+    });
+  } catch (e) {
+    console.warn('audio cache list failed:', e);
+    return [];
+  }
+}
+
+// 音频缓存一共占了多少字节（一键缓存歌单时每首下载前查一次，快到上限就停）
+async function audioCacheTotalBytes() {
+  try {
+    const db = await openAudioCacheDB();
+    return await new Promise((resolve, reject) => {
+      let total = 0;
+      const req = db.transaction(AUDIO_CACHE_STORE, 'readonly').objectStore(AUDIO_CACHE_STORE).openCursor();
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur) { resolve(total); return; }
+        total += cur.value.size || 0;
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    return 0;
+  }
+}
+
+// 封面图字节：存进元数据库，断网时「已缓存」列表、播放页和锁屏封面都靠它。网易云封面（meting 跳转到
+// music.126.net）发 CORS 头，网页 fetch 读得到；QQ 封面 y.gtimg.cn 不发，网页里读不到就算了（列表照旧
+// 走 sw.js 缓存的图）。APK 里走原生 HTTP，不受 CORS 限制（见原生壳一节的 nativeFetchBlob）
+async function fetchCoverBlob(url) {
+  if (!url) return null;
+  try {
+    let blob;
+    if (IS_NATIVE) {
+      blob = await nativeFetchBlob(url, 8000);
+    } else {
+      const r = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return null;
+      blob = await r.blob();
+    }
+    return blob && /^image\//.test(blob.type) && blob.size < 2 * 1024 * 1024 ? blob : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 封面地址 → 本地 blob: 地址。refreshCacheIndex 按元数据库里存的封面字节维护这张表；
+// 有本地的就用本地的，没有才用原地址（联网时走 sw.js 的图片缓存）
+const coverObjectUrls = new Map();
+function coverSrc(url) {
+  return (url && coverObjectUrls.get(url)) || url || null;
 }
 
 // 正在进行中的缓存下载：key → Promise<是否落库>。预取下一首还没下完就切到这首时，loadAndPlay 会对
 // 同一首再发起一次缓存下载——一首歌动辄几十 MB（QQ 默认挑无损），多开一路就是跟播放器自己的边播边下
-// 抢网速、白花一份流量。同一首已经在下就不再新开，只把 onDone 挂到那一次的结果上
+// 抢网速、白花一份流量。同一首已经在下就不再新开，直接复用那一次的结果
 const audioCacheInflight = new Map();
 
-// onDone（可选）在整段音频真正落库成功后才回调——用来在"当前播放的这首歌后台缓存完成"时点亮导出按钮。
-// 预取下一首的调用不传 onDone，避免下一首缓存好了误点亮当前按钮。
-function cacheAudioInBackground(key, url, onDone) {
+// 把一首歌的整段音频下载进缓存，返回 Promise<是否落库>。track 用来写元数据、顺手存封面；
+// evict 见 putCachedAudio
+function cacheAudio(key, url, track, { evict = true } = {}) {
   const inflight = audioCacheInflight.get(key);
-  if (inflight) {
-    if (onDone) inflight.then(ok => { if (ok) onDone(); });
-    return;
-  }
+  if (inflight) return inflight;
   const job = fetch(url).then(r => {
     if (!r.ok) return null;
     // Content-Length 若可用，优先拿它跟实际下载到的字节数比对——不足说明这次下载中途被打断了
@@ -931,15 +1300,31 @@ function cacheAudioInBackground(key, url, onDone) {
       }
       return blob;
     });
-  }).then(blob => {
-    if (blob) return putCachedAudio(key, blob).then(() => true);
-    return false;
+  }).then(async blob => {
+    if (!blob) return false;
+    const ok = await putCachedAudio(key, blob, { evict });
+    if (ok && track) {
+      await putCachedMeta(key, trackCacheMeta(track));
+      // 封面不阻塞"缓存完成"（导出按钮要靠它点亮），后台补上之后再广播一次刷新列表
+      if (track.cover) {
+        fetchCoverBlob(track.cover).then(cover => {
+          if (cover) putCachedMeta(key, null, cover).then(notifyAudioCacheChanged);
+        });
+      }
+    }
+    return ok;
   }).catch(e => {
     console.warn('audio cache fetch failed:', e);
     return false;
   }).finally(() => audioCacheInflight.delete(key));
   audioCacheInflight.set(key, job);
-  if (onDone) job.then(ok => { if (ok) onDone(); });
+  return job;
+}
+
+// onDone（可选）在整段音频真正落库成功后才回调——用来在"当前播放的这首歌后台缓存完成"时点亮导出按钮。
+// 预取下一首的调用不传 onDone，避免下一首缓存好了误点亮当前按钮。
+function cacheAudioInBackground(key, url, onDone, track) {
+  cacheAudio(key, url, track).then(ok => { if (ok && onDone) onDone(); });
 }
 
 // 从缓存 blob 的 MIME 推断导出文件扩展名（音源基本都是 mp3，flac/m4a 等按类型兜底）
@@ -1278,6 +1663,17 @@ class Component extends DCLogic {
         { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
       ],
       selectedPlaylist: 'liked', hoverPlaylistId: null,
+      // 离线相关（运行时状态，都不进歌单库存档）：online 跟着浏览器的 online/offline 事件走；
+      // offlineOnly / cacheCapMB 是面板里的两个设置，各自存自己的 localStorage key；
+      // cacheRev / cachedCount / cachedBytes 在已缓存索引重读后更新（索引本身在 this._cachedKeys 等实例字段上）；
+      // batchCache 是「缓存全部」的进度 { pid, done, total, failed }；localSearch 标记当前搜索结果来自本地曲库
+      online: navigator.onLine !== false,
+      offlineOnly: loadOfflineOnly(),
+      cacheCapMB: loadCacheCapMB(),
+      cacheRev: 0, cachedCount: 0, cachedBytes: 0,
+      storagePanelOpen: false,
+      batchCache: null,
+      localSearch: false,
     };
     const persisted = loadPersistedLibrary();
     if (!persisted) return base;
@@ -1322,6 +1718,11 @@ class Component extends DCLogic {
     document.removeEventListener('resume', this._onDiagResume);
     window.removeEventListener('online', this._onDiagOnline);
     window.removeEventListener('offline', this._onDiagOffline);
+    window.removeEventListener('listening:cache-changed', this._onCacheChanged);
+    clearTimeout(this._cacheRefreshTimer);
+    if (this._batch) this._batch.cancelled = true;
+    for (const u of coverObjectUrls.values()) URL.revokeObjectURL(u);
+    coverObjectUrls.clear();
     clearInterval(this._adaptiveLoopTimer);
     if (this._audioCtx) { try { this._audioCtx.close(); } catch (e) {} }
   }
@@ -1365,13 +1766,25 @@ class Component extends DCLogic {
     this._onDiagVisibility = () => diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' });
     this._onDiagFreeze = () => diagLog('页面被冻结', { 在播: this.state.playing ? '是' : '否' });
     this._onDiagResume = () => diagLog('页面恢复');
-    this._onDiagOnline = () => diagLog('网络恢复');
-    this._onDiagOffline = () => diagLog('网络断开');
+    // 同一对监听顺便维护 state.online：断网后挑歌只在已缓存里挑（见 isOfflineMode）
+    this._onDiagOnline = () => { diagLog('网络恢复'); this.patch({ online: true }); };
+    this._onDiagOffline = () => { diagLog('网络断开'); this.patch({ online: false }); };
     document.addEventListener('visibilitychange', this._onDiagVisibility);
     document.addEventListener('freeze', this._onDiagFreeze);
     document.addEventListener('resume', this._onDiagResume);
     window.addEventListener('online', this._onDiagOnline);
     window.addEventListener('offline', this._onDiagOffline);
+    // 已缓存索引：启动时读一遍；之后缓存有增删（写入 / 淘汰 / 删除 / 清空 / 补了封面都会广播这个事件）就重读
+    this._onCacheChanged = () => this.scheduleCacheRefresh();
+    window.addEventListener('listening:cache-changed', this._onCacheChanged);
+    this.refreshCacheIndex();
+    // 申请"持久化存储"：浏览器磁盘紧张时，没申请过的站点数据可能被整体清掉（缓存的歌一夜之间全没了）。
+    // 浏览器不一定批（WebView 里多半直接拒），批不批都不影响别的功能
+    try {
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persisted().then(p => p || navigator.storage.persist()).catch(() => {});
+      }
+    } catch (e) { /* 老浏览器没有这个 API */ }
     // 安卓上锁屏后台要连续自动切歌，系统电池策略默认会限制——这不是这个页面能靠代码绕过的东西，
     // 只能提示用户自己去系统设置放行。只在安卓上提示一次，点掉之后记住，不用每次打开都看到
     try {
@@ -1426,10 +1839,12 @@ class Component extends DCLogic {
           const nextTrack = this.nextListLoopTrack();
           if (nextTrack && nextTrack.id !== s.currentId) this.prefetchTrack(nextTrack);
         } else if (s.playMode === 1 && this._shufflePrefetchedNextId == null && s.playOrder.length > 0) {
-          const nextId = s.playOrder[Math.floor(Math.random() * s.playOrder.length)];
-          this._shufflePrefetchedNextId = nextId;
-          const nextTrack = s.queue.find(t2 => t2.id === nextId);
-          if (nextTrack) this.prefetchTrack(nextTrack);
+          const nextId = this.pickShuffleNextId();
+          if (nextId != null) {
+            this._shufflePrefetchedNextId = nextId;
+            const nextTrack = s.queue.find(t2 => t2.id === nextId);
+            if (nextTrack) this.prefetchTrack(nextTrack);
+          }
         }
       }
     };
@@ -1478,6 +1893,8 @@ class Component extends DCLogic {
         if (t) t.duration = dur;
         return { currentTime: a.currentTime };
       });
+      // 真实时长补写进缓存元数据：离线列表里显示得出时长，也是"缓存被截断"检测的基准
+      if (track && this._playingFromCache) this.syncCacheMeta(track);
     };
 
     a.addEventListener('timeupdate', this._onTimeUpdate);
@@ -1625,6 +2042,7 @@ class Component extends DCLogic {
     const pid = this.state.viewingPlaylistId;
     if (!pid) return;
     if (pid === 'liked') { this.toggleLike(trackId); return; }
+    if (pid === CACHED_VIEW_ID) { this.deleteCachedTrack(this.state.queue.find(t => t.id === trackId)); return; }
     this.patch(s => ({ playlists: s.playlists.map(p => p.id === pid ? { ...p, trackIds: (p.trackIds || []).filter(id => id !== trackId) } : p) }));
     this.persist();
     this.showToast('已从歌单移除');
@@ -1665,6 +2083,258 @@ class Component extends DCLogic {
       console.warn('clear audio cache failed:', e);
       this.showToast('清空缓存失败，请稍后再试');
     });
+  }
+
+  // ==== 离线：已缓存索引 / 离线挑歌 / 缓存与离线面板 / 一键缓存歌单 / 本地搜索 ====
+
+  // 缓存写入往往一连串（写音频、写元数据、补封面各广播一次），合并成一次重读
+  scheduleCacheRefresh() {
+    clearTimeout(this._cacheRefreshTimer);
+    this._cacheRefreshTimer = setTimeout(() => this.refreshCacheIndex(), 250);
+  }
+
+  // 重读已缓存索引：哪些 key 缓存了（列表角标、离线挑歌）、每条对应曲库里的哪首（「已缓存」列表）、
+  // 封面的本地地址、总共占多少空间。缓存里有、曲库里已经没有的歌，用元数据重建一份放回曲库——
+  // 曲库本来就是"只增不减"的，放回去才能在列表里点播、加歌单、搜得到
+  async refreshCacheIndex() {
+    const seq = (this._cacheRefreshSeq || 0) + 1;
+    this._cacheRefreshSeq = seq;
+    const records = await listCachedRecords();
+    if (seq !== this._cacheRefreshSeq) return; // 读的过程中又发出了一次更新的重读，以那次为准
+    records.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+
+    const covers = new Map();
+    for (const r of records) {
+      const url = r.meta && r.meta.cover;
+      if (url && r.coverBlob && !covers.has(url)) covers.set(url, coverObjectUrls.get(url) || URL.createObjectURL(r.coverBlob));
+    }
+    for (const [url, obj] of coverObjectUrls) { if (covers.get(url) !== obj) URL.revokeObjectURL(obj); }
+    coverObjectUrls.clear();
+    for (const [url, obj] of covers) coverObjectUrls.set(url, obj);
+
+    const keys = new Set(records.map(r => r.id));
+    const keyToId = new Map();
+    for (const t of this.state.queue) {
+      const k = audioCacheKey(t);
+      if (keys.has(k) && !keyToId.has(k)) keyToId.set(k, t.id);
+    }
+    const restored = [];
+    for (const r of records) {
+      if (keyToId.has(r.id) || !r.meta || !r.meta.source) continue;
+      const t = normalizeTrack(trackFromCacheMeta(r.meta));
+      restored.push(t);
+      keyToId.set(r.id, t.id);
+    }
+    this._cachedKeys = keys;
+    this._cachedRecords = records;
+    this._cacheKeyToTrackId = keyToId;
+    this.patch(s => ({
+      queue: restored.length ? [...s.queue, ...restored] : s.queue,
+      cacheRev: s.cacheRev + 1,
+      cachedCount: records.filter(r => keyToId.has(r.id)).length,
+      cachedBytes: records.reduce((n, r) => n + (r.size || 0), 0),
+    }));
+    if (restored.length) this.persist();
+  }
+
+  // 「已缓存」列表里的曲目 id，按最近播放时间排（新的在前）。没有元数据、曲库里也找不到的老缓存不进列表
+  cachedTrackIds() {
+    const map = this._cacheKeyToTrackId;
+    if (!map || !this._cachedRecords) return [];
+    return this._cachedRecords.map(r => map.get(r.id)).filter(id => id != null);
+  }
+
+  isTrackCached(t) {
+    return !!(t && this._cachedKeys && this._cachedKeys.has(audioCacheKey(t)));
+  }
+
+  // 离线挑歌模式：真断网，或者手动开了「只播已缓存」
+  isOfflineMode(s = this.state) {
+    return !s.online || s.offlineOnly;
+  }
+
+  isPlayable(t, s = this.state) {
+    return !!t && (!this.isOfflineMode(s) || this.isTrackCached(t));
+  }
+
+  isPlayableId(id, s = this.state) {
+    return this.isPlayable(s.queue.find(t => t.id === id), s);
+  }
+
+  // 从 playOrder 的 fromIdx 出发往 dir 方向找下一首能放的（离线挑歌模式下跳过没缓存的），绕一圈。
+  // includeSelf：绕满一圈回到起点那首也算——列表循环 / 手动切歌在只剩这一首能放时就重放它，跟原来
+  // "队列只有一首时下一首就是它自己"一致。fromIdx = -1（当前曲目不在队列里）时从队首找起，没有"自己"可言
+  findPlayableInOrder(fromIdx, dir, { includeSelf = false } = {}) {
+    const s = this.state;
+    const order = s.playOrder;
+    const n = order.length;
+    for (let step = 1; step <= n; step++) {
+      if (step === n && !includeSelf && fromIdx >= 0) break;
+      const id = order[(((fromIdx + dir * step) % n) + n) % n];
+      const t = s.queue.find(t2 => t2.id === id);
+      if (this.isPlayable(t, s)) return t;
+    }
+    return null;
+  }
+
+  // 随机模式挑下一首：离线挑歌模式下只在能放的里面挑
+  pickShuffleNextId() {
+    const s = this.state;
+    const pool = this.isOfflineMode(s) ? s.playOrder.filter(id => this.isPlayableId(id, s)) : s.playOrder;
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  }
+
+  openStoragePanel() {
+    this.patch({ storagePanelOpen: true });
+    this.refreshCacheIndex(); // 面板上的占用以打开这一刻为准
+  }
+  closeStoragePanel() { this.patch({ storagePanelOpen: false }); }
+
+  setCacheCap(mb) {
+    if (mb === this.state.cacheCapMB) return;
+    saveCacheCapMB(mb);
+    this.patch({ cacheCapMB: mb });
+    // 调小了就马上按新上限清一次，不等下一首歌写入缓存时才清
+    evictAudioCacheIfOverCap().then(n => {
+      if (n > 0) this.showToast(`已按新上限删掉 ${n} 首最久没听的缓存`);
+    });
+  }
+
+  toggleOfflineOnly() {
+    const next = !this.state.offlineOnly;
+    saveOfflineOnly(next);
+    this.patch({ offlineOnly: next });
+    this.showToast(next ? '已开启：只播已缓存的歌' : '已关闭「只播已缓存」');
+  }
+
+  deleteCachedTrack(t) {
+    if (!t) return;
+    if (!confirm(`删除《${t.title || '这首歌'}》的本地缓存？删了之后断网就放不了它。`)) return;
+    deleteCachedAudio(audioCacheKey(t)).then(() => this.showToast('已删除这首歌的缓存'));
+    if (t.id === this.state.currentId) this.patch({ exportReady: false });
+  }
+
+  // 歌单 id → { name, tracks }：普通歌单按 trackIds，「喜欢的音乐」按 likedOrder，「已缓存」按最近播放时间。
+  // 列表显示 / 播放全部 / 导出 / 缓存全部都从这里取，三种来源只写这一遍
+  playlistContext(pid, s = this.state) {
+    if (pid === CACHED_VIEW_ID) {
+      return { name: '已缓存', virtual: true, tracks: this.cachedTrackIds().map(id => s.queue.find(t => t.id === id)).filter(Boolean) };
+    }
+    const pl = s.playlists.find(p => p.id === pid);
+    if (!pl) return null;
+    const ids = pid === 'liked' ? likedIdsOrdered(s) : (pl.trackIds || []);
+    // 按歌单自己的顺序取曲目（不是曲库里的顺序——那只是曲目第一次被搜到/导入时落进去的顺序）
+    return { name: pl.name, virtual: false, tracks: ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean) };
+  }
+
+  // 「缓存全部」：把歌单里还没缓存的歌一首一首下载下来（同时只下一首，不跟正在播放的歌抢太多网速）。
+  // 下载中再点一次是停止。QQ 的链接带时效，每首下载前都现要一次新链接；空间快到上限就停，
+  // 而且写入时不触发淘汰（见 putCachedAudio），免得同一批刚下完的歌被挤掉
+  async cachePlaylist() {
+    const s = this.state;
+    const pid = s.viewingPlaylistId;
+    if (this._batch) {
+      if (this._batch.pid === pid) { this._batch.cancelled = true; this.showToast('正在停止…'); }
+      else this.showToast('正在缓存另一个歌单，等它完成或先停掉');
+      return;
+    }
+    const ctx = pid ? this.playlistContext(pid) : null;
+    if (!ctx) return;
+    const seen = new Set();
+    const todo = ctx.tracks.filter(t => {
+      const k = audioCacheKey(t);
+      if (seen.has(k) || this.isTrackCached(t)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (!todo.length) { this.showToast('这个歌单里的歌都已经缓存好了'); return; }
+    if (!navigator.onLine) { this.showToast('离线中，联网后再缓存'); return; }
+    const API = window.ListeningAPI;
+    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
+    const conn = navigator.connection;
+    if (conn && conn.type === 'cellular' && !confirm(`现在用的是移动网络，要下载 ${todo.length} 首歌吗？无损音质一首大约 30MB。`)) return;
+
+    const batch = { pid, cancelled: false };
+    this._batch = batch;
+    let done = 0, failed = 0, streak = 0, stoppedForCap = false;
+    const cap = audioCacheCapBytes();
+    this.patch({ batchCache: { pid, done, total: todo.length, failed } });
+    for (const t of todo) {
+      if (batch.cancelled) break;
+      if (isFinite(cap) && (await audioCacheTotalBytes()) >= cap * 0.98) { stoppedForCap = true; break; }
+      const ok = await this.cacheTrackNow(t, API);
+      if (ok) { done++; streak = 0; } else { failed++; streak++; }
+      if (!batch.cancelled) this.patch({ batchCache: { pid, done, total: todo.length, failed } });
+      // 连续好几首都失败，多半是网断了或者接口挂了，别把剩下的全试一遍
+      if (streak >= 3) break;
+    }
+    this._batch = null;
+    this.patch({ batchCache: null });
+    this.persist(); // 下载前解析到的歌词 / 专辑也存一下，断网时歌词页能用
+    if (stoppedForCap) this.showToast(`缓存空间到上限了（${capLabel(this.state.cacheCapMB)}），这次缓存了 ${done} 首；可以在「缓存与离线」里调大`);
+    else if (batch.cancelled) this.showToast(`已停止，这次缓存了 ${done} 首`);
+    else if (streak >= 3) this.showToast(`连续几首都下载失败，先停了（这次缓存了 ${done} 首），检查一下网络`);
+    else this.showToast(failed ? `缓存完成：${done} 首成功，${failed} 首失败` : `缓存完成：${done} 首都能离线播放了`);
+  }
+
+  // 下载一首歌进缓存，返回是否成功。播放链接的解析跟 prefetchTrack 一样：QQ 一律现要新链接。
+  // 下载偶尔会被半路打断（移动网络换基站、CDN 回一个不带 CORS 头的 5xx），失败了隔一会儿再试一次——
+  // QQ 再试时又会现要一次新链接；网易云走的 meting 地址每次请求都会重新跳到 CDN，常常换一台机器
+  async cacheTrackNow(t, API) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 1500));
+      try {
+        if (t.source === 'qq' && API.fetchQQDetails) await API.fetchQQDetails(t);
+        else if (!t.audioUrl) await API.ensureTrackDetails(t);
+        // HLS 曲目的 audioUrl 是分片清单，不能当整段文件存，改用同一首歌的 progressive mp3
+        const url = t.scIsHLS
+          ? (API.resolveSoundCloudCacheUrl ? await API.resolveSoundCloudCacheUrl(t) : null)
+          : t.audioUrl;
+        if (url && await cacheAudio(audioCacheKey(t), url, t, { evict: false })) return true;
+      } catch (e) {
+        console.warn('cache track failed:', e);
+      }
+    }
+    return false;
+  }
+
+  // 曲目信息后到时（歌词、真实时长、QQ 详情里的专辑和封面）补写进缓存的元数据，
+  // 断网时「已缓存」列表和歌词页就是完整的。没缓存的歌不用管，下载完成时会整份写一次
+  syncCacheMeta(track) {
+    if (this.isTrackCached(track)) putCachedMeta(audioCacheKey(track), trackCacheMeta(track));
+  }
+
+  // 本地曲库里按歌名 / 歌手 / 专辑找（不区分大小写）。同一首歌（缓存 key 相同）只出一次，已缓存的排前面
+  searchLocalLibrary(q) {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return [];
+    const seen = new Set();
+    const out = [];
+    for (const t of this.state.queue) {
+      const k = audioCacheKey(t);
+      if (seen.has(k)) continue;
+      const hay = `${t.title || ''} ${t.artist || ''} ${t.album || ''}`.toLowerCase();
+      if (!hay.includes(needle)) continue;
+      seen.add(k);
+      out.push(t);
+    }
+    return out.sort((a, b) => Number(this.isTrackCached(b)) - Number(this.isTrackCached(a)));
+  }
+
+  // 把本地曲库的匹配结果当成搜索结果展示。reason：'offline' 断网时直接搜本地；'empty' 联网没搜到时退而求其次。
+  // 返回是否展示了——'empty' 时本地也没有就不展示，交回调用方走原来的"没有找到"
+  showLocalSearch(q, seq, reason) {
+    if (seq !== this._searchSeq) return true;
+    const results = this.searchLocalLibrary(q);
+    if (!results.length && reason !== 'offline') return false;
+    this.patch({ appliedQuery: q, hasSearched: true, isSearching: false, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: results, localSearch: true, suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
+    const cachedN = results.filter(t => this.isTrackCached(t)).length;
+    if (reason === 'offline') {
+      this.showToast(results.length ? `离线中，在本地曲库里找到 ${results.length} 首（${cachedN} 首已缓存）` : `离线中，本地曲库里没有「${q}」`);
+    } else {
+      this.showToast(`联网没搜到「${q}」，先显示本地曲库里的 ${results.length} 首`);
+    }
+    return true;
   }
 
   // 顶栏按钮：把切歌诊断记录（见 diagLog）复制到剪贴板，方便贴出来排查
@@ -1814,7 +2484,9 @@ class Component extends DCLogic {
     // 请求序号守卫：先搜 A 再快速搜 B 时，慢返回的 A 不会覆盖 B 的结果
     this._searchSeq = (this._searchSeq || 0) + 1;
     const seq = this._searchSeq;
-    this.patch({ appliedQuery: q, hasSearched: true, isSearching: true, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
+    // 断网时联网搜索必然失败，直接在本地曲库里搜
+    if (!navigator.onLine) { this.showLocalSearch(q, seq, 'offline'); return; }
+    this.patch({ appliedQuery: q, hasSearched: true, isSearching: true, localSearch: false, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
     this.showToast(`正在搜索 "${q}" …`);
     // 从 SEARCH_SOURCES 而不是 state.sources 的 key 出发：让可搜索源只有这一个卡口，即使
     // state.sources 里残留了已下掉的源（部分回退 / 手改 / 以后改成持久化）也注不进搜索；
@@ -1825,6 +2497,9 @@ class Component extends DCLogic {
       // 给每个 track 分配内部 id
       tracks.forEach(t => normalizeTrack(t));
       if (!tracks.length) {
+        // 联网没搜到：可能真没有，也可能是网络半通不通 / 接口挂了（各音源出错都被吞成空结果）。
+        // 本地曲库里有匹配的就先给这些，总比一句"没有找到"有用
+        if (this.showLocalSearch(q, seq, 'empty')) return;
         this.patch({ searchResults: [], isSearching: false });
         this.showToast(`没有找到「${q}」相关歌曲`);
         return;
@@ -1835,6 +2510,7 @@ class Component extends DCLogic {
     }).catch(e => {
       if (seq !== this._searchSeq) return;
       console.error('search error:', e);
+      if (this.showLocalSearch(q, seq, 'empty')) return;
       this.patch({ isSearching: false });
       this.showToast('搜索失败，请检查网络连接');
     });
@@ -2065,33 +2741,29 @@ class Component extends DCLogic {
 
   // "播放全部"：整个替换当前播放队列（不是接在后面），曲库（s.queue）不动——
   // 其它歌单/喜欢的音乐还要靠曲库解析自己的内容，不能因为播了别的歌单就丢数据
+  // 离线挑歌模式下照样把整个歌单排进播放队列（联网后没缓存的也能接着放），只是从第一首已缓存的开始，
+  // 之后的切歌由 nextListLoopTrack / stepTrack 跳过没缓存的
   playAllInPlaylist() {
     const s = this.state;
-    const pid = s.viewingPlaylistId;
-    if (!pid) return;
-    const pl = s.playlists.find(p => p.id === pid);
-    if (!pl) return;
-    const ids = pid === 'liked' ? likedIdsOrdered(s) : (pl.trackIds || []);
-    // 按歌单自己的顺序取曲目（不是曲库里的顺序——那只是曲目第一次被搜到/导入时落进去的顺序）
-    const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
-    if (!tracks.length) return;
-    this.patch({ playOrder: tracks.map(t => t.id) });
-    this.startTrack(tracks[0]);
-    this.showToast(`正在播放「${pl.name}」`);
+    const ctx = s.viewingPlaylistId ? this.playlistContext(s.viewingPlaylistId) : null;
+    if (!ctx || !ctx.tracks.length) return;
+    const first = ctx.tracks.find(t => this.isPlayable(t));
+    if (!first) { this.showToast(s.online ? '已开启「只播已缓存」，这个歌单里还没有缓存好的歌' : '离线中，这个歌单里还没有缓存好的歌'); return; }
+    this.patch({ playOrder: ctx.tracks.map(t => t.id) });
+    this.startTrack(first);
+    this.showToast(this.isOfflineMode() ? `正在播放「${ctx.name}」里已缓存的歌` : `正在播放「${ctx.name}」`);
   }
 
   // "导出歌单"：把当前歌单的曲目编码成可复制粘贴的字符串，不动播放/曲库状态
   async exportPlaylist() {
     const s = this.state;
     const pid = s.viewingPlaylistId;
-    if (!pid) return;
-    const pl = s.playlists.find(p => p.id === pid);
-    if (!pl) return;
-    const ids = pid === 'liked' ? likedIdsOrdered(s) : (pl.trackIds || []);
-    const tracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
+    const ctx = pid ? this.playlistContext(pid) : null;
+    if (!ctx) return;
+    const tracks = ctx.tracks;
     if (!tracks.length) { this.showToast('这个歌单还没有歌曲，没什么可导出的'); return; }
 
-    const text = await encodePlaylistExport(pl.name, tracks);
+    const text = await encodePlaylistExport(ctx.name, tracks);
     this.copyToClipboard(text).then(ok => {
       if (!ok) { this.showToast('复制失败，请手动复制'); return; }
       if (this._exportRevertTimer) clearTimeout(this._exportRevertTimer);
@@ -2236,12 +2908,11 @@ class Component extends DCLogic {
 
   // 列表循环模式下"下一首"是谁：playOrder 里紧跟着 currentId 后面那个，到头了绕回队首。
   // handleTrackEnd() 的列表循环分支、_onTimeUpdate 里判断要不要提前预取，都用这一份算法
+  // 离线挑歌模式下跳过没缓存的（见 findPlayableInOrder）；联网时就是紧跟着的那一首，和原来一样
   nextListLoopTrack() {
     const s = this.state;
-    const order = s.playOrder;
-    const idx = order.indexOf(s.currentId);
-    const nextId = idx >= 0 && idx + 1 < order.length ? order[idx + 1] : (order.length > 0 ? order[0] : null);
-    return nextId != null ? s.queue.find(t => t.id === nextId) : null;
+    if (!s.playOrder.length) return null;
+    return this.findPlayableInOrder(s.playOrder.indexOf(s.currentId), 1, { includeSelf: true });
   }
 
   handleTrackEnd() {
@@ -2260,10 +2931,10 @@ class Component extends DCLogic {
     if (mode === 1) {
       // 随机模式：优先用预取阶段提前定好的那首（保证跟预取的是同一首），
       // 提前定的那首已经不在播放队列里了，或者根本没提前定过，就现场重新随机
-      let nextId = (this._shufflePrefetchedNextId != null && order.includes(this._shufflePrefetchedNextId))
-        ? this._shufflePrefetchedNextId
-        : null;
-      if (nextId == null && order.length > 0) nextId = order[Math.floor(Math.random() * order.length)];
+      // 离线挑歌模式下两种来源都只认能放的（已缓存的）
+      const pre = this._shufflePrefetchedNextId;
+      let nextId = (pre != null && order.includes(pre) && this.isPlayableId(pre)) ? pre : null;
+      if (nextId == null) nextId = this.pickShuffleNextId();
       if (nextId != null) nextTrack = s.queue.find(t => t.id === nextId);
     } else {
       // 列表循环
@@ -2282,6 +2953,8 @@ class Component extends DCLogic {
   // 播放路径，loadAndPlay 该走的完整流程照样会走一遍
   async prefetchTrack(track) {
     if (!track || track.id === this._prefetchedForId) return;
+    // 断网时预取注定失败，白白触发一串请求超时；不记 _prefetchedForId，联网后这首还能再预取
+    if (!navigator.onLine) return;
     this._prefetchedForId = track.id;
     const API = window.ListeningAPI;
     if (!API) return;
@@ -2302,9 +2975,9 @@ class Component extends DCLogic {
       // 非 HLS：audioUrl 本身就是整段文件，直接缓存。
       if (track.scIsHLS) {
         const url = API.resolveSoundCloudCacheUrl && await API.resolveSoundCloudCacheUrl(track);
-        if (url) cacheAudioInBackground(cacheKey, url);
+        if (url) cacheAudioInBackground(cacheKey, url, null, track);
       } else {
-        cacheAudioInBackground(cacheKey, track.audioUrl);
+        cacheAudioInBackground(cacheKey, track.audioUrl, null, track);
       }
     } catch (e) {
       console.warn('prefetch track failed:', e);
@@ -2447,6 +3120,7 @@ class Component extends DCLogic {
           if (!track.lrc) {
             this.patch({ lyricsLoading: true });
             API.ensureTrackDetails(track).then(() => {
+              this.syncCacheMeta(track); // 补到的歌词写进缓存元数据，下次断网也有
               if (myToken !== this._loadToken) return;
               if (track.lrc) this.parseAndSetLyrics(track.lrc, track.id);
               else this.markLyricsUnavailable(track.id);
@@ -2470,7 +3144,7 @@ class Component extends DCLogic {
           const API = window.ListeningAPI;
           if (API && API.resolveSoundCloudCacheUrl) {
             API.resolveSoundCloudCacheUrl(track)
-              .then(url => { if (url) cacheAudioInBackground(cacheKey, url, markExportReady); })
+              .then(url => { if (url) cacheAudioInBackground(cacheKey, url, markExportReady, track); })
               .catch(() => {});
           }
         };
@@ -2499,7 +3173,7 @@ class Component extends DCLogic {
           // 非 HLS：audioUrl 本身就是整段文件，边播边后台拉完整文件存起来，下次播放这首歌就能命中
           a.src = track.audioUrl;
           startPlayback();
-          cacheAudioInBackground(cacheKey, track.audioUrl, markExportReady);
+          cacheAudioInBackground(cacheKey, track.audioUrl, markExportReady, track);
         }
       });
     };
@@ -2575,8 +3249,15 @@ class Component extends DCLogic {
         // currentId 没指向任何曲目时（比如刚导入歌单还没点过任何一首），从播放队列队首开始，
         // 而不是对着空 src 调用 play() 却什么都不播、UI 却显示"正在播放"
         const resuming = s.queue.find(t => t.id === s.currentId);
-        const track = resuming || s.queue.find(t => t.id === s.playOrder[0]);
-        if (track) this.startTrack(track, resuming ? (s.currentTime || 0) : 0);
+        let track = resuming || s.queue.find(t => t.id === s.playOrder[0]);
+        let resumeAt = resuming ? (s.currentTime || 0) : 0;
+        // 离线打开 App 时上次那首可能没缓存：顺着播放队列往后找一首已缓存的从头放
+        if (track && !this.isPlayable(track)) {
+          track = this.findPlayableInOrder(s.playOrder.indexOf(track.id), 1);
+          resumeAt = 0;
+          if (!track) { this.showToast('离线中，播放队列里没有已缓存的歌'); return; }
+        }
+        if (track) this.startTrack(track, resumeAt);
         else a.play().catch(() => {});
       } else {
         a.play().catch(e => { console.error('play error:', e); });
@@ -2625,6 +3306,11 @@ class Component extends DCLogic {
     const s = this.state;
     const track = s.searchResults.find(t => t.id === id) || s.queue.find(t => t.id === id);
     if (!track) return;
+    // 离线挑歌模式下点没缓存的歌：提示一下就行，别去加载（断网时加载必然失败，还会触发重试和跳歌）
+    if (!this.isPlayable(track)) {
+      this.showToast(s.online ? '已开启「只播已缓存」，这首还没缓存' : '离线中，这首还没缓存，联网后才能播');
+      return;
+    }
     this.ensureQueued(id);
     if (!s.playOrder.includes(id)) {
       this.patch({ playOrder: [id, ...s.playOrder] });
@@ -2637,10 +3323,10 @@ class Component extends DCLogic {
     const order = s.playOrder;
     const idx = order.indexOf(s.currentId);
     if (idx < 0 || order.length === 0) return;
-    // 手动切歌允许在队首/队尾绕圈，跟自动播放到头时的列表循环行为保持一致
-    const ni = (idx + dir + order.length) % order.length;
-    const track = s.queue.find(t => t.id === order[ni]);
+    // 手动切歌允许在队首/队尾绕圈，跟自动播放到头时的列表循环行为保持一致；离线挑歌模式下跳过没缓存的
+    const track = this.findPlayableInOrder(idx, dir, { includeSelf: true });
     if (track) this.startTrack(track);
+    else this.showToast('播放队列里没有已缓存的歌，联网后才能切');
   }
 
   removeTrack(id) {
@@ -2689,6 +3375,8 @@ class Component extends DCLogic {
   renderVals() {
     const s = this.state;
     const c = THEMES[s.theme];
+    // 离线挑歌模式下没缓存的歌在列表里变淡，一眼看出哪些现在放不了
+    const offlineMode = this.isOfflineMode(s);
     const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]) || null;
     const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
     const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack), coverStyle: coverStyle(rawTrack) };
@@ -2728,12 +3416,14 @@ class Component extends DCLogic {
     const queueRender = s.playOrder.map(id => s.queue.find(t => t.id === id)).filter(Boolean).map((t, i, arr) => {
       const isCurrent = t.id === s.currentId;
       const isFirst = i === 0, isLast = i === arr.length - 1;
+      const cached = this.isTrackCached(t);
       return {
         ...t, index: i + 1, isCurrent, coverStyle: coverStyle(t), showCoverIcon: !t.cover,
         sourceLabel: SOURCE_LABELS[t.source], durationStr: fmtTime(t.duration),
         artistDisplay: fmtArtistAlbum(t),
         playingGlyph: isCurrent ? 'graphic_eq' : 'music_note',
-        rowStyle: `display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:grab;background:${isCurrent ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
+        isCached: cached,
+        rowStyle: `display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:grab;background:${isCurrent ? c.secondaryContainer : 'transparent'};transition:background .15s;opacity:${offlineMode && !cached ? 0.45 : 1};`,
         titleColor: isCurrent ? c.onSecondaryContainer : c.onSurface,
         artistColor: isCurrent ? c.onSecondaryContainer : c.onSurfaceVariant,
         onClick: () => this.playTrackAt(t.id),
@@ -2751,14 +3441,15 @@ class Component extends DCLogic {
     });
 
     const isPlaylistView = !!s.viewingPlaylistId;
-    const activePlaylist = isPlaylistView ? s.playlists.find(p => p.id === s.viewingPlaylistId) : null;
+    const isCachedView = s.viewingPlaylistId === CACHED_VIEW_ID;
+    const viewCtx = isPlaylistView ? this.playlistContext(s.viewingPlaylistId, s) : null;
     const q = s.appliedQuery;
     let displayTracks;
-    if (isPlaylistView && activePlaylist) {
-      const ids = activePlaylist.id === 'liked' ? likedIdsOrdered(s) : (activePlaylist.trackIds || []);
-      // 按 ids 自己的顺序取曲目，不能用 s.queue.filter——那是曲库的顺序（曲目第一次被搜到/导入时落进去的顺序），
-      // 跟歌单/喜欢自己的顺序是两回事，之前这里写成 filter 导致列表显示顺序对不上实际的 trackIds/likedOrder
-      displayTracks = ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
+    if (isPlaylistView && viewCtx) {
+      // 按歌单自己的顺序取曲目（playlistContext 里按 ids 逐个找），不能用 s.queue.filter——那是曲库的顺序
+      // （曲目第一次被搜到/导入时落进去的顺序），跟歌单/喜欢自己的顺序是两回事，之前这里写成 filter
+      // 导致列表显示顺序对不上实际的 trackIds/likedOrder
+      displayTracks = viewCtx.tracks;
     } else if (s.hasSearched) {
       // 直接用各平台搜索接口返回的结果，不再在客户端按关键词做子串过滤——
       // 平台搜索本身是分词/模糊匹配（比如「明日方舟终末地」能搜到相关曲目，但标题/歌手里未必含这个完整子串），
@@ -2772,8 +3463,11 @@ class Component extends DCLogic {
     const rowsRender = displayTracks.map(t => {
       const isCurrent = t.id === s.currentId;
       const liked = !!s.liked[t.id];
+      const cached = this.isTrackCached(t);
       return {
         ...t, isHeader: false, isRow: true,
+        isCached: cached, cachedColor: isCurrent ? c.onPrimaryContainer : c.primary,
+        rowOpacity: offlineMode && !cached ? '0.45' : '1',
         coverStyle: coverStyle(t), showCoverIcon: !t.cover, sourceLabel: SOURCE_LABELS[t.source],
         sourceDot: SOURCE_COLORS[t.source] || SOURCE_COLORS.netease,
         artistDisplay: fmtArtistAlbum(t),
@@ -2783,7 +3477,7 @@ class Component extends DCLogic {
         sourceLabelColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
         likeGlyph: 'favorite', likeIconClass: liked ? 'dc-heart-icon dc-heart-filled' : 'dc-heart-icon',
         likeColor: liked ? c.heart : c.onSurfaceVariant,
-        primaryActionIcon: isPlaylistView ? 'playlist_remove' : 'playlist_add',
+        primaryActionIcon: isCachedView ? 'delete' : (isPlaylistView ? 'playlist_remove' : 'playlist_add'),
         onPlay: () => this.playTrackAt(t.id),
         onAdd: isPlaylistView ? (e) => { e.stopPropagation(); this.removeFromPlaylist(t.id); } : (e) => { e.stopPropagation(); this.openAddModal(t.id); },
         onLike: (e) => { e.stopPropagation(); this.toggleLike(t.id); },
@@ -2875,16 +3569,30 @@ class Component extends DCLogic {
 
     const playlistOptions = s.playlists.map(pl => ({ id: pl.id, name: pl.name, icon: pl.glyph, tileBg: pl.tileBg, onClick: () => this.confirmAdd(pl.id, pl.name) }));
 
-    const playlistsRender = s.playlists.map(pl => {
+    const playlistRowLook = (selected) => ({
+      rowStyle: `display:flex;align-items:center;gap:12px;padding:9px 10px 9px 14px;border-radius:28px;cursor:pointer;background:${selected ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
+      nameColor: selected ? c.onSecondaryContainer : c.onSurface,
+      countColor: selected ? c.onSecondaryContainer : c.onSurfaceVariant,
+    });
+    // 「已缓存」排在最上面：它不是真歌单（不进持久化的 playlists），不能删，数量就是能列出来的已缓存首数
+    const cachedEntry = {
+      id: CACHED_VIEW_ID, name: '已缓存', builtin: true, glyph: 'download_done', iconFill: 0,
+      tileBg: 'linear-gradient(135deg,#5B9BD5,#3A6EA8)',
+      countLabel: s.cachedCount,
+      ...playlistRowLook(s.selectedPlaylist === CACHED_VIEW_ID),
+      deleteDisplay: 'none', deleteBtnClass: '',
+      onClick: () => this.selectPlaylist(CACHED_VIEW_ID),
+      onMouseEnter: () => {}, onMouseLeave: () => {},
+      onDelete: (e) => e.stopPropagation(),
+    };
+    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => {
       const selected = pl.id === s.selectedPlaylist;
       const hovered = s.hoverPlaylistId === pl.id;
       return {
         ...pl,
         // 和歌单详情页用同一套「在 queue 里能查到」的过滤逻辑算数量，避免 trackIds/liked 里有 queue 已经删掉的悬空 id 时，外面数量和点进去的数量对不上
         countLabel: pl.id === 'liked' ? s.queue.filter(t => s.liked[t.id]).length : s.queue.filter(t => (pl.trackIds || []).includes(t.id)).length,
-        rowStyle: `display:flex;align-items:center;gap:12px;padding:9px 10px 9px 14px;border-radius:28px;cursor:pointer;background:${selected ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
-        nameColor: selected ? c.onSecondaryContainer : c.onSurface,
-        countColor: selected ? c.onSecondaryContainer : c.onSurfaceVariant,
+        ...playlistRowLook(selected),
         deleteDisplay: (hovered && !pl.builtin) ? 'flex' : 'none',
         // 手机端没有 hover，删除图标靠 CSS 断点强制常驻显示（见 .dc-pl-delete-btn 规则）；
         // 内置歌单（喜欢的音乐）本来就不该有删除按钮，这里不给它加这个 class，断点样式就不会误命中它
@@ -2893,6 +3601,17 @@ class Component extends DCLogic {
         onMouseEnter: () => this.hoverPlaylist(pl.id),
         onMouseLeave: () => this.unhoverPlaylist(),
         onDelete: (e) => this.deletePlaylist(pl.id, e),
+      };
+    })];
+
+    const batchHere = !!(s.batchCache && s.batchCache.pid === s.viewingPlaylistId);
+    // 「缓存与离线」面板
+    const capChoicesRender = CACHE_CAP_CHOICES_MB.map(mb => {
+      const active = mb === s.cacheCapMB;
+      return {
+        key: 'cap' + mb, label: capLabel(mb),
+        chipStyle: `display:flex;align-items:center;padding:7px 14px;border-radius:20px;cursor:pointer;font-size:12.5px;background:${active ? c.secondaryContainer : 'transparent'};color:${active ? c.onSecondaryContainer : c.onSurfaceVariant};border:1px solid ${active ? 'transparent' : c.outlineVariant};`,
+        onClick: () => this.setCacheCap(mb),
       };
     });
 
@@ -2916,27 +3635,41 @@ class Component extends DCLogic {
         searchQuery: s.searchQuery,
         showSuggest, suggestIsHistory, suggestRender, showClear: !!s.searchQuery,
         isPlaylistView, isLibraryView: !isPlaylistView,
-        playlistHeaderName: activePlaylist ? activePlaylist.name : '',
+        playlistHeaderName: viewCtx ? viewCtx.name : '',
         showPlayAll: isPlaylistView && displayTracks.length > 0,
+        // 「缓存全部」：「已缓存」视图里没意义；正在缓存这个歌单时按钮变成进度，再点是停止
+        showCacheAll: isPlaylistView && !isCachedView && displayTracks.length > 0,
+        cacheAllLabel: batchHere ? `缓存中 ${s.batchCache.done + s.batchCache.failed}/${s.batchCache.total} · 点此停止` : '缓存全部',
+        cacheAllIcon: batchHere ? 'progress_activity' : 'download',
+        cacheAllIconStyle: batchHere ? 'animation:iconSpin .9s linear infinite;display:inline-block;' : '',
         exportBtnLabel: s.exportedPlaylistId === s.viewingPlaylistId ? '已导出到剪贴板' : '导出歌单',
         exportBtnIcon: s.exportedPlaylistId === s.viewingPlaylistId ? 'check' : 'ios_share',
         isSearching: s.isSearching,
         hasNoResults: !showPrompt && !s.isSearching && displayTracks.length === 0,
         showPrompt, showStatusText: !showPrompt && !s.isSearching,
-        emptyIcon: isPlaylistView ? 'queue_music' : 'search_off',
-        emptyText: isPlaylistView ? '这个歌单还没有歌曲，去搜索页添加吧' : '没有找到相关歌曲，换个关键词试试',
-        statusText: isPlaylistView
-          ? `${activePlaylist ? activePlaylist.name : ''} · ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · － 移出歌单）`
-          : (q
-            ? `“${q}” 找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`
-            : `找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`),
+        emptyIcon: isCachedView ? 'download_done' : (isPlaylistView ? 'queue_music' : 'search_off'),
+        emptyText: isCachedView
+          ? '还没有缓存好的歌：听过一遍的歌会自动缓存，也可以在歌单里点「缓存全部」'
+          : (isPlaylistView
+            ? '这个歌单还没有歌曲，去搜索页添加吧'
+            : (s.localSearch ? '离线中，本地曲库里没有找到，联网后再搜' : '没有找到相关歌曲，换个关键词试试')),
+        statusText: (isPlaylistView
+          ? (isCachedView
+            ? `已缓存 · ${displayTracks.length} 首 · 占用 ${formatBytes(s.cachedBytes)}（断网也能播 · 点垃圾桶删除缓存）`
+            : `${viewCtx ? viewCtx.name : ''} · ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · － 移出歌单）`)
+          : (s.localSearch
+            ? `本地曲库里匹配“${q}”的 ${displayTracks.length} 首（不是联网搜索结果）`
+            : (q
+              ? `“${q}” 找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`
+              : `找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`)))
+          + (offlineMode && !isCachedView ? (s.online ? ' · 只播已缓存：灰色的歌先跳过' : ' · 离线中：灰色的歌没缓存，暂时放不了') : ''),
         viewIsList: !showPrompt && displayTracks.length > 0,
         mediaIsCover: !mediaIsLyrics, mediaIsLyrics,
-        mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.cover ? `url('${track.cover}')` : track.coverGradient};background-size:auto, cover;background-position:center;animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
+        mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.cover ? `url('${coverSrc(track.cover)}')` : track.coverGradient};background-size:auto, cover;background-position:center;animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
         // 全屏播放页手机端的封面氛围背景：一层放大模糊的封面图（无封面时退化成来源渐变）+ 一层主题面色半透明遮罩，
         // 分成两个 div 叠加，省得手写 hex->rgba 换算
         ambientStyle: track.cover
-          ? `position:absolute;inset:-24px;z-index:0;background-image:url('${track.cover}');background-size:cover;background-position:center;filter:blur(48px) saturate(1.35) brightness(${s.theme === 'dark' ? 0.6 : 0.9});transform:scale(1.3);`
+          ? `position:absolute;inset:-24px;z-index:0;background-image:url('${coverSrc(track.cover)}');background-size:cover;background-position:center;filter:blur(48px) saturate(1.35) brightness(${s.theme === 'dark' ? 0.6 : 0.9});transform:scale(1.3);`
           : `position:absolute;inset:-24px;z-index:0;background:${track.coverGradient};`,
         ambientOverlayStyle: `position:absolute;inset:0;z-index:0;background:${c.surfaceLow};opacity:0.8;`,
         rightIsQueue, rightIsBrowse: !rightIsQueue,
@@ -2970,6 +3703,22 @@ class Component extends DCLogic {
         shareCanSystemShare: typeof navigator.share === 'function',
         hasToast: !!s.toast, toastText: s.toast || '', toastKey: s.toastKey,
         showBatteryHint: !!s.showBatteryHint,
+        // 离线：顶栏标签 + 「缓存与离线」面板
+        showOfflineChip: offlineMode,
+        offlineChipIcon: s.online ? 'download_done' : 'cloud_off',
+        offlineChipText: s.online ? '只播缓存' : '离线',
+        storagePanelOpen: s.storagePanelOpen,
+        netStatusText: s.online
+          ? (s.offlineOnly ? '已联网 · 只播已缓存的歌（省流量）' : '已联网 · 听过的歌会自动缓存')
+          : '没有网络 · 现在只能放已缓存的歌',
+        cachedCount: s.cachedCount,
+        cacheUsageText: `${formatBytes(s.cachedBytes)} / ${capLabel(s.cacheCapMB)}`,
+        showCacheBar: s.cacheCapMB > 0,
+        cacheUsagePct: s.cacheCapMB > 0 ? Math.min(100, (s.cachedBytes / (s.cacheCapMB * 1024 * 1024)) * 100) : 0,
+        capChoicesRender,
+        offlineSwitchBg: s.offlineOnly ? c.primary : c.outlineVariant,
+        offlineThumbBg: s.offlineOnly ? c.onPrimary : c.surfaceLow,
+        offlineThumbLeft: s.offlineOnly ? 22 : 2,
         // 手机端：歌单抽屉是否打开（控制遮罩层显隐）
         mobileSidebarOpen: s.mobileSidebarOpen,
         sidebarClass, nowPlayingClass,
@@ -3024,6 +3773,10 @@ class Component extends DCLogic {
         importKeyDown: (e) => this.importKeyDown(e),
         confirmImport: () => this.confirmImport(),
         dismissBatteryHint: () => this.dismissBatteryHint(),
+        openStoragePanel: () => this.openStoragePanel(),
+        closeStoragePanel: () => this.closeStoragePanel(),
+        toggleOfflineOnly: () => this.toggleOfflineOnly(),
+        cachePlaylist: () => this.cachePlaylist(),
       },
     };
   }
