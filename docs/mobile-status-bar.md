@@ -1,6 +1,9 @@
 # 手机端状态栏（通知栏）：能做什么，不能做什么
 
 > 记录时间：2026-09 ｜ 验证设备：安卓 + Edge 安装的 PWA
+>
+> 2026-10 更新：**安卓 APK 已经做到沉浸**（第五节）。下面一到四节说的是纯网页 / PWA，结论没变。
+> APK 的整体说明见 [android-app.md](android-app.md)。
 
 ## 结论
 
@@ -68,40 +71,40 @@ Chromium 在安卓 WebAPK 上并没有这么实现。**别照着 MDN 推断行�
 
 ## 四、代码里相关的地方
 
-- `examples/Listening Player.dc.html` 的 `<head>` 里，`.dc-topbar` 那段
-  `padding-top: env(safe-area-inset-top, 0px)`：**当前所有平台这个 inset 恒为 0，是死代码**，
-  渲染结果和没写一样。留着是因为一旦套上原生壳、或 Chromium 把 PWA edge-to-edge 修好，
-  它就是现成的正确布局，不用再改。同一段里 `.dc-sidebar` 的 `top` 也跟着它走。
+- `examples/Listening Player.dc.html` 的 `<head>` 里，`.dc-topbar` 那段 `padding-top`：安全区取值是
+  `var(--safe-area-inset-top, env(safe-area-inset-top, 0px))`。**网页版 / PWA 里这个值恒为 0**，渲染和
+  没写一样；APK 里是原生壳注入的状态栏高度，顶栏的底色就一路铺到状态栏下面。同一段里 `.dc-sidebar` 的
+  `top`、全屏播放页、底部迷你播放条、弹层的避让都是同一套写法。
 - 同文件的 `syncThemeChrome()`：它写 `theme-color` meta **只对浏览器标签页的地址栏有用**，
-  对安装版 PWA 无效。
+  对安装版 PWA 无效；APK 里它另外调 `SystemBars.setStyle` 切状态栏图标的深浅。
 
-## 五、以后真要做：Capacitor 原生壳的正确入口
+## 五、APK 里是怎么做的（Capacitor 8.5.2）
 
-网上大量资料已经过时，会把人带沟里。截至 2026-09：
+原来这一节是"以后真要做的正确入口"，照着做的时候读了 Capacitor 8.5.2 的源码，发现有两条说错了，
+已经改正：
 
-- ❌ `StatusBar.setBackgroundColor()` 在 **Android 16 上已是 no-op**；`setOverlaysWebView()`
-  同样失效。**别用这两个。**
-- ✅ **Capacitor 8.3.2+ 自带 edge-to-edge**。Android 15 / API 35 起系统层面强制，
-  Android 16 连 `windowOptOutEdgeToEdgeEnforcement` 这条退路都没了。
-- ✅ 状态栏那块颜色**不由原生 API 设，而是用自己的 HTML 元素加 safe-area 内边距去填**——
-  `.dc-topbar` 那段 padding 就是现成的，背景本来就绑着 `{{ v.c.surfaceLow }}` 跟主题走。
-- ✅ 图标明暗用 `SystemBars.setStyle()`，运行时可切，夜间/白天都能对上。
-- ⚠️ 安全区取值用 `var(--safe-area-inset-top, env(safe-area-inset-top, 0px))`——
-  Android WebView < 140 的 `env()` 有 bug，Capacitor 8.3.0 起会注入 `--safe-area-inset-*`
-  平行变量兜底。
+- ❌ `StatusBar.setBackgroundColor()` 在 **Android 16 上已是 no-op**；`setOverlaysWebView()` 同样失效。
+  **别用这两个。**（没变）
+- ⚠️ ~~Capacitor 8.3.2+ 自带 edge-to-edge~~：自带的 `SystemBars` 插件（`insetsHandling: "css"`）**只在
+  WebView ≥ 140 且页面写了 `viewport-fit=cover` 时**才真的让页面铺到状态栏下面；更老的 WebView 是给整个
+  窗口加内边距——**不沉浸**。Android 14 及以下它也不会替你打开 edge-to-edge。
+- ⚠️ ~~Capacitor 8.3.0 起会注入 `--safe-area-inset-*` 给 WebView < 140 兜底~~：只有在上面那种"真的铺满"
+  的情况下注入的才是真实高度；WebView < 140 时注入的**全是 0**。国产系统自带的 WebView 经常偏旧，
+  这条路在不少手机上等于没沉浸。
 
-参考：[Capacitor Edge-to-Edge & Safe Areas 指南](https://capawesome.io/blog/capacitor-edge-to-edge-and-safe-areas-guide/)
+所以 APK 里关掉了自带的处理，自己做（代码在 `mobile/android/.../MainActivity.java`）：
 
-### 打包方式的成本差异
+1. `capacitor.config.json` 里 `SystemBars.insetsHandling: "disable"`。
+2. `MainActivity` 调 `EdgeToEdge.enable`，状态栏、导航栏都透明，任何 Android 版本都铺满窗口。
+3. 监听窗口 insets，把状态栏 / 导航栏 / 刘海的高度（dp）注入成 `<html>` 上的 `--safe-area-inset-*`，
+   页面每次加载完再补一次；键盘弹出时给窗口底部加键盘高度的内边距，底部弹层里的输入框不会被盖住。
+4. 页面一律用 `var(--safe-area-inset-*, env(safe-area-inset-*, 0px))` 取值——APK 里取注入的真实值，
+   网页版取不到变量就退回 `env()`（也是 0），不用分两套 CSS。
+5. 状态栏那块颜色**不由原生设**，就是页面自己的顶栏 / 播放页背景铺上去的，天然跟主题走；系统只画图标，
+   图标深浅用 `SystemBars.setStyle()` 按 App 主题切（夜间 `DARK` = 浅色图标，白天 `LIGHT` = 深色图标），
+   `<head>` 的首屏脚本先按存的主题切一次，免得白天主题下第一屏是看不见的浅色图标。
 
-`SC_PROXY`（`src/api/soundcloud.js`）和 `NETEASE_PROXY`（`src/api/netease.js`）现在都是空串，
-走相对路径、同源。所以：
-
-- **瘦壳**（`capacitor.config` 的 `server.url` 指向线上实例）：页面 origin 就是线上域名，
-  代理的相对路径原样能用，**API 层零改动**。代价是必须联网才能打开，Render 免费实例休眠后
-  冷启动要等 10~30 秒。
-- **内置页面**（HTML 打进 APK）：秒开，但 origin 变成 localhost，得把两个 PROXY 常量改成绝对
-  地址、重新 `npm run build`，还要确认 `server.mjs` 的 CORS 头放行。活多不少。
+页面是打进 APK 的（不是瘦壳指向线上），代价和取舍见 [android-app.md](android-app.md) 第五节。
 
 ## 六、方法论教训
 
