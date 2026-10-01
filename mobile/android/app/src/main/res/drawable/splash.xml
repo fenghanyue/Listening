@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 以下的启动画面：深色底 + 居中的圆形图标（12 及以上由系统按 windowSplashScreen* 画）。
+     图标直接引用 mipmap，不能包在 <bitmap> 里：8.0 起它解析到的是自适应图标 XML，<bitmap> 加载不了会直接崩 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/app_background" />
+    <item
+        android:width="96dp"
+        android:height="96dp"
+        android:drawable="@mipmap/ic_launcher_round"
+        android:gravity="center" />
+</layer-list>

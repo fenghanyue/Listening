@@ -24,17 +24,17 @@
   /* 100dvh 走 class 而不是内联：内联 style 会被 support.js 的 cssToObj 转成对象，
      重复属性会被后者吃掉，写不了 100vh 的降级兜底 */
   .dc-app-shell { height: 100vh; height: 100dvh; }
-  /* 顶栏通知栏避让：总高撑成 48px + 安全区，安全区用 padding-top 吃掉，内容区仍是 48px。
-     注意：当前所有平台上 safe-area-inset-top 恒为 0，所以这几行现在是死代码，渲染结果和
-     没写完全一样——网页不拥有 Android 窗口，视口从哪开始由浏览器决定，压根没有 inset 可报。
-     留着是因为一旦套上原生壳、或 Chromium 把安装版 PWA 的 edge-to-edge 修好，它就是现成的
-     正确布局，不用再改（.dc-sidebar 的 top 也跟着这个值走）。
-     来龙去脉见 docs/mobile-status-bar.md。同样用两遍声明兜住不认 env() 的浏览器 */
+  /* 顶栏通知栏避让：总高撑成 48px + 安全区，安全区用 padding-top 吃掉，内容区仍是 48px，
+     顶栏的底色就一直铺到状态栏下面（沉浸）。.dc-sidebar 的 top 也跟着这个值走。
+     安全区先取 APK 原生壳注入的 --safe-area-inset-*（MainActivity 按系统栏实际高度注入，任何 WebView
+     版本都准），没有再退回 env()。网页版 / 安装版 PWA 里两者都是 0，渲染和不写一样——网页不拥有
+     Android 窗口，没有 inset 可报。来龙去脉见 docs/mobile-status-bar.md。
+     同样用两遍声明兜住不认 var() / env() 的浏览器 */
   .dc-topbar {
     height: 48px;
-    height: calc(48px + env(safe-area-inset-top, 0px));
+    height: calc(48px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
     padding: 0 20px;
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   }
 </style>
 <script>
@@ -46,6 +46,14 @@
   document.documentElement.setAttribute('data-app-theme', t);
   var m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', t === 'dark' ? '#1D1B20' : '#F7F2FA');
+  // APK（Capacitor 原生壳）里：状态栏图标深浅先按存的主题定一次，免得白天主题下第一屏是看不见的浅色图标
+  // （挂载后 syncThemeChrome 还会再校准）；页面来源是 https://localhost，同源的 /proxy 不存在，
+  // 代理改走线上实例（见 src/api/utils.js 的 proxyBase）
+  var cap = window.Capacitor;
+  if (cap && cap.isNativePlatform && cap.isNativePlatform()) {
+    window.LISTENING_PROXY_BASE = 'https://listening-5bnv.onrender.com';
+    try { cap.nativePromise('SystemBars', 'setStyle', { style: t === 'dark' ? 'DARK' : 'LIGHT' }).catch(function () {}); } catch (e) { /* 插件不在就算了 */ }
+  }
 })();
 </script>
 <!-- React / hls.js / 字体都从本地 vendor/ 加载（scripts/vendor-assets.mjs 下载并校验哈希），不再走 CDN：
@@ -143,7 +151,7 @@ if ('serviceWorker' in navigator) {
       .dc-sidebar {
         position: fixed !important;
         /* 顶栏在有安全区的环境下会长高一截，抽屉顶边贴着顶栏底边，要跟着走 */
-        top: calc(48px + env(safe-area-inset-top, 0px)) !important;
+        top: calc(48px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) !important;
         bottom: 0 !important;
         left: 0 !important;
         width: 78vw !important;
@@ -155,7 +163,7 @@ if ('serviceWorker' in navigator) {
         box-shadow: 2px 0 16px rgba(0,0,0,.3);
         border-radius: 0 20px 20px 0 !important;
         overflow: hidden;
-        padding-bottom: env(safe-area-inset-bottom) !important;
+        padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) !important;
         box-sizing: border-box !important;
       }
       .dc-sidebar.dc-open { transform: translateX(0) !important; }
@@ -175,15 +183,15 @@ if ('serviceWorker' in navigator) {
         z-index: 60 !important;
         transform: translateY(100%);
         transition: transform .32s cubic-bezier(.2, .9, .3, 1);
-        padding-top: env(safe-area-inset-top) !important;
-        padding-bottom: env(safe-area-inset-bottom) !important;
+        padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) !important;
+        padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) !important;
         box-sizing: border-box !important;
         overflow: hidden !important;
       }
       .dc-nowplaying.dc-open { transform: translateY(0) !important; }
-      .dc-nowplaying-close { display: none; top: calc(10px + env(safe-area-inset-top)) !important; }
+      .dc-nowplaying-close { display: none; top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) !important; }
       .dc-nowplaying.dc-open .dc-nowplaying-close { display: flex !important; }
-      .dc-nowplaying-share { top: calc(10px + env(safe-area-inset-top)) !important; }
+      .dc-nowplaying-share { top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) !important; }
 
       /* 全屏播放页手机端专属：封面氛围背景、更大的唱片和控制键 */
       .dc-ambient { display: block !important; }
@@ -199,7 +207,7 @@ if ('serviceWorker' in navigator) {
       .dc-pl-delete-btn { display: flex !important; }
       .dc-mobile-miniplayer {
         display: flex !important;
-        bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+        bottom: calc(12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important;
       }
       .dc-search-input-wrap { min-width: 120px !important; }
       .dc-desktop-only { display: none !important; }
@@ -209,7 +217,7 @@ if ('serviceWorker' in navigator) {
       .dc-search-btn-icon { display: flex !important; }
       .dc-search-btn-label { display: none !important; }
 
-      .dc-scroll-area { padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+      .dc-scroll-area { padding-bottom: calc(96px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important; }
 
       /* 弹窗手机端改为底部弹层 */
       .dc-modal-overlay { align-items: flex-end !important; }
@@ -218,11 +226,11 @@ if ('serviceWorker' in navigator) {
         max-width: none !important;
         box-sizing: border-box !important;
         border-radius: 28px 28px 0 0 !important;
-        padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+        padding-bottom: calc(24px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important;
         animation: sheetUp .26s cubic-bezier(.2, .9, .3, 1);
       }
 
-      .dc-toast { bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+      .dc-toast { bottom: calc(86px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important; }
 
       .dc-queue-drag-handle { display: none !important; }
       .dc-queue-move-btns { display: flex !important; }
@@ -649,10 +657,23 @@ if ('serviceWorker' in navigator) {
   </sc-if>
 
   <sc-if value="{{ v.showBatteryHint }}">
-  <div class="dc-mobile-only" style="display:none;flex-direction:column;position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top));z-index:150;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};border-radius:16px;padding:14px 16px;box-shadow:{{ v.c.e3 }};box-sizing:border-box;">
-    <div style="font-size:13px;line-height:1.5;">安卓锁屏后台要连续自动播放下一首，需要手动放行一次：设置 → 电池 → 找到浏览器（或本应用）→ 允许后台耗电/关闭省电限制。</div>
-    <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+  <div class="dc-mobile-only" style="display:none;flex-direction:column;position:fixed;left:12px;right:12px;top:calc(12px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));z-index:150;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};border-radius:16px;padding:14px 16px;box-shadow:{{ v.c.e3 }};box-sizing:border-box;">
+    <div style="font-size:13px;line-height:1.5;">{{ v.batteryHintText }}</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+      <sc-if value="{{ v.isNative }}">
+      <button onclick="{{ H.openBatterySettings }}" style="padding:6px 16px;border-radius:16px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.primary }};font-size:12.5px;font-weight:500;cursor:pointer;">去设置</button>
+      </sc-if>
       <button onclick="{{ H.dismissBatteryHint }}" style="padding:6px 16px;border-radius:16px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:12.5px;font-weight:500;cursor:pointer;">知道了</button>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ v.showUpdateBanner }}">
+  <div style="display:flex;flex-direction:column;position:fixed;left:12px;right:12px;top:calc(12px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));z-index:150;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};border-radius:16px;padding:14px 16px;box-shadow:{{ v.c.e3 }};box-sizing:border-box;">
+    <div style="font-size:13px;line-height:1.5;">{{ v.updateBannerText }}</div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+      <button onclick="{{ H.dismissUpdate }}" style="padding:6px 16px;border-radius:16px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.primary }};font-size:12.5px;font-weight:500;cursor:pointer;">以后再说</button>
+      <button onclick="{{ H.downloadUpdate }}" style="padding:6px 16px;border-radius:16px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:12.5px;font-weight:500;cursor:pointer;">下载新版</button>
     </div>
   </div>
   </sc-if>
@@ -755,6 +776,15 @@ if ('serviceWorker' in navigator) {
           <button onclick="{{ H.clearAudioCache }}" style="padding:10px 16px;border-radius:20px;border:none;background:none;color:{{ v.c.heart }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">清空缓存</button>
           <button onclick="{{ H.closeStoragePanel }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">完成</button>
         </div>
+        <sc-if value="{{ v.isNative }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid {{ v.c.outlineVariant }};font-size:12px;color:{{ v.c.onSurfaceVariant }};">
+          <span>版本 {{ v.appVersionText }}</span>
+          <span style="display:flex;gap:16px;">
+            <span onclick="{{ H.openBatterySettings }}" style="color:{{ v.c.primary }};cursor:pointer;">后台运行设置</span>
+            <span onclick="{{ H.checkUpdateNow }}" style="color:{{ v.c.primary }};cursor:pointer;">检查更新</span>
+          </span>
+        </div>
+        </sc-if>
       </div>
     </div>
   </sc-if>
@@ -846,19 +876,35 @@ function coverStyle(t) {
 // 普通浏览器里没有这个对象。原生相关的分支一律靠它判断，网页版走原来的逻辑
 const IS_NATIVE = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
 
-// 取一个原生插件（Capacitor 注入的代理对象）；网页版、或者 APK 里没装这个插件时返回 null
-function nativePlugin(name) {
+// 原生插件调用的最小封装：直接用原生壳注入的 Capacitor.nativePromise / nativeCallback——@capacitor/core 的
+// registerPlugin 底下调的就是这两个，页面因此不用再打包一份 @capacitor/core。插件装没装，看原生壳注入的
+// Capacitor.PluginHeaders。网页版（IS_NATIVE 为 false）一律当作没有插件
+function nativeHas(plugin) {
   const cap = window.Capacitor;
-  return (IS_NATIVE && cap && cap.Plugins && cap.Plugins[name]) || null;
+  return IS_NATIVE && !!cap && Array.isArray(cap.PluginHeaders) && cap.PluginHeaders.some(h => h.name === plugin);
+}
+
+function nativeCall(plugin, method, options) {
+  if (!nativeHas(plugin)) return Promise.reject(new Error(`原生插件 ${plugin} 不可用`));
+  return window.Capacitor.nativePromise(plugin, method, options || {});
+}
+
+// 回调型的方法（原生那头会多次回调，比如媒体会话的按键）和事件监听都走这个；出错的那次回调直接忽略
+function nativeOn(plugin, method, options, cb) {
+  if (!nativeHas(plugin)) return null;
+  return window.Capacitor.nativeCallback(plugin, method, options || {}, (data, err) => { if (!err) cb(data || {}); });
+}
+
+function nativeListen(plugin, eventName, cb) {
+  return nativeOn(plugin, 'addListener', { eventName }, cb);
 }
 
 // APK 里用原生 HTTP 拉二进制：不受 CORS 限制（QQ 封面就靠这个），带连接/读取超时，返回 Blob，失败返回 null。
 // CapacitorHttp 是 Capacitor 自带的插件，这里只是显式调用它，并没有打开"接管全部 fetch"的开关——
 // 那个开关会让几十 MB 的音频也走原生 HTTP、再转成 base64 过桥，内存和速度都扛不住
 async function nativeFetchBlob(url, timeoutMs) {
-  const Http = nativePlugin('CapacitorHttp');
-  if (!Http) return null;
-  const res = await Http.request({ url, method: 'GET', responseType: 'blob', connectTimeout: timeoutMs, readTimeout: timeoutMs });
+  if (!nativeHas('CapacitorHttp')) return null;
+  const res = await nativeCall('CapacitorHttp', 'request', { url, method: 'GET', responseType: 'blob', connectTimeout: timeoutMs, readTimeout: timeoutMs });
   if (!res || res.status < 200 || res.status >= 300 || typeof res.data !== 'string') return null;
   const headers = res.headers || {};
   const typeKey = Object.keys(headers).find(k => k && k.toLowerCase() === 'content-type');
@@ -1617,6 +1663,121 @@ function formatDiagLog(list) {
   return [`# 听音乐 切歌诊断记录（${list.length} 条）`, `# ${navigator.userAgent}`, ...lines].join('\n');
 }
 
+// ====================== 原生壳（APK）桥接 ======================
+// 网页版（IS_NATIVE 为 false）这一节全部跳过，行为和原来一样。原生那头的代码在 mobile/android 里
+
+// 状态栏 / 导航栏图标深浅跟 App 主题走。SystemBars 的 'DARK' 指"给深色背景用"，也就是浅色图标
+function nativeSetBarStyle(theme) {
+  nativeCall('SystemBars', 'setStyle', { style: theme === 'dark' ? 'DARK' : 'LIGHT' }).catch(() => {});
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+// 锁屏 / 通知栏封面：只给媒体会话插件传 data: 图片。插件自己下 http 图片是在所有原生插件共用的那条线程上
+// 同步下载、还不设超时，弱网时一卡住，状态栏、返回键这些原生调用全得排队等它。这里按
+// "本地缓存的封面 → 原生 HTTP 现拉（8 秒超时）" 的顺序取，最近用过的记在内存里
+const nativeArtworkCache = new Map();
+async function artworkDataUrl(coverUrl) {
+  if (!coverUrl) return null;
+  if (nativeArtworkCache.has(coverUrl)) return nativeArtworkCache.get(coverUrl);
+  let blob = null;
+  try {
+    const local = coverObjectUrls.get(coverUrl);
+    if (local) blob = await (await fetch(local)).blob();
+    else if (navigator.onLine) blob = await fetchCoverBlob(coverUrl);
+  } catch (e) { blob = null; }
+  if (!blob) return null;
+  const url = await blobToDataUrl(blob);
+  nativeArtworkCache.set(coverUrl, url);
+  if (nativeArtworkCache.size > 30) nativeArtworkCache.delete(nativeArtworkCache.keys().next().value);
+  return url;
+}
+
+// 没有封面时也得给插件一张图：它在取不到新封面时会沿用上一首的，锁屏上就成了张冠李戴
+let _appIconDataUrl = null;
+function appIconDataUrl() {
+  if (!_appIconDataUrl) _appIconDataUrl = fetch('./icons/icon-192.png').then(r => r.blob()).then(blobToDataUrl).catch(() => null);
+  return _appIconDataUrl;
+}
+
+// 媒体会话（通知栏 / 锁屏控制 / 蓝牙耳机按键）的适配层：网页版用浏览器的 navigator.mediaSession；APK 里
+// WebView 不支持这个 API，改走 @capgo/capacitor-media-session 插件——它挂一个原生 MediaSession，并在播放 /
+// 暂停期间开着前台服务，锁屏之后系统才不会把播放杀掉。两边对外是同一组方法，播放器只调这里
+const mediaSessionBridge = {
+  native: IS_NATIVE && nativeHas('MediaSession'),
+  _metaToken: 0,
+
+  setMetadata(track) {
+    if (this.native) { this._setNativeMetadata(track); return; }
+    if (!('mediaSession' in navigator)) return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title || '',
+      artist: track.artist || '',
+      album: track.album || '',
+      artwork: track.cover ? [{ src: track.cover }] : [],
+    });
+  },
+
+  // 标题先换（封面可能要等网络），封面拿到后再补一次；切歌快的时候，晚到的旧封面靠 _metaToken 丢掉
+  async _setNativeMetadata(track) {
+    const token = ++this._metaToken;
+    const base = { title: track.title || '', artist: track.artist || '', album: track.album || '' };
+    const coverIsLocal = !!track.cover && (coverObjectUrls.has(track.cover) || nativeArtworkCache.has(track.cover));
+    const first = (coverIsLocal && await artworkDataUrl(track.cover)) || await appIconDataUrl();
+    if (token !== this._metaToken) return;
+    nativeCall('MediaSession', 'setMetadata', { ...base, artwork: first ? [{ src: first }] : [] }).catch(() => {});
+    if (coverIsLocal || !track.cover) return;
+    const cover = await artworkDataUrl(track.cover);
+    if (cover && token === this._metaToken) {
+      nativeCall('MediaSession', 'setMetadata', { ...base, artwork: [{ src: cover }] }).catch(() => {});
+    }
+  },
+
+  setPlaybackState(state) {
+    if (this.native) { nativeCall('MediaSession', 'setPlaybackState', { playbackState: state }).catch(() => {}); return; }
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
+  },
+
+  // 锁屏进度条。系统会按播放状态自己往前推，只需要在播放 / 暂停 / 拖动 / 换歌时报一次；时长未知时不报
+  setPosition(duration, position) {
+    if (!isFinite(duration) || duration <= 0) return;
+    const pos = Math.min(Math.max(0, position || 0), duration);
+    if (this.native) {
+      nativeCall('MediaSession', 'setPositionState', { duration, position: pos, playbackRate: 1 }).catch(() => {});
+      return;
+    }
+    try {
+      if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
+        navigator.mediaSession.setPositionState({ duration, position: pos, playbackRate: 1 });
+      }
+    } catch (e) { /* 参数不合法或浏览器不支持，不影响播放 */ }
+  },
+
+  setActionHandler(action, handler) {
+    if (this.native) { nativeOn('MediaSession', 'setActionHandler', { action }, handler); return; }
+    if (!('mediaSession' in navigator)) return;
+    try { navigator.mediaSession.setActionHandler(action, details => handler(details || {})); } catch (e) { /* 有的浏览器不认 seekto 之类的动作 */ }
+  },
+};
+
+// 检查更新：查 GitHub 上最新的 Release。CI 发版时 tag 是 v1.0.<构建号>，APK 的 versionCode 就是这个构建号
+const UPDATE_CHECK_STORAGE_KEY = 'listening-update-checked-at-v1';
+const UPDATE_DISMISSED_STORAGE_KEY = 'listening-update-dismissed-v1';
+const LATEST_RELEASE_API = 'https://api.github.com/repos/fenghanyue/Listening/releases/latest';
+const LATEST_APK_URL = 'https://github.com/fenghanyue/Listening/releases/latest/download/listening.apk';
+
+function buildNumberFromTag(tag) {
+  const m = /^v\d+\.\d+\.(\d+)$/.exec(String(tag || ''));
+  return m ? Number(m[1]) : 0;
+}
+
 // ====================== 自适应音量（Web Audio AGC）可调参数 ======================
 const ADAPTIVE_LOOP_INTERVAL_MS = 150;   // 增益控制循环的采样/调整周期
 const TARGET_DBFS = -18;                 // 目标 RMS 响度（dBFS），流行/摇滚/古典等常见母带响度的折中值
@@ -1674,6 +1835,8 @@ class Component extends DCLogic {
       storagePanelOpen: false,
       batchCache: null,
       localSearch: false,
+      // APK 专属：App 版本号（检查更新 / 面板里显示）、发现的新版本 { tag }
+      appVersion: '', updateInfo: null,
     };
     const persisted = loadPersistedLibrary();
     if (!persisted) return base;
@@ -1787,16 +1950,134 @@ class Component extends DCLogic {
     } catch (e) { /* 老浏览器没有这个 API */ }
     // 安卓上锁屏后台要连续自动切歌，系统电池策略默认会限制——这不是这个页面能靠代码绕过的东西，
     // 只能提示用户自己去系统设置放行。只在安卓上提示一次，点掉之后记住，不用每次打开都看到
+    // APK 里能直接问系统放没放行，见 refreshBatteryHint
     try {
-      if (/Android/i.test(navigator.userAgent) && !localStorage.getItem('lsn-battery-hint-dismissed')) {
+      if (!IS_NATIVE && /Android/i.test(navigator.userAgent) && !localStorage.getItem('lsn-battery-hint-dismissed')) {
         this.patch({ showBatteryHint: true });
       }
     } catch (e) { /* localStorage 不可用时就不提示，不影响播放主功能 */ }
+    if (IS_NATIVE) this.initNativeShell();
   }
 
   dismissBatteryHint() {
     try { localStorage.setItem('lsn-battery-hint-dismissed', '1'); } catch (e) { /* 存不下就下次还会提示 */ }
     this.patch({ showBatteryHint: false });
+  }
+
+  // ==== 原生壳（APK）专属 ====
+
+  initNativeShell() {
+    // 返回键 / 返回手势：注册了监听，Capacitor 就不再自己处理返回键，全交给 handleNativeBack
+    nativeListen('App', 'backButton', () => this.handleNativeBack());
+    // 拔耳机 / 蓝牙耳机断开：正在放就暂停，免得突然外放
+    nativeListen('AppShell', 'audioBecomingNoisy', () => {
+      if (this._audio && !this._audio.paused) {
+        this._audio.pause();
+        this.showToast('耳机断开了，已暂停');
+      }
+    });
+    // 从系统设置页回来时重新问一次后台运行放没放行，放行了就把提示条收起来
+    nativeListen('App', 'resume', () => this.refreshBatteryHint());
+    this.refreshBatteryHint();
+    this.checkForUpdate(false);
+  }
+
+  // 返回键 / 返回手势：一层层往回退；退到底就把 App 切到后台——不能直接退出，退出会把 WebView
+  // 连同正在放的歌一起销毁
+  handleNativeBack() {
+    const s = this.state;
+    if (s.storagePanelOpen) { this.closeStoragePanel(); return; }
+    if (s.shareModalOpen) { this.closeShareModal(); return; }
+    if (s.importModalOpen) { this.closeImportModal(); return; }
+    if (s.createModalOpen) { this.closeCreateModal(); return; }
+    if (s.addModalId != null) { this.closeAddModal(); return; }
+    if (s.mobileNowPlayingExpanded) {
+      if (s.rightPanel === 'queue') this.closeQueuePanel(); else this.closeMobileNowPlaying();
+      return;
+    }
+    if (s.mobileSidebarOpen) { this.closeMobileSidebar(); return; }
+    if (s.rightPanel === 'queue') { this.closeQueuePanel(); return; }
+    if (s.viewingPlaylistId) { this.backFromPlaylist(); return; }
+    nativeCall('App', 'minimizeApp').catch(() => {});
+  }
+
+  // APK 里直接问系统"有没有放行后台运行"：没放行、也没点过"知道了"才显示提示条
+  refreshBatteryHint() {
+    nativeCall('AppShell', 'getBatteryOptimization').then(r => {
+      let dismissed = false;
+      try { dismissed = !!localStorage.getItem('lsn-battery-hint-dismissed'); } catch (e) { /* 读不到就当没点过 */ }
+      this.patch({ showBatteryHint: !(r && r.ignoring) && !dismissed });
+    }).catch(() => {});
+  }
+
+  // 还没放行就弹系统的"允许在后台运行"对话框；已经放行了就打开应用详情页（小米的省电策略、华为的
+  // 应用启动管理这类厂商开关都在那儿）。见 AppShellPlugin.openBatterySettings
+  openBatterySettings() {
+    nativeCall('AppShell', 'openBatterySettings', { target: 'auto' }).catch(() => this.showToast('打不开系统设置，请手动在设置里找到「听音乐」'));
+  }
+
+  // 检查更新：自动检查每天最多一次，手动（面板里点「检查更新」）随时查。失败都不打扰，手动的才提示
+  async checkForUpdate(manual) {
+    let info;
+    try { info = await nativeCall('App', 'getInfo'); } catch (e) { return; }
+    const current = Number(info && info.build) || 0;
+    if (info && info.version) this.patch({ appVersion: info.version });
+    if (!manual) {
+      try {
+        if (Date.now() - Number(localStorage.getItem(UPDATE_CHECK_STORAGE_KEY) || 0) < 20 * 3600 * 1000) return;
+      } catch (e) { /* 读不到就照常检查 */ }
+    }
+    if (!navigator.onLine) { if (manual) this.showToast('离线中，联网后再检查'); return; }
+    try {
+      const r = await fetch(LATEST_RELEASE_API, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const rel = await r.json();
+      try { localStorage.setItem(UPDATE_CHECK_STORAGE_KEY, String(Date.now())); } catch (e) { /* 存不下就下次再查 */ }
+      const latest = buildNumberFromTag(rel.tag_name);
+      let dismissed = '';
+      try { dismissed = localStorage.getItem(UPDATE_DISMISSED_STORAGE_KEY) || ''; } catch (e) { /* 读不到就当没忽略过 */ }
+      if (latest > current && (manual || dismissed !== rel.tag_name)) this.patch({ updateInfo: { tag: rel.tag_name } });
+      else if (manual) this.showToast(latest > current ? `有新版本 ${rel.tag_name}` : `已经是最新版（${(info && info.version) || current}）`);
+    } catch (e) {
+      if (manual) this.showToast('检查更新失败，稍后再试');
+    }
+  }
+
+  dismissUpdate() {
+    const tag = this.state.updateInfo && this.state.updateInfo.tag;
+    try { if (tag) localStorage.setItem(UPDATE_DISMISSED_STORAGE_KEY, tag); } catch (e) { /* 存不下下次还会提示 */ }
+    this.patch({ updateInfo: null });
+  }
+
+  // 用系统浏览器打开最新版 APK 的固定下载地址；装的时候直接覆盖，歌单和缓存都在（同一把签名钥匙）
+  downloadUpdate() {
+    nativeCall('AppShell', 'openUrl', { url: LATEST_APK_URL })
+      .then(() => this.patch({ updateInfo: null }))
+      .catch(() => this.showToast('打不开浏览器，去 GitHub 的 Releases 页面下载'));
+  }
+
+  // APK 里 WebView 不支持 <a download>：把缓存的音频写进 App 的缓存目录，再交给系统分享面板（可以存到
+  // 文件管理、发给微信 / QQ）。一首无损几十 MB，整首转成一个 base64 字符串过原生桥内存扛不住，所以分块写，
+  // 每块 768KB（base64 之后 1MB 左右）
+  async exportViaShare(track, blob) {
+    const name = `${sanitizeFilename(`${track.title || 'audio'}${track.artist ? ' - ' + track.artist : ''}`)}.${audioExtFromBlob(blob)}`;
+    const path = `exports/${name}`;
+    this.showToast('正在准备导出…');
+    try {
+      await nativeCall('Filesystem', 'rmdir', { path: 'exports', directory: 'CACHE', recursive: true }).catch(() => {});
+      const CHUNK = 768 * 1024;
+      for (let off = 0; off < blob.size; off += CHUNK) {
+        const data = bytesToBase64(new Uint8Array(await blob.slice(off, off + CHUNK).arrayBuffer()));
+        await nativeCall('Filesystem', off === 0 ? 'writeFile' : 'appendFile', { path, data, directory: 'CACHE', recursive: true });
+      }
+      const { uri } = await nativeCall('Filesystem', 'getUri', { path, directory: 'CACHE' });
+      await nativeCall('Share', 'share', { title: name, files: [uri], dialogTitle: '导出这首歌' });
+    } catch (e) {
+      // 在分享面板里点了取消也会走到这里，那不算失败
+      if (/cancel/i.test(String((e && e.message) || e))) return;
+      console.warn('export via share failed:', e);
+      this.showToast('导出失败，请稍后再试');
+    }
   }
 
   measureLyricsViewport() {
@@ -1851,7 +2132,8 @@ class Component extends DCLogic {
     this._onEnded = () => this.handleTrackEnd();
     this._onPlay = () => {
       this.setState({ playing: true });
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+      mediaSessionBridge.setPlaybackState('playing');
+      mediaSessionBridge.setPosition(a.duration, a.currentTime);
     };
     this._onPause = () => {
       // 自然播完时浏览器会先触发一次 pause、再触发 ended——这一步的 paused=true 只是流程自带的步骤，
@@ -1861,7 +2143,8 @@ class Component extends DCLogic {
       // 点暂停）此时 a.ended 一定是 false，不受影响。
       if (a.ended) return;
       this.setState({ playing: false });
-      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+      mediaSessionBridge.setPlaybackState('paused');
+      mediaSessionBridge.setPosition(a.duration, a.currentTime);
     };
     this._onError = () => {
       console.error('audio error:', a.error);
@@ -1895,6 +2178,7 @@ class Component extends DCLogic {
       });
       // 真实时长补写进缓存元数据：离线列表里显示得出时长，也是"缓存被截断"检测的基准
       if (track && this._playingFromCache) this.syncCacheMeta(track);
+      mediaSessionBridge.setPosition(dur, a.currentTime);
     };
 
     a.addEventListener('timeupdate', this._onTimeUpdate);
@@ -1906,13 +2190,23 @@ class Component extends DCLogic {
 
     // 手机端后台切歌失败的根因：不注册 Media Session，系统不知道这个标签页在持续播放媒体，
     // 后台时会限流/拦截 ended 事件里异步发起的下一首 play()。这里把播放控制接到已有方法上，
-    // 不新增播放逻辑。
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', () => { this.resumeAudioContext(); a.play(); });
-      navigator.mediaSession.setActionHandler('pause', () => a.pause());
-      navigator.mediaSession.setActionHandler('previoustrack', () => this.stepTrack(-1));
-      navigator.mediaSession.setActionHandler('nexttrack', () => this.stepTrack(1));
-    }
+    // 不新增播放逻辑。网页走浏览器的 Media Session，APK 走原生插件（见 mediaSessionBridge）。
+    // play：audio 元素还没装过歌（APK 刚打开就按了耳机上的播放键）时交给 togglePlay 去续播上次那首
+    mediaSessionBridge.setActionHandler('play', () => {
+      this.resumeAudioContext();
+      if (a.src && a.src !== window.location.href) a.play().catch(() => {});
+      else if (!this.state.playing) this.togglePlay();
+    });
+    mediaSessionBridge.setActionHandler('pause', () => a.pause());
+    mediaSessionBridge.setActionHandler('previoustrack', () => this.stepTrack(-1));
+    mediaSessionBridge.setActionHandler('nexttrack', () => this.stepTrack(1));
+    // 通知栏 / 锁屏上拖进度条
+    mediaSessionBridge.setActionHandler('seekto', d => {
+      if (!isFinite(d.seekTime) || !isFinite(a.duration)) return;
+      a.currentTime = d.seekTime;
+      this.setState({ currentTime: d.seekTime });
+      mediaSessionBridge.setPosition(a.duration, d.seekTime);
+    });
 
     // 上次会话开启过自适应音量：懒建图（建图本身不需要用户手势，真正开始出声时才需要）
     if (this.state.adaptiveVolume) this.initAdaptiveVolumeGraph();
@@ -2359,6 +2653,8 @@ class Component extends DCLogic {
     document.documentElement.setAttribute('data-app-theme', t);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute('content', THEMES[t].surfaceLow);
+    // APK 里状态栏由页面自己画（沉浸），系统只画图标：图标深浅要跟着主题换，见 docs/mobile-status-bar.md
+    if (IS_NATIVE) nativeSetBarStyle(t);
   }
   setSearchQuery(e) {
     const val = e.target.value;
@@ -2692,7 +2988,15 @@ class Component extends DCLogic {
     const text = this.currentShareText();
     if (!text) { this.showToast('没有可分享的歌曲'); return; }
     // 只传 text、不传 url：一旦带上 url 字段，iOS 微信会优先把它渲染成链接卡片，
-    // 就不是这里要的纯文本了。只给 text 时 iOS / Android 都发成普通文本消息
+    // 就不是这里要的纯文本了。只给 text 时 iOS / Android 都发成普通文本消息。
+    // APK 里 WebView 没有 navigator.share，走原生的系统分享面板，同样只给文本
+    if (IS_NATIVE) {
+      nativeCall('Share', 'share', { text, dialogTitle: '分享这首歌' }).then(() => this.closeShareModal()).catch(err => {
+        if (/cancel/i.test(String((err && err.message) || err))) return;
+        this.copyShareText();
+      });
+      return;
+    }
     navigator.share({ text }).then(() => this.closeShareModal()).catch(err => {
       // 用户在系统分享面板里点取消会 reject 一个 AbortError，那不是失败
       if (err && err.name === 'AbortError') return;
@@ -2855,14 +3159,7 @@ class Component extends DCLogic {
     this._diagAutoAdvance = false;
     this._diagTrackStartAt = Date.now();
     diagLog('切歌', { 方式: auto ? '自动' : '手动', 来源: track.source, 歌: (track.title || '').slice(0, 20) });
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: track.title || '',
-        artist: track.artist || '',
-        album: track.album || '',
-        artwork: track.cover ? [{ src: track.cover }] : [],
-      });
-    }
+    mediaSessionBridge.setMetadata(track);
     // 新曲目开始加载：上一首的预取记录作废，从头给这一首武装加载超时兜底，
     // 并把它标记成"正在加载中"（播放按钮显示 loading 图标，直到 _onTimeUpdate 观察到
     // 真实播放进度、或 _onError/watchdog 判定失败为止）
@@ -2894,6 +3191,7 @@ class Component extends DCLogic {
     if (!track) return;
     const blob = await getCachedAudio(audioCacheKey(track));
     if (!blob) { this.showToast('这首歌还没缓存完，听一遍后再导出'); return; }
+    if (IS_NATIVE) { this.exportViaShare(track, blob); return; }
     const base = sanitizeFilename(`${track.title || 'audio'}${track.artist ? ' - ' + track.artist : ''}`);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -3281,6 +3579,7 @@ class Component extends DCLogic {
       const finalTime = frac(ev.clientX) * a.duration;
       a.currentTime = finalTime;
       this.setState({ currentTime: finalTime, seeking: false });
+      mediaSessionBridge.setPosition(a.duration, finalTime);
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       document.body.style.userSelect = '';
@@ -3700,9 +3999,19 @@ class Component extends DCLogic {
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
         shareModalOpen: s.shareModalOpen, shareTextPreview,
         shareNoLink: !!matchedTrack && !shareHasLink,
-        shareCanSystemShare: typeof navigator.share === 'function',
+        shareCanSystemShare: IS_NATIVE ? nativeHas('Share') : typeof navigator.share === 'function',
         hasToast: !!s.toast, toastText: s.toast || '', toastKey: s.toastKey,
         showBatteryHint: !!s.showBatteryHint,
+        isNative: IS_NATIVE,
+        batteryHintText: IS_NATIVE
+          ? '锁屏后要连续自动播放，需要允许「听音乐」在后台运行：点「去设置」在弹窗里选允许。小米、华为等手机还要在应用信息里把省电策略设成「无限制」、打开「自启动」。'
+          : '安卓锁屏后台要连续自动播放下一首，需要手动放行一次：设置 → 电池 → 找到浏览器（或本应用）→ 允许后台耗电/关闭省电限制。',
+        // 和电池提示条位置重叠，那个先显示，点掉之后再出这个
+        showUpdateBanner: !!s.updateInfo && !s.showBatteryHint,
+        updateBannerText: s.updateInfo
+          ? `有新版本 ${s.updateInfo.tag}${s.appVersion ? `（当前 ${s.appVersion}）` : ''}。下载后点开安装，会直接覆盖这一版，歌单和缓存都还在。`
+          : '',
+        appVersionText: s.appVersion || '—',
         // 离线：顶栏标签 + 「缓存与离线」面板
         showOfflineChip: offlineMode,
         offlineChipIcon: s.online ? 'download_done' : 'cloud_off',
@@ -3777,6 +4086,10 @@ class Component extends DCLogic {
         closeStoragePanel: () => this.closeStoragePanel(),
         toggleOfflineOnly: () => this.toggleOfflineOnly(),
         cachePlaylist: () => this.cachePlaylist(),
+        openBatterySettings: () => this.openBatterySettings(),
+        checkUpdateNow: () => this.checkForUpdate(true),
+        dismissUpdate: () => this.dismissUpdate(),
+        downloadUpdate: () => this.downloadUpdate(),
       },
     };
   }

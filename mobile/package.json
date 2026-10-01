@@ -1,0 +1,23 @@
+{
+  "name": "listening-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "听音乐 Android 壳（Capacitor）。页面本身在 ../examples，打包前由 scripts/build-www.mjs 拷进 www/",
+  "scripts": {
+    "build:www": "node scripts/build-www.mjs",
+    "sync": "npm run build:www && cap sync android",
+    "apk:debug": "npm run sync && cd android && ./gradlew assembleDebug",
+    "apk:release": "npm run sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/filesystem": "8.1.3",
+    "@capacitor/share": "8.0.2",
+    "@capgo/capacitor-media-session": "8.0.32"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  }
+}
