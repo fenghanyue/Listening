@@ -4,12 +4,13 @@
  * SoundCloud 已停止发放新 API key，client_id 需从 SoundCloud 网页 JavaScript 中提取。
  * ⚠️ SoundCloud API 在中国大陆无法直连，需要代理/VPN。
  * ⚠️ api-v2.soundcloud.com 不返回 CORS 响应头，浏览器端必须经代理（server.mjs 提供的
- *    /proxy /stream /sc-client-id）转发，否则搜索/详情请求会被浏览器直接拦截。代理走
- *    相对路径（同源）——本机开发和线上部署页面与代理都在同一个进程/同一个域名下，不需要
- *    区分环境。代理不可用时退回直连（仅适用于 Node 等无 CORS 限制的环境，浏览器端会失败）。
+ *    /proxy /stream /sc-client-id）转发，否则搜索/详情请求会被浏览器直接拦截。网页版和代理
+ *    同源走相对路径，APK 里走线上实例（前缀见 utils.js 的 proxyBase）。代理不可用时退回直连
+ *    （仅适用于 Node 等无 CORS 限制的环境，浏览器端会失败）。
  */
 
-const SC_PROXY = '';
+import { proxyBase } from './utils.js';
+
 let scProxyAvailable = null;
 let scProxyCheckedAt = 0;
 // 失败结果只短暂缓存：Render 冷启动等瞬时问题不该让整个会话永久判定代理不可用
@@ -20,7 +21,7 @@ async function checkScProxy() {
   if (scProxyAvailable === true) return true;
   if (scProxyAvailable === false && Date.now() - scProxyCheckedAt < SC_PROXY_NEGATIVE_TTL) return false;
   try {
-    const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(6000) });
+    const r = await fetch(`${proxyBase()}/sc-client-id`, { signal: AbortSignal.timeout(6000) });
     scProxyAvailable = r.ok;
   } catch (e) {
     scProxyAvailable = false;
@@ -32,7 +33,7 @@ async function checkScProxy() {
 // 走本地代理（可用时）获取 JSON，否则直连；直连在浏览器端会因 CORS 失败
 async function scFetchJson(url, timeout = 10000) {
   if (await checkScProxy()) {
-    const r = await fetch(`${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
+    const r = await fetch(`${proxyBase()}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
     if (!r.ok) throw new Error(`proxy ${r.status}`);
     return r.json();
   }
@@ -67,7 +68,7 @@ async function getSCClientId() {
   // 1. 优先走本地代理的 /sc-client-id（服务端抓取+验证，不受浏览器 CORS 限制，最可靠）
   if (await checkScProxy()) {
     try {
-      const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(5000) });
+      const r = await fetch(`${proxyBase()}/sc-client-id`, { signal: AbortSignal.timeout(5000) });
       const j = await r.json();
       if (j.client_id) {
         scClientId = j.client_id;
@@ -226,7 +227,7 @@ export async function fetchSoundCloudDetails(t) {
           } else {
             // progressive mp3：走本地代理 /stream 流式转发，绕开 CDN 对部分地区的 403
             t.audioUrl = useProxy
-              ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}`
+              ? `${proxyBase()}/stream?url=${encodeURIComponent(resolved.url)}`
               : resolved.url;
             t.scIsHLS = false;
           }
@@ -275,7 +276,7 @@ export async function resolveSoundCloudCacheUrl(t) {
     if (!resolved || !resolved.url) return null;
     const useProxy = await checkScProxy();
     return useProxy
-      ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}`
+      ? `${proxyBase()}/stream?url=${encodeURIComponent(resolved.url)}`
       : resolved.url;
   } catch (e) {
     console.warn('soundcloud cache url resolve:', e);

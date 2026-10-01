@@ -48,9 +48,13 @@
   if (m) m.setAttribute('content', t === 'dark' ? '#1D1B20' : '#F7F2FA');
 })();
 </script>
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5"></script>
+<!-- React / hls.js / 字体都从本地 vendor/ 加载（scripts/vendor-assets.mjs 下载并校验哈希），不再走 CDN：
+     断网时页面得能起来（APK 离线打开就靠这个），也不再受国内 unpkg / jsdelivr / Google Fonts 时好时坏的影响。
+     support.js 看到 window.React 已经在了就不会再去 unpkg 拉；别往这里加回外链，mobile/scripts/build-www.mjs 会拦 -->
+<link rel="stylesheet" href="./vendor/fonts.css">
+<script src="./vendor/react.production.min.js"></script>
+<script src="./vendor/react-dom.production.min.js"></script>
+<script src="./vendor/hls.min.js"></script>
 <script src="./support.js"></script>
 <script src="./api-bundle.js"></script>
 <script>
@@ -65,11 +69,6 @@ if ('serviceWorker' in navigator) {
 <body>
 <x-dc>
 <helmet>
-  
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="true">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
   <style>
 .material-symbols-outlined {
   font-family: 'Material Symbols Outlined';
