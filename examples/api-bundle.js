@@ -246,7 +246,8 @@ var ListeningAPI = (() => {
       track.title = d.song_title || d.song_name || track.title;
       track.artist = d.singer_name || track.artist;
       track.album = d.album_name || d.album_title || track.album || "";
-      track.cover = d.album_pic || d.singer_pic || track.cover;
+      const pic = d.album_pic || d.singer_pic;
+      track.cover = pic ? pic.replace(/^http:\/\//, "https://") : track.cover;
       track.pageUrl = d.song_h5_url || track.pageUrl;
       const best = pickBestPlayUrl(d);
       if (best.url) track.audioUrl = best.url.replace(/^http:\/\//, "https://");

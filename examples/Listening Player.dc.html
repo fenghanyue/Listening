@@ -1294,6 +1294,7 @@ async function audioCacheTotalBytes() {
 // music.126.net）发 CORS 头，网页 fetch 读得到；QQ 封面 y.gtimg.cn 不发，网页里读不到就算了（列表照旧
 // 走 sw.js 缓存的图）。APK 里走原生 HTTP，不受 CORS 限制（见原生壳一节的 nativeFetchBlob）
 async function fetchCoverBlob(url) {
+  url = httpsCover(url);
   if (!url) return null;
   try {
     let blob;
@@ -1310,10 +1311,18 @@ async function fetchCoverBlob(url) {
   }
 }
 
-// 封面地址 → 本地 blob: 地址。refreshCacheIndex 按元数据库里存的封面字节维护这张表；
+// 封面地址一律按 https 用：QQ 接口给的是 http://y.gtimg.cn/…，曲库和缓存元数据里也存着不少这种旧地址。
+// 浏览器会自动把 http 图片升级成 https 去取，APK 的 WebView 不会——直接当混合内容拦掉，原生下载也被
+// 安卓默认禁止明文 http，QQ 封面就既显示不出来也缓存不下来。存下来的数据不改，用的地方统一过一遍
+function httpsCover(url) {
+  return typeof url === 'string' ? url.replace(/^http:\/\//i, 'https://') : url;
+}
+
+// 封面地址 → 本地 blob: 地址。refreshCacheIndex 按元数据库里存的封面字节维护这张表（key 是 https 地址）；
 // 有本地的就用本地的，没有才用原地址（联网时走 sw.js 的图片缓存）
 const coverObjectUrls = new Map();
 function coverSrc(url) {
+  url = httpsCover(url);
   return (url && coverObjectUrls.get(url)) || url || null;
 }
 
@@ -1685,6 +1694,7 @@ function blobToDataUrl(blob) {
 // "本地缓存的封面 → 原生 HTTP 现拉（8 秒超时）" 的顺序取，最近用过的记在内存里
 const nativeArtworkCache = new Map();
 async function artworkDataUrl(coverUrl) {
+  coverUrl = httpsCover(coverUrl);
   if (!coverUrl) return null;
   if (nativeArtworkCache.has(coverUrl)) return nativeArtworkCache.get(coverUrl);
   let blob = null;
@@ -1721,7 +1731,7 @@ const mediaSessionBridge = {
       title: track.title || '',
       artist: track.artist || '',
       album: track.album || '',
-      artwork: track.cover ? [{ src: track.cover }] : [],
+      artwork: track.cover ? [{ src: httpsCover(track.cover) }] : [],
     });
   },
 
@@ -1729,7 +1739,8 @@ const mediaSessionBridge = {
   async _setNativeMetadata(track) {
     const token = ++this._metaToken;
     const base = { title: track.title || '', artist: track.artist || '', album: track.album || '' };
-    const coverIsLocal = !!track.cover && (coverObjectUrls.has(track.cover) || nativeArtworkCache.has(track.cover));
+    const coverKey = httpsCover(track.cover);
+    const coverIsLocal = !!coverKey && (coverObjectUrls.has(coverKey) || nativeArtworkCache.has(coverKey));
     const first = (coverIsLocal && await artworkDataUrl(track.cover)) || await appIconDataUrl();
     if (token !== this._metaToken) return;
     nativeCall('MediaSession', 'setMetadata', { ...base, artwork: first ? [{ src: first }] : [] }).catch(() => {});
@@ -2399,7 +2410,7 @@ class Component extends DCLogic {
 
     const covers = new Map();
     for (const r of records) {
-      const url = r.meta && r.meta.cover;
+      const url = httpsCover(r.meta && r.meta.cover);
       if (url && r.coverBlob && !covers.has(url)) covers.set(url, coverObjectUrls.get(url) || URL.createObjectURL(r.coverBlob));
     }
     for (const [url, obj] of coverObjectUrls) { if (covers.get(url) !== obj) URL.revokeObjectURL(obj); }
@@ -2429,6 +2440,33 @@ class Component extends DCLogic {
       cachedBytes: records.reduce((n, r) => n + (r.size || 0), 0),
     }));
     if (restored.length) this.persist();
+    this.backfillCachedCovers(records);
+  }
+
+  // 已缓存、封面却没存下来的歌（QQ 封面以前是 http 地址，APK 里原生下载被拦）：APK 里联网时在后台一首
+  // 一首补存，补到了刷新一次列表。每首每次启动只试一次，失败了不反复请求。网页版不补——QQ 封面服务器
+  // 不发 CORS 头，网页读不到图片字节，补也补不到
+  backfillCachedCovers(records) {
+    if (!IS_NATIVE || this._coverBackfilling || !navigator.onLine) return;
+    const tried = this._coverBackfillTried || (this._coverBackfillTried = new Set());
+    const todo = records.filter(r => r.meta && r.meta.cover && !r.coverBlob && !tried.has(r.id));
+    if (!todo.length) return;
+    this._coverBackfilling = true;
+    (async () => {
+      let added = 0;
+      try {
+        for (const r of todo) {
+          if (!navigator.onLine) break; // 没试的留到下次联网
+          tried.add(r.id);
+          const blob = await fetchCoverBlob(r.meta.cover);
+          // 下载期间这首的缓存可能被删了（淘汰 / 手动删），音频不在就别写一条没主的元数据
+          if (blob && await getCachedAudio(r.id)) { await putCachedMeta(r.id, null, blob); added++; }
+        }
+      } finally {
+        this._coverBackfilling = false;
+        if (added) notifyAudioCacheChanged();
+      }
+    })();
   }
 
   // 「已缓存」列表里的曲目 id，按最近播放时间排（新的在前）。没有元数据、曲库里也找不到的老缓存不进列表
