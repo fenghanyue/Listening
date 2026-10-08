@@ -28,6 +28,17 @@ export function parseLRC(txt) {
 }
 
 /**
+ * server.mjs 那几个代理路由（/proxy /stream /sc-client-id）的地址前缀。
+ * 网页版和代理同源，前缀是空串、走相对路径；APK 里页面来源是 https://localhost，本机没有代理，
+ * 页面会在加载 api-bundle.js 之前把 globalThis.LISTENING_PROXY_BASE 设成线上实例的地址。
+ * 每次请求时才读，不在模块加载时定死——加载顺序万一有出入也不会一直拿着错的值
+ * @returns {string}
+ */
+export function proxyBase() {
+  return (typeof globalThis !== 'undefined' && globalThis.LISTENING_PROXY_BASE) || '';
+}
+
+/**
  * 根据播放链接的文件扩展名判断是否无损格式（flac/wav/ape/alac/aiff）
  * @param {string} url - 播放链接
  * @returns {boolean}

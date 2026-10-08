@@ -36,6 +36,9 @@ var ListeningAPI = (() => {
   });
 
   // src/api/utils.js
+  function proxyBase() {
+    return typeof globalThis !== "undefined" && globalThis.LISTENING_PROXY_BASE || "";
+  }
   function isLosslessExtension(url) {
     if (!url) return false;
     const base = url.split("?")[0].toLowerCase();
@@ -46,11 +49,10 @@ var ListeningAPI = (() => {
 
   // src/api/netease.js
   var BASE_URL = "https://api.qijieya.cn/meting/";
-  var NETEASE_PROXY = "";
   async function fetchNeteaseAlbum(songid) {
     const target = `https://interface3.music.163.com/api/v3/song/detail?c=${encodeURIComponent(JSON.stringify([{ id: Number(songid) }]))}`;
     try {
-      const r = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(target)}`, { signal: AbortSignal.timeout(5e3) });
+      const r = await fetch(`${proxyBase()}/proxy?url=${encodeURIComponent(target)}`, { signal: AbortSignal.timeout(5e3) });
       if (!r.ok) return "";
       const json = await r.json();
       return json?.songs?.[0]?.al?.name || "";
@@ -105,7 +107,7 @@ var ListeningAPI = (() => {
     let url = shortUrl;
     try {
       for (let i = 0; i < 3; i++) {
-        const res = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5e3) });
+        const res = await fetch(`${proxyBase()}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5e3) });
         const location = res.headers.get("x-proxy-location");
         if (!location) break;
         url = new URL(location, url).toString();
@@ -244,7 +246,8 @@ var ListeningAPI = (() => {
       track.title = d.song_title || d.song_name || track.title;
       track.artist = d.singer_name || track.artist;
       track.album = d.album_name || d.album_title || track.album || "";
-      track.cover = d.album_pic || d.singer_pic || track.cover;
+      const pic = d.album_pic || d.singer_pic;
+      track.cover = pic ? pic.replace(/^http:\/\//, "https://") : track.cover;
       track.pageUrl = d.song_h5_url || track.pageUrl;
       const best = pickBestPlayUrl(d);
       if (best.url) track.audioUrl = best.url.replace(/^http:\/\//, "https://");
@@ -266,7 +269,6 @@ var ListeningAPI = (() => {
   }
 
   // src/api/soundcloud.js
-  var SC_PROXY = "";
   var scProxyAvailable = null;
   var scProxyCheckedAt = 0;
   var SC_PROXY_NEGATIVE_TTL = 3e4;
@@ -274,7 +276,7 @@ var ListeningAPI = (() => {
     if (scProxyAvailable === true) return true;
     if (scProxyAvailable === false && Date.now() - scProxyCheckedAt < SC_PROXY_NEGATIVE_TTL) return false;
     try {
-      const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(6e3) });
+      const r = await fetch(`${proxyBase()}/sc-client-id`, { signal: AbortSignal.timeout(6e3) });
       scProxyAvailable = r.ok;
     } catch (e) {
       scProxyAvailable = false;
@@ -284,7 +286,7 @@ var ListeningAPI = (() => {
   }
   async function scFetchJson(url, timeout = 1e4) {
     if (await checkScProxy()) {
-      const r2 = await fetch(`${SC_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
+      const r2 = await fetch(`${proxyBase()}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(timeout) });
       if (!r2.ok) throw new Error(`proxy ${r2.status}`);
       return r2.json();
     }
@@ -312,7 +314,7 @@ var ListeningAPI = (() => {
     if (scClientId) return scClientId;
     if (await checkScProxy()) {
       try {
-        const r = await fetch(`${SC_PROXY}/sc-client-id`, { signal: AbortSignal.timeout(5e3) });
+        const r = await fetch(`${proxyBase()}/sc-client-id`, { signal: AbortSignal.timeout(5e3) });
         const j = await r.json();
         if (j.client_id) {
           scClientId = j.client_id;
@@ -429,7 +431,7 @@ var ListeningAPI = (() => {
               t.audioUrl = resolved.url;
               t.scIsHLS = true;
             } else {
-              t.audioUrl = useProxy ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
+              t.audioUrl = useProxy ? `${proxyBase()}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
               t.scIsHLS = false;
             }
           }
@@ -463,7 +465,7 @@ var ListeningAPI = (() => {
       const resolved = await scFetchJson(t.scProgressiveResolveUrl);
       if (!resolved || !resolved.url) return null;
       const useProxy = await checkScProxy();
-      return useProxy ? `${SC_PROXY}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
+      return useProxy ? `${proxyBase()}/stream?url=${encodeURIComponent(resolved.url)}` : resolved.url;
     } catch (e) {
       console.warn("soundcloud cache url resolve:", e);
       return null;

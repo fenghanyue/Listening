@@ -3,14 +3,13 @@
  * API 来源: qijieya meting (第三方代理)
  */
 
-import { isLosslessExtension } from './utils.js';
+import { isLosslessExtension, proxyBase } from './utils.js';
 
 const BASE_URL = 'https://api.qijieya.cn/meting/';
 
 // meting 的 search/url/lrc 接口本身不带专辑名（固定 name/artist/url/pic/lrc 5 字段），
 // 专辑名需要额外查网易云官方接口，且该接口不发 CORS 头，浏览器端必须经代理转发（server.mjs
-// 提供的 /proxy，相对路径同源，本机开发和线上部署都一样）
-const NETEASE_PROXY = '';
+// 提供的 /proxy；网页版同源走相对路径，APK 里走线上实例，前缀见 utils.js 的 proxyBase）
 
 /**
  * 查专辑名（走本地代理，代理不可用或请求失败时静默放弃，不影响播放主流程）
@@ -18,7 +17,7 @@ const NETEASE_PROXY = '';
 async function fetchNeteaseAlbum(songid) {
   const target = `https://interface3.music.163.com/api/v3/song/detail?c=${encodeURIComponent(JSON.stringify([{ id: Number(songid) }]))}`;
   try {
-    const r = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(target)}`, { signal: AbortSignal.timeout(5000) });
+    const r = await fetch(`${proxyBase()}/proxy?url=${encodeURIComponent(target)}`, { signal: AbortSignal.timeout(5000) });
     if (!r.ok) return '';
     const json = await r.json();
     return json?.songs?.[0]?.al?.name || '';
@@ -97,7 +96,7 @@ export async function resolveNeteaseShortLink(shortUrl) {
   let url = shortUrl;
   try {
     for (let i = 0; i < 3; i++) {
-      const res = await fetch(`${NETEASE_PROXY}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
+      const res = await fetch(`${proxyBase()}/proxy?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(5000) });
       const location = res.headers.get('x-proxy-location');
       if (!location) break;
       url = new URL(location, url).toString();

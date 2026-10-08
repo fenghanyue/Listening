@@ -32,12 +32,16 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  '.woff2': 'font/woff2',
 };
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // 跨域读自定义响应头得显式放行：APK 里页面来源是 https://localhost，调这里的 /proxy 属于跨域，
+  // 不放行的话 resolveNeteaseShortLink 读到的 X-Proxy-Location 永远是 null，短链导入直接失败
+  res.setHeader('Access-Control-Expose-Headers', 'X-Proxy-Location');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);

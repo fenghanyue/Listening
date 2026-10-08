@@ -99,7 +99,11 @@ export async function fetchQQDetails(track) {
     track.title = d.song_title || d.song_name || track.title;
     track.artist = d.singer_name || track.artist;
     track.album = d.album_name || d.album_title || track.album || '';
-    track.cover = d.album_pic || d.singer_pic || track.cover;
+    // 封面同样固定返回 http://y.gtimg.cn/…，https 实测一样能取。浏览器会自动把 http 图片升级成
+    // https，APK 的 WebView 不会：直接当混合内容拦掉，原生下载也被安卓默认禁止明文 http，
+    // 封面就既显示不出来也缓存不下来
+    const pic = d.album_pic || d.singer_pic;
+    track.cover = pic ? pic.replace(/^http:\/\//, 'https://') : track.cover;
     track.pageUrl = d.song_h5_url || track.pageUrl;
 
     const best = pickBestPlayUrl(d);

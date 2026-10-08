@@ -1,0 +1,113 @@
+name: Android APK
+
+# 页面 / API / 安卓壳有改动就打一个 APK（打包方式见 mobile/，说明见 docs/android-app.md）：
+# - main 分支：发正式 Release（tag v1.0.<构建号>），手机上用固定地址下载最新版：
+#   https://github.com/fenghanyue/Listening/releases/latest/download/listening.apk
+# - 其他分支（claude/** 等）：覆盖同一个 apk-preview 预发布，合并前先在手机上试装
+# 签名钥匙放在仓库的 Actions Secrets 里。还没配的时候只出临时签名的调试包，作为这次运行的附件，
+# 不发布——临时签名的包和正式签名的包互相不能覆盖安装，混着装会逼你卸载重装、清空歌单和缓存
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'examples/**'
+      - 'src/**'
+      - 'mobile/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+          cache-dependency-path: |
+            mobile/android/*.gradle*
+            mobile/android/app/*.gradle*
+            mobile/android/gradle/wrapper/gradle-wrapper.properties
+
+      - name: 装 Capacitor
+        working-directory: mobile
+        run: npm ci
+
+      - name: 把页面拷进安卓工程
+        working-directory: mobile
+        run: npm run sync
+
+      - name: 解出签名钥匙
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+
+      - name: 打包
+        working-directory: mobile/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ "$HAS_KEYSTORE" = "true" ]; then
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+            ./gradlew --no-daemon assembleRelease -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME"
+            cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/listening.apk"
+          else
+            echo "::warning::没配签名 Secrets（步骤见 docs/android-app.md），这次只出临时签名的调试包，不发布"
+            ./gradlew --no-daemon assembleDebug -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME"
+            cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/listening.apk"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: listening-${{ env.VERSION_NAME }}${{ env.HAS_KEYSTORE != 'true' && '-debug-temporary-key' || '' }}
+          path: ${{ runner.temp }}/listening.apk
+
+      - name: 发布正式版（main）
+        if: env.HAS_KEYSTORE == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${VERSION_NAME}" "$RUNNER_TEMP/listening.apk" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest \
+            --title "听音乐 v${VERSION_NAME}" \
+            --notes "$(git log -1 --format='%s')
+
+          手机上用浏览器打开下载、点开安装即可，会直接覆盖旧版，歌单和缓存都还在。固定下载地址（永远是最新版）：
+          https://github.com/$GITHUB_REPOSITORY/releases/latest/download/listening.apk"
+
+      - name: 发布预览版（其他分支）
+        if: env.HAS_KEYSTORE == 'true' && github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-preview --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create apk-preview "$RUNNER_TEMP/listening.apk" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "预览版 v${VERSION_NAME}（${GITHUB_REF_NAME}）" \
+            --notes "还没合并到 main 的改动，装上试用用。和正式版用同一把签名钥匙，可以互相覆盖安装。
+
+          $(git log -1 --format='%s')"

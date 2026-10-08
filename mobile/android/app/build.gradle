@@ -1,0 +1,77 @@
+apply plugin: 'com.android.application'
+
+// 版本号由 CI 传进来（.github/workflows/android.yml：-PversionCode=<run_number> -PversionName=1.0.<run_number>），
+// 每次构建都比上一次大，手机上才能直接覆盖安装；本机随手编的就是 1 / 1.0.0-dev
+def appVersionCode = (project.findProperty('versionCode') ?: '1') as Integer
+def appVersionName = (project.findProperty('versionName') ?: '1.0.0-dev') as String
+
+// release 签名钥匙同样由 CI 从 GitHub Secrets 里解出来，通过环境变量交给这里（docs/android-app.md 有配置步骤）。
+// 每次升级必须是同一把钥匙，否则手机上只能卸载重装，而卸载会清空歌单和缓存
+def releaseKeystore = System.getenv('ANDROID_KEYSTORE_PATH')
+
+android {
+    namespace = "io.github.fenghanyue.listening"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "io.github.fenghanyue.listening"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode appVersionCode
+        versionName appVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // 没给钥匙就出未签名的包（app-release-unsigned.apk），不会悄悄用别的钥匙签
+            if (releaseKeystore) signingConfig signingConfigs.release
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    // MainActivity 里的 EdgeToEdge.enable 来自这个库（appcompat 也会间接带进来，这里写明版本）
+    implementation "androidx.activity:activity:$androidxActivityVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

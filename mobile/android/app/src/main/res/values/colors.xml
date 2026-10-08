@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 和页面夜间主题的背景色（THEMES.dark.bg）同一个值：启动画面、窗口底色、WebView 底色都用它，
+         页面第一帧画出来之前不会闪白 -->
+    <color name="app_background">#141218</color>
+</resources>
