@@ -48,7 +48,7 @@ const SEED = `
     page: 'search', viewingPlaylistId: null, openMenu: null, mobileNowPlayingExpanded: false, rightPanel: 'browse', mediaView: 'cover',
     addModalId: null, importModalOpen: false, createModalOpen: false, shareModalOpen: false, toast: '',
     queue: [...arg.results, ...arg.more], searchResults: arg.results, hasSearched: false, appliedQuery: '', searchQuery: '',
-    searchFocused: false, suggestions: [], suggestActiveIdx: -1, suggestDismissed: false, groupBy: 'none', localSearch: false,
+    searchFocused: false, suggestions: [], suggestActiveIdx: -1, suggestDismissed: false, localSearch: false,
     playOrder: arg.commute, currentId: 101, currentTime: 66, playing: false, online: true,
     liked: { 101: true, 201: true, 203: true, 105: true }, likedOrder: [101, 201, 203, 105],
     playlists: [
@@ -69,7 +69,6 @@ const SCREENS = {
   'suggest': `logic.patch({ searchQuery: '后', searchFocused: true, suggestActiveIdx: 1, suggestions: [
       { title: '后来', artist: '刘若英' }, { title: '后来的我们', artist: '五月天' }, { title: '后会无期', artist: 'G.E.M.邓紫棋' }, { title: '后继者', artist: '任然' } ] });`,
   'search': SEARCHED,
-  'search-group': `${SEARCHED} logic.patch({ groupBy: 'source' });`,
   'add-sheet': `${SEARCHED} logic.openAddModal(110);`,
   'library': `logic.setPage('library');`,
   'playlist': `logic.selectPlaylist('pl_1');`,
@@ -153,6 +152,11 @@ const measure = () => {
     lines, curLine: box($('.sw-ly.is-cur')),
     rowBtns: [...document.querySelectorAll('.dc-result-row .sw-acts > button')].filter(vis).map(b => [b.offsetWidth, b.offsetHeight]),
     hits,
+    // 播放页顶部那一行：标签组、⋮、⌄（电脑上 ⌄ 隐藏）
+    head: box($('.sw-np-head')), tabs: box($('.sw-np-head .sw-tabs')), more: box($('.sw-np-more > .sw-icon-btn')), collapse: box($('.sw-np-head .sw-collapse')),
+    npLabel: [...document.querySelectorAll('.dc-nowplaying *')].some(el => vis(el) && !el.children.length && el.textContent.trim() === '正在播放'),
+    filtersText: ($('.sw-filters') || {}).textContent || '',
+    scrollbar: (({ scrollbarWidth, scrollbarColor }) => ({ scrollbarWidth, scrollbarColor }))(getComputedStyle($('.sw-main'))),
   };
 };
 
@@ -243,6 +247,30 @@ for (const vp of VIEWPORTS) {
       { cover: pc.cover, viewport: pc.viewport });
     const lt = shots['player-long-title'];
     check(`${tag}: long song title is cut to two lines`, lt.title && lt.title.h <= lt.titleLine * 2 + 1, { h: lt.title && lt.title.h, line: lt.titleLine });
+
+    // 播放页顶部只有一行：标签在左，⋮ 在右（手机上 ⋮ 右边紧挨着 ⌄，⌄ 在最右；电脑上没有 ⌄，⋮ 在最右），
+    // 三样东西的竖直中心都在这一行里；不再有「正在播放」小标题
+    const inRow = (b) => b && Math.abs((b.y + b.h / 2) - (pc.head.y + pc.head.h / 2)) <= 2;
+    const headOk = pc.head && Math.round(pc.head.h) === 48 && inRow(pc.tabs) && inRow(pc.more) && !pc.npLabel
+      && pc.tabs.r <= pc.more.x + 0.5
+      && (vp.layout === 'mobile'
+        ? inRow(pc.collapse) && Math.abs(pc.more.r - pc.collapse.x) <= 0.5 && pc.collapse.r > pc.head.r
+        : !pc.collapse && pc.more.r > pc.head.r);
+    check(`${tag}: player top is one row (tabs, then ⋮${vp.layout === 'mobile' ? ', then ⌄ at the far right' : ' at the far right'})`, headOk,
+      { head: pc.head, tabs: pc.tabs, more: pc.more, collapse: pc.collapse, label: pc.npLabel });
+    // ⋮ 菜单挂在 ⋮ 正下方：上沿贴着这一行的底线，右边缘落在 ⋮ 按钮的范围里
+    const pm = shots['player-menu'];
+    check(`${tag}: player ⋮ menu hangs right under the ⋮ button`,
+      pm.menu && pm.more && Math.abs(pm.menu.y - pm.head.b) <= 4 && pm.menu.r >= pm.more.x && pm.menu.r <= pm.more.r + 0.5,
+      { menu: pm.menu, more: pm.more, headBottom: pm.head && pm.head.b });
+
+    // 搜索页没有分组选项了（搜到结果之后也没有）
+    check(`${tag}: search filters have no grouping options`, /网易云/.test(shots.search.filtersText) && !/分组|歌手|来源/.test(shots.search.filtersText), shots.search.filtersText);
+
+    // 滚动条：触屏不自定义（用系统那种滑动才出现的），用鼠标的电脑上是细方条
+    const sb = home.scrollbar;
+    check(`${tag}: ${vp.touch ? 'system scrollbar on touch screens' : 'thin custom scrollbar with a mouse'}`,
+      vp.touch ? sb.scrollbarWidth === 'auto' && sb.scrollbarColor === 'auto' : sb.scrollbarWidth === 'thin', sb);
 
     // 歌词：每行 48px（滚动定位按这个数算），当前行停在歌词区正中间
     const ly = shots['player-lyrics'];
