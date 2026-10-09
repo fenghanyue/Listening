@@ -1,2 +1,4 @@
 .DS_Store
 .claude/settings.local.json
+# 本机装 Playwright 跑测试时用（npm i --no-save playwright），见 tests/README.md
+node_modules/

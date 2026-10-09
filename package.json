@@ -6,6 +6,7 @@
   "scripts": {
     "build": "npx esbuild src/api/index.js --bundle --format=iife --global-name=ListeningAPI --outfile=examples/api-bundle.js",
     "start": "node server.mjs",
+    "test": "node tests/run.mjs",
     "dev": "node server.mjs"
   }
 }
