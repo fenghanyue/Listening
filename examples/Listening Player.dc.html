@@ -757,7 +757,7 @@ if ('serviceWorker' in navigator) {
                     <button class="sw-icon-btn" onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" aria-label="上移" title="上移"><span class="ms">keyboard_arrow_up</span></button>
                     <button class="sw-icon-btn" onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" aria-label="下移" title="下移"><span class="ms">keyboard_arrow_down</span></button>
                   </span>
-                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="移出队列" title="移出队列"><span class="ms">close</span></button>
+                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="删除这首歌" title="删除这首歌：播放队列、歌单和「喜欢的音乐」里都会去掉"><span class="ms">close</span></button>
                 </div>
               </div>
             </sc-for>
