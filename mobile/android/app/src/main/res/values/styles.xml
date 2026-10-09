@@ -9,7 +9,7 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
-    <!-- 页面加载后的主题。窗口底色用页面夜间主题的背景色，WebView 第一帧画出来之前不闪白 -->
+    <!-- 页面加载后的主题。窗口底色用页面默认白底主题的底色，WebView 第一帧画出来之前不闪别的颜色 -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
@@ -17,7 +17,7 @@
         <item name="android:windowBackground">@color/app_background</item>
     </style>
 
-    <!-- 启动画面：深色底 + App 图标，替掉模板里那张 Capacitor 的图 -->
+    <!-- 启动画面：白底 + App 图标，替掉模板里那张 Capacitor 的图 -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
         <item name="windowSplashScreenBackground">@color/app_background</item>

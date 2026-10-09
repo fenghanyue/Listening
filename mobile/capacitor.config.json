@@ -2,14 +2,14 @@
   "appId": "io.github.fenghanyue.listening",
   "appName": "听音乐",
   "webDir": "www",
-  "backgroundColor": "#141218",
+  "backgroundColor": "#F7F7F4",
   "android": {
     "resolveServiceWorkerRequests": true
   },
   "plugins": {
     "SystemBars": {
       "insetsHandling": "disable",
-      "style": "DARK"
+      "style": "LIGHT"
     }
   }
 }
