@@ -229,7 +229,6 @@ if ('serviceWorker' in navigator) {
     .sw-recent-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 12px; align-items: center; width: 100%; min-height: 52px; border-bottom: 1px solid var(--rule); font-size: 17px; cursor: pointer; }
     .sw-recent-row .ms { font-size: 20px; color: var(--ink-2); }
     .sw-recent-row > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sw-empty-note { font-size: 13px; color: var(--ink-2); margin-top: 20px; line-height: 1.6; }
 
     /* ---------- 曲目行（搜索结果 / 歌单详情共用） ---------- */
     .sw-list.has-rule { border-top: 2px solid var(--ink); }
@@ -546,13 +545,10 @@ if ('serviceWorker' in navigator) {
             </span>
           </div>
           <sc-if value="{{ v.showRecents }}">
-            <div class="sw-head-rule"><span class="sw-label">最近搜索</span><button class="sw-btn-text" onclick="{{ H.clearHistoryNow }}">清空</button></div>
+            <div class="sw-head-rule"><span class="sw-label">最近搜索</span><button class="sw-btn-text" onmousedown="{{ H.clearHistory }}">清空</button></div>
             <sc-for list="{{ v.recentRender }}" as="r" hint-placeholder-count="4">
-              <button class="{{ r.rowClass }}" onclick="{{ r.onPick }}"><span class="ms">history</span><span>{{ r.text }}</span></button>
+              <button class="{{ r.rowClass }}" onmousedown="{{ r.onPick }}"><span class="ms">history</span><span>{{ r.text }}</span></button>
             </sc-for>
-          </sc-if>
-          <sc-if value="{{ v.showPrompt }}">
-            <p class="sw-empty-note">网易云音乐、QQ音乐一起搜；网易云歌单链接可以在「歌单」页导入。</p>
           </sc-if>
           <sc-if value="{{ v.isSearching }}">
             <div class="sw-head-rule"><span>正在搜索…</span></div>
@@ -1958,6 +1954,7 @@ class Component extends DCLogic {
     clearTimeout(this._loadWatchdogTimer);
     clearTimeout(this._toastTimer);
     window.removeEventListener('resize', this._onResizeMeasureLyrics);
+    if (window.visualViewport && this._onViewportResize) window.visualViewport.removeEventListener('resize', this._onViewportResize);
     if (this._lyricsResizeObserver) this._lyricsResizeObserver.disconnect();
     document.removeEventListener('visibilitychange', this._onDiagVisibility);
     document.removeEventListener('freeze', this._onDiagFreeze);
@@ -2006,6 +2003,20 @@ class Component extends DCLogic {
     // 挂载后量一次，横竖屏切换/软键盘收起等触发的 resize 再量一次；量不到就让 renderVals 用兜底值
     this._onResizeMeasureLyrics = () => this.measureLyricsViewport();
     window.addEventListener('resize', this._onResizeMeasureLyrics);
+    // 安卓上用返回手势收起键盘后，输入框其实还处于聚焦状态，「最近搜索」会一直留在页面上。可视区宽度没变、
+    // 高度一下子变高很多，就当键盘收起了，让搜索框失焦；宽度变了是横竖屏切换，不算
+    const vv = window.visualViewport;
+    if (vv) {
+      this._vvSize = { w: vv.width, h: vv.height };
+      this._onViewportResize = () => {
+        const prev = this._vvSize;
+        this._vvSize = { w: vv.width, h: vv.height };
+        if (Math.abs(vv.width - prev.w) > 1 || vv.height - prev.h < 120) return;
+        const el = document.activeElement;
+        if (el && el.classList && el.classList.contains('dc-search-input')) el.blur();
+      };
+      vv.addEventListener('resize', this._onViewportResize);
+    }
     setTimeout(() => {
       this.measureLyricsViewport();
       // 歌名折成两行、切换横竖屏等都会让歌词区变高变矮，不一定触发窗口 resize：有 ResizeObserver 就直接盯着它
@@ -3900,12 +3911,12 @@ class Component extends DCLogic {
       return { key, label: SOURCE_LABELS[key], checked, cls: checked ? 'sw-check is-on' : 'sw-check', onClick: () => this.toggleSource(key) };
     });
 
-    // 搜索联想 / 历史：输入框有字时下拉展示网易云联想曲目；没字时是搜索历史——还没搜过的时候历史直接列在页面上
-    // （「最近搜索」），这时就不再弹同一份历史的下拉；键盘上下键照样能选，高亮落在页面上的那一行
+    // 搜索联想 / 历史：输入框有字时下拉展示网易云联想曲目；没字时是搜索历史。还没搜过的时候，点进输入框（框里没字）
+    // 才把历史列在页面上（「最近搜索」），平时不显示；这时就不再弹同一份历史的下拉，键盘上下键照样能选，
+    // 高亮落在页面上的那一行。已经搜过、页面上有结果时，历史照旧以下拉的形式出现
     const suggestIsHistory = !s.searchQuery.trim();
     const suggestData = suggestIsHistory ? s.searchHistory : s.suggestions;
-    const showPrompt = isSearchPage && !s.hasSearched;
-    const showRecents = showPrompt && s.searchHistory.length > 0;
+    const showRecents = isSearchPage && !s.hasSearched && s.searchFocused && !s.suggestDismissed && suggestIsHistory && s.searchHistory.length > 0;
     const showSuggest = isSearchPage && s.searchFocused && !s.suggestDismissed && suggestData.length > 0 && !(suggestIsHistory && showRecents);
     const suggestRender = suggestIsHistory
       ? s.searchHistory.map((kw, i) => ({
@@ -3921,7 +3932,8 @@ class Component extends DCLogic {
     const recentRender = s.searchHistory.map((kw, i) => ({
       key: 'r' + i, text: kw,
       rowClass: 'sw-recent-row' + (s.searchFocused && suggestIsHistory && i === s.suggestActiveIdx ? ' is-active' : ''),
-      onPick: () => this.pickHistory(i),
+      // 按下那一刻就执行并挡住失焦：列表只在输入框聚焦时显示，先失焦的话它会被收掉，这一下就点空了
+      onPick: (e) => { e.preventDefault(); this.pickHistory(i); },
     }));
 
     // 列表上方那一行：搜索页是「“关键词” 找到 N 首」（关键词加粗），歌单详情是标题下面的「N 首 · 已缓存 M 首」。
@@ -4038,7 +4050,7 @@ class Component extends DCLogic {
         cacheAllIconClass: batchHere ? 'ms is-spinning' : 'ms',
         isSearching: isSearchPage && s.isSearching,
         hasNoResults, emptyTitle, emptyText,
-        showPrompt, showStatusText: isSearchPage && s.hasSearched && !s.isSearching,
+        showStatusText: isSearchPage && s.hasSearched && !s.isSearching,
         statusLead, statusTail, statusText: (statusLead + statusTail).trim(),
         viewIsList: displayTracks.length > 0 && (isPlaylistView || (isSearchPage && s.hasSearched)),
         mediaIsCover, mediaIsLyrics, mediaIsQueue,
@@ -4116,7 +4128,6 @@ class Component extends DCLogic {
         clearSearch: () => this.clearSearch(),
         // 下拉里的「清空」用 mousedown + preventDefault，免得输入框先失焦把下拉收掉；页面上那个是普通按钮
         clearHistory: (e) => { e.preventDefault(); this.clearHistory(); },
-        clearHistoryNow: () => this.clearHistory(),
         backFromPlaylist: () => this.backFromPlaylist(),
         togglePlaylistMenu: (e) => { e.stopPropagation(); this.toggleMenu('playlist'); },
         togglePlayerMenu: (e) => { e.stopPropagation(); this.toggleMenu('player'); },
