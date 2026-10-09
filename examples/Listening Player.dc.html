@@ -4,49 +4,66 @@
 <meta charset="utf-8">
 <title>听音乐</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#1D1B20">
+<meta name="theme-color" content="#F7F7F4">
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-512.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="听音乐">
 <style>
-  /* 下面四个色值是从 dc-script 里的 THEMES 复制出来的（dark/light 的 bg 与 surfaceLow）。
-     改 THEMES 的时候记得同步这里——首屏脚本跑在 dc-script 之前，拿不到那个对象 */
-  /* 属性名特意避开 dc-runtime 用的那个：它的 helmet 把 documentElement.dataset.theme
-     当作画布宿主的明暗主题在读写（support.js 里的 __dc_theme），同名会互相覆盖 */
-  html[data-app-theme="dark"]  { --app-bg: #141218; color-scheme: dark; }
-  html[data-app-theme="light"] { --app-bg: #FFFBFE; color-scheme: light; }
-  /* 整页回弹露出的底色 / React 挂载前的底色，不能放 <helmet>：
-     那里的样式是 dc-runtime 挂载时才注入的，晚了一拍会先闪一帧白底 */
-  html, body { background: var(--app-bg, #141218); }
+  /* 设计变量：颜色只在这里定义一份。页面各处的样式（<helmet> 里那一大段）都用 var(--…) 取；
+     JS 要用到色值的地方（theme-color 那条 meta）也从这里读，不再手抄一份。
+     写在 <head> 里而不是 <helmet>：helmet 的样式是 dc-runtime 挂载时才插进来的，整页回弹露出的底色、
+     React 挂载前那一瞬间的底色得在那之前就是对的，不然会先闪一帧别的颜色。
+     属性名特意避开 dc-runtime 用的那个：它的 helmet 把 documentElement.dataset.theme
+     当作画布宿主的明暗主题在读写（support.js 里的 __dc_theme），同名会互相覆盖。
+     白底和 APK 原生壳的底色是同一个值（mobile/android/…/colors.xml 的 app_background、
+     mobile/capacitor.config.json 的 backgroundColor、manifest.json），改这里记得同步那几处 */
+  html[data-app-theme="light"] {
+    --bg: #F7F7F4; --ink: #111111; --ink-2: #5C5C58; --ink-3: #A3A39E;
+    --rule: #DCDCD6; --red: #E30613; --on-red: #FFFFFF;
+    --hover: rgba(17,17,17,.05); --press: rgba(17,17,17,.10);
+    --cover-empty: #E5E5E0; --scrim: rgba(17,17,17,.45);
+    color-scheme: light;
+  }
+  /* 黑底的红提亮一档：#E30613 压在近黑底上文字对比度不到 4.5:1 */
+  html[data-app-theme="dark"] {
+    --bg: #0F0F0F; --ink: #F2F2EE; --ink-2: #A3A39D; --ink-3: #5A5A55;
+    --rule: #2A2A28; --red: #FF3B3B; --on-red: #FFFFFF;
+    --hover: rgba(242,242,238,.06); --press: rgba(242,242,238,.12);
+    --cover-empty: #222220; --scrim: rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg, #F7F7F4); }
   /* 100dvh 走 class 而不是内联：内联 style 会被 support.js 的 cssToObj 转成对象，
      重复属性会被后者吃掉，写不了 100vh 的降级兜底 */
   .dc-app-shell { height: 100vh; height: 100dvh; }
   /* 顶栏通知栏避让：总高撑成 48px + 安全区，安全区用 padding-top 吃掉，内容区仍是 48px，
-     顶栏的底色就一直铺到状态栏下面（沉浸）。.dc-sidebar 的 top 也跟着这个值走。
+     顶栏的底色就一直铺到状态栏下面（沉浸）。
      安全区先取 APK 原生壳注入的 --safe-area-inset-*（MainActivity 按系统栏实际高度注入，任何 WebView
      版本都准），没有再退回 env()。网页版 / 安装版 PWA 里两者都是 0，渲染和不写一样——网页不拥有
      Android 窗口，没有 inset 可报。来龙去脉见 docs/mobile-status-bar.md。
-     同样用两遍声明兜住不认 var() / env() 的浏览器 */
+     同样用两遍声明兜住不认 var() / env() 的浏览器。
+     <helmet> 里给顶栏写左右内边距时只能写 padding-left / padding-right，写 padding 简写会把这里的
+     padding-top 盖掉 */
   .dc-topbar {
     height: 48px;
     height: calc(48px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
-    padding: 0 20px;
     padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   }
 </style>
 <script>
 // 首屏防闪：在任何渲染之前按上次存的主题定好 <html data-app-theme> 和 theme-color，
-// 否则打开时会先看到一帧白底 + 写死的深色状态栏，再跳回真正的主题色
+// 否则打开时会先看到一帧默认底色，再跳回真正的主题色。默认白底，存的是 dark 才用黑底
 (function () {
-  var t = 'dark';
-  try { if (localStorage.getItem('listening-player-theme-v1') === 'light') t = 'light'; } catch (e) { /* 隐私模式下读不到就用默认夜间 */ }
+  var t = 'light';
+  try { if (localStorage.getItem('listening-player-theme-v1') === 'dark') t = 'dark'; } catch (e) { /* 隐私模式下读不到就用默认白底 */ }
   document.documentElement.setAttribute('data-app-theme', t);
   var m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.setAttribute('content', t === 'dark' ? '#1D1B20' : '#F7F2FA');
-  // APK（Capacitor 原生壳）里：状态栏图标深浅先按存的主题定一次，免得白天主题下第一屏是看不见的浅色图标
+  var bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  if (m && bg) m.setAttribute('content', bg);
+  // APK（Capacitor 原生壳）里：状态栏图标深浅先按存的主题定一次，免得黑底主题下第一屏是看不见的深色图标
   // （挂载后 syncThemeChrome 还会再校准）；页面来源是 https://localhost，同源的 /proxy 不存在，
   // 代理改走线上实例（见 src/api/utils.js 的 proxyBase）
   var cap = window.Capacitor;
@@ -78,713 +95,806 @@ if ('serviceWorker' in navigator) {
 <x-dc>
 <helmet>
   <style>
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
-}
-</style>
-  <style>
-    body { margin: 0; font-family: 'Plus Jakarta Sans', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; }
+    /* ============ 瑞士风格：严格网格、无衬线大字、黑白加一个红、细线分隔，不用圆角 / 阴影 / 渐变 ============
+       颜色全部取 <head> 里定义的变量。类名统一 sw- 前缀；dc- 开头的是逻辑或测试要找的钩子，别改名：
+       dc-app-shell（测试靠它找组件）、dc-topbar（测试量它的高度）、dc-result-row、dc-media-viewport
+       （量歌词区高度）、dc-search-input（聚焦）、dc-nowplaying / dc-open、dc-modal-overlay / dc-modal、
+       dc-queue-drag-handle / dc-queue-move-btns。
+       断点：宽 ≤ 860 或高 < 560（包括横过来的手机）是手机布局；更宽更高是分栏，≥ 1200 再加左边歌单栏 */
+
+    /* ---------- 基础 ---------- */
+    body { margin: 0; font-family: 'Inter', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
     /* App 化的触感细节：去掉移动端点击灰块，控件文字（含 Material Symbols 连字图标）不可长按选中，输入框除外 */
     html, body { -webkit-tap-highlight-color: transparent; }
     body { -webkit-user-select: none; user-select: none; }
     input, textarea { -webkit-user-select: text; user-select: text; }
     button, a, input { touch-action: manipulation; }
-    @keyframes vinylSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    @keyframes iconSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    @keyframes searchPulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @keyframes popIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
-    @keyframes sheetUp { from { transform: translateY(48px); opacity: 0.6; } to { transform: translateY(0); opacity: 1; } }
-    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
-    /* 弹窗进出场：遮罩淡入，面板桌面缩放浮现（手机端在下面的媒体查询里改为底部弹层上滑） */
-    .dc-modal-overlay { animation: fadeIn .18s ease; }
-    .dc-modal { animation: popIn .22s cubic-bezier(.2, .9, .3, 1); }
-    /* 输入框焦点态：--ring 在根节点上取当前主题的 primary 色 */
-    .dc-search-input:focus { box-shadow: 0 0 0 2px var(--ring); }
+    .dc-app-shell { width: 100vw; display: flex; flex-direction: column; position: relative; overflow: hidden; box-sizing: border-box; background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.45; }
+    /* 这几条重置故意只用元素选择器（优先级最低）：写成 .dc-app-shell button 会比 .sw-btn-primary 这类单个 class
+       的优先级高，把按钮自己的底色、边距全盖掉 */
+    *, *::before, *::after { box-sizing: border-box; }
+    button { font: inherit; color: inherit; background: none; border: 0; border-radius: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
+    button:disabled { cursor: default; opacity: .35; }
+    a { color: inherit; text-decoration: none; }
+    h1, p { margin: 0; }
+    :focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+    .ms {
+      font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1;
+      letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr;
+      -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; flex-shrink: 0;
+      font-variation-settings: 'FILL' 0;
+    }
+    /* 图标实心 / 空心一律靠 class 切 FILL 轴，别内联动态改 font-variation-settings：部分安卓浏览器
+       （如 Edge App）对内联改这个属性不重绘，颜色变了填充不变；class 切换是 Material Symbols 官方推荐的做法 */
+    .ms.fill { font-variation-settings: 'FILL' 1; }
+    .num { font-variant-numeric: tabular-nums; }
+    .is-spinning { animation: swSpin .9s linear infinite; }
+    .is-pulsing { animation: swPulse 1.2s ease-in-out infinite; }
+    @keyframes swSpin { to { transform: rotate(360deg); } }
+    @keyframes swPulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+    @keyframes swFade { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes swSheetUp { from { transform: translateY(32px); opacity: .6; } to { transform: none; opacity: 1; } }
+    @keyframes swToastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    @keyframes swSweep { 0% { left: 0; right: 100%; } 50% { left: 0; right: 0; } 100% { left: 100%; right: 0; } }
+    /* 滚动条：颜色跟主题走，方的 */
+    .dc-scrollbar { scrollbar-width: thin; scrollbar-color: var(--rule) transparent; }
+    .dc-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .dc-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .dc-scrollbar::-webkit-scrollbar-thumb { background: var(--rule); }
+    .dc-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--ink-3); }
+
+    /* ---------- 通用部件 ---------- */
+    .sw-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--ink); }
+    .sw-title { font-size: 32px; line-height: 1.12; font-weight: 700; margin: 4px 0 20px; word-break: break-all; }
+    .sw-head-rule { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; padding-bottom: 6px; border-bottom: 2px solid var(--ink); font-size: 13px; color: var(--ink-2); }
+    .sw-head-rule b { color: var(--ink); font-weight: 700; }
+    .sw-btn { height: 40px; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+    .sw-btn .ms { font-size: 20px; }
+    .sw-btn-primary { background: var(--ink); color: var(--bg); }
+    .sw-btn-outline { box-shadow: inset 0 0 0 1px var(--ink); }
+    .sw-btn-text { display: inline-flex; align-items: center; min-height: 32px; text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; font-weight: 500; font-size: 13px; color: var(--ink); }
+    .sw-icon-btn { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-2); flex-shrink: 0; }
+    .sw-icon-btn .ms { font-size: 22px; }
+    .sw-icon-btn.is-liked { color: var(--red); }
+    .sw-icon-btn.is-liked .ms { font-variation-settings: 'FILL' 1; }
+    /* 浮层统一：底色 + 2px 墨色边框，不用阴影（右上角菜单、联想下拉、弹窗、提示条） */
+    .sw-menu-scrim { position: fixed; inset: 0; z-index: 1; }
+    .sw-menu { position: absolute; top: 46px; right: 12px; z-index: 2; min-width: 208px; background: var(--bg); border: 2px solid var(--ink); animation: swFade .12s ease; }
+    .sw-menu-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 52px; padding: 8px 16px; font-size: 15px; color: var(--ink); }
+    .sw-menu-item + .sw-menu-item { border-top: 1px solid var(--rule); }
+    .sw-menu-item .ms { font-size: 22px; }
+    .sw-menu-item.is-dim { color: var(--ink-2); }
+    .sw-menu-hint { display: block; font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+    .sw-press:active, .sw-menu-item:active, .sw-btn-outline:active { background: var(--press); }
+    @media (hover: hover) {
+      .sw-press:hover, .sw-btn-outline:hover, .sw-menu-item:hover, .sw-sg-row:hover, .sw-recent-row:hover { background: var(--hover); }
+      .sw-icon-btn:hover, .sw-nav-btn:hover, .sw-back:hover { color: var(--ink); }
+      .sw-icon-btn.is-liked:hover { color: var(--red); }
+      .sw-btn-primary:hover { opacity: .86; }
+      .sw-btn-text:hover { text-decoration-thickness: 2px; }
+      .sw-sg-row.is-active:hover, .sw-recent-row.is-active:hover { background: var(--ink); }
+    }
+
+    /* ---------- 外壳：顶栏（就是导航）+ 主体 ---------- */
+    /* 左右两边也要让出安全区：横过来的手机，三键导航栏和刘海在侧边 */
+    .dc-topbar { flex-shrink: 0; display: flex; align-items: stretch; justify-content: space-between; padding-left: calc(4px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); padding-right: calc(4px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); border-bottom: 1px solid var(--rule); background: var(--bg); position: relative; z-index: 30; box-sizing: border-box; }
+    .sw-nav { display: flex; }
+    .sw-nav-btn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--ink-2); position: relative; }
+    .sw-nav-btn.is-active { color: var(--ink); }
+    .sw-nav-btn.is-active::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--ink); }
+    .sw-status-btn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--red); }
+    .sw-body { flex: 1; min-height: 0; display: flex; position: relative; padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px)); padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px)); }
+    .sw-lib-col { display: none; }
+    .sw-main { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
+    .dc-app-shell.has-mini .sw-main { padding-bottom: calc(64px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+    .sw-page { padding: 20px 16px 32px; }
+    .sw-footer { display: none; }
+
+    /* ---------- 搜索页：搜索框本身就是这一页的大标题 ---------- */
+    .sw-search { display: flex; align-items: stretch; margin-bottom: 16px; position: relative; }
+    .sw-search-field { flex: 1; min-width: 0; position: relative; }
+    .dc-search-input {
+      width: 100%; height: 56px; border: 0; border-bottom: 2px solid var(--ink); border-radius: 0; background: transparent; color: var(--ink);
+      font: inherit; font-size: 28px; font-weight: 700; line-height: 1.2; padding: 0 40px 0 0; outline: none; -webkit-appearance: none; appearance: none;
+    }
+    .dc-search-input::placeholder { color: var(--ink-3); opacity: 1; }
+    .dc-search-input:focus { border-bottom-color: var(--red); }
+    .dc-search-input:focus-visible { outline: none; }
     /* 隐藏 type="search" 浏览器自带的清除叉，用页面里自定义的那个（避免两个叉重叠） */
     .dc-search-input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
-    .dc-input:focus { border-color: var(--ring) !important; }
-    /* 全屏播放页的封面氛围背景只在手机端启用，桌面三栏保持原样 */
-    .dc-ambient { display: none; }
-    /* 喜欢按钮的实心爱心：用 class 切换可变字体的 FILL 轴而不是每次内联拼新样式值，
-       部分安卓浏览器（如 Edge App）对内联动态改 font-variation-settings 不会重绘，
-       颜色等普通样式能刷新但字体填充效果不生效；class 切换是 Material Symbols 官方
-       推荐的做法，这个文件别处的动态 class（如 dc-pl-delete-btn）也一直是这样用 */
-    .dc-heart-icon { font-variation-settings: 'FILL' 0; }
-    .dc-heart-icon.dc-heart-filled { font-variation-settings: 'FILL' 1; }
-    /* 搜索按钮桌面端显示文字，手机端（媒体查询里）收成纯图标 */
-    .dc-search-btn-icon { display: none; }
-    /* 歌词渐隐：靠近视口上下边缘的行淡出 */
-    .dc-lyrics-mask { mask-image: linear-gradient(to bottom, transparent 0, black 15%, black 85%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 15%, black 85%, transparent 100%); }
-    /* 迷你播放器毛玻璃：只在浏览器支持 backdrop-filter 时启用，不支持时保留纯色背景兜底 */
-    @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-      .dc-mobile-miniplayer { background: var(--glass) !important; backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6); }
+    .sw-search-clear { position: absolute; right: 0; top: 10px; width: 36px; height: 36px; color: var(--ink-2); display: flex; align-items: center; justify-content: center; }
+    .sw-search-clear .ms { font-size: 22px; }
+    .sw-search-btn { height: 56px; padding: 0 20px; font-size: 15px; flex-shrink: 0; }
+    /* 搜索中：搜索框下沿一条红线来回扫 */
+    .sw-search-loading { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; }
+    .sw-search-loading::after { content: ''; position: absolute; top: 0; bottom: 0; background: var(--red); animation: swSweep 1.1s ease-in-out infinite; }
+    .sw-suggest { position: absolute; left: 0; right: 0; top: 100%; z-index: 40; max-height: 360px; overflow-y: auto; background: var(--bg); border: 2px solid var(--ink); }
+    .sw-suggest .sw-head-rule { padding: 6px 14px; border-bottom-width: 1px; }
+    .sw-sg-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; cursor: pointer; }
+    .sw-sg-row + .sw-sg-row { border-top: 1px solid var(--rule); }
+    .sw-sg-row .ms { font-size: 18px; color: var(--ink-2); }
+    .sw-sg-t { flex: 1; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-sg-a { font-size: 13px; color: var(--ink-2); max-width: 42%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-sg-row.is-active, .sw-recent-row.is-active { background: var(--ink); color: var(--bg); }
+    .sw-sg-row.is-active .ms, .sw-sg-row.is-active .sw-sg-a, .sw-recent-row.is-active .ms { color: var(--bg); }
+    .sw-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; font-size: 13px; margin-bottom: 18px; }
+    .sw-filter-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0 16px; }
+    .sw-check { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; color: var(--ink-2); }
+    .sw-check::before { content: ''; width: 10px; height: 10px; flex-shrink: 0; box-shadow: inset 0 0 0 1.5px var(--ink-2); }
+    .sw-check.is-on { color: var(--ink); }
+    .sw-check.is-on::before { background: var(--ink); box-shadow: none; }
+    .sw-opts-label { color: var(--ink-2); }
+    .sw-opt { min-height: 36px; display: inline-flex; align-items: center; color: var(--ink-2); }
+    .sw-opt > span { padding: 2px 0; }
+    .sw-opt.is-on { color: var(--ink); font-weight: 700; }
+    .sw-opt.is-on > span { box-shadow: inset 0 -2px 0 var(--ink); }
+    .sw-recent-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 12px; align-items: center; width: 100%; min-height: 52px; border-bottom: 1px solid var(--rule); font-size: 17px; cursor: pointer; }
+    .sw-recent-row .ms { font-size: 20px; color: var(--ink-2); }
+    .sw-recent-row > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-empty-note { font-size: 13px; color: var(--ink-2); margin-top: 20px; line-height: 1.6; }
+
+    /* ---------- 曲目行（搜索结果 / 歌单详情共用） ---------- */
+    .sw-list.has-rule { border-top: 2px solid var(--ink); }
+    .sw-row { display: grid; grid-template-columns: 26px 48px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; min-height: 68px; padding: 10px 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+    .sw-idx { font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; display: flex; align-items: center; }
+    .sw-idx .ms { font-size: 18px; }
+    .is-current .sw-idx { color: var(--red); }
+    .sw-cover { width: 48px; height: 48px; background: var(--cover-empty) center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: var(--ink-2); overflow: hidden; flex-shrink: 0; }
+    .sw-row-main { min-width: 0; }
+    .sw-t { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .is-current .sw-t { font-weight: 700; }
+    .sw-m { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+    .sw-a { overflow: hidden; text-overflow: ellipsis; }
+    .sw-src { flex-shrink: 0; }
+    .sw-m .ms { font-size: 14px; }
+    .sw-acts { display: flex; margin-right: -12px; }
+    .sw-group-head { display: flex; align-items: center; gap: 8px; padding: 20px 0 8px; border-bottom: 1px solid var(--ink); font-size: 13px; }
+    .sw-group-head .ms { font-size: 16px; color: var(--ink-2); }
+    .sw-group-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-group-count { color: var(--ink-2); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .sw-empty { padding: 40px 0; }
+    .sw-empty-title { font-size: 20px; font-weight: 700; line-height: 1.3; }
+    .sw-empty-text { font-size: 13px; color: var(--ink-2); margin-top: 8px; line-height: 1.6; }
+
+    /* ---------- 歌单页 / 歌单详情 ---------- */
+    .sw-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 4px 0 20px; }
+    .sw-page-head .sw-title { margin: 0; }
+    .sw-head-acts { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .sw-lib-list { border-top: 2px solid var(--ink); }
+    .sw-lib-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; width: 100%; min-height: 64px; border-bottom: 1px solid var(--rule); cursor: pointer; text-align: left; }
+    .sw-lib-row .sw-idx { font-size: 13px; }
+    .sw-lib-name { font-size: 17px; font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .sw-lib-name > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-lib-name .ms { font-size: 18px; color: var(--ink-2); }
+    .sw-lib-count { font-size: 15px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+    .sw-back-row { display: flex; align-items: center; justify-content: space-between; margin: -6px -12px 0 -4px; position: relative; }
+    .sw-back-row.has-menu, .sw-np-head.has-menu { z-index: 80; }
+    .sw-back-row .sw-menu { top: 44px; right: 12px; }
+    .sw-back { display: inline-flex; align-items: center; gap: 4px; height: 44px; padding: 0 4px; font-size: 14px; color: var(--ink-2); }
+    .sw-back .ms { font-size: 20px; }
+    .sw-back-row > .sw-icon-btn { color: var(--ink); }
+    .sw-pl-meta { font-size: 13px; color: var(--ink-2); margin: -12px 0 16px; }
+    .sw-pl-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+
+    /* ---------- 设置页 ---------- */
+    .sw-sec { margin-bottom: 32px; }
+    .sw-sec > .sw-label { display: block; padding-bottom: 8px; border-bottom: 2px solid var(--ink); margin-bottom: 14px; }
+    .sw-note { font-size: 13px; color: var(--ink-2); margin-bottom: 12px; }
+    .sw-kv { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 15px; }
+    .sw-kv .num { color: var(--ink-2); font-size: 13px; white-space: nowrap; }
+    .sw-meter { height: 4px; background: var(--rule); margin-top: 10px; }
+    .sw-meter > div { height: 100%; background: var(--ink); }
+    .sw-field-label { font-size: 13px; font-weight: 700; margin: 20px 0 8px; }
+    .sw-seg { display: flex; box-shadow: inset 0 0 0 1px var(--ink); }
+    .sw-seg > button { flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 13px; text-align: center; }
+    .sw-seg > button + button { box-shadow: inset 1px 0 0 var(--ink); }
+    .sw-seg > button.is-on { background: var(--ink); color: var(--bg); font-weight: 700; }
+    .sw-hint { display: block; font-size: 12px; color: var(--ink-2); margin-top: 8px; line-height: 1.5; }
+    .sw-set-list { border-top: 1px solid var(--rule); margin-top: 16px; }
+    .sw-set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 52px; padding: 12px 0; border-bottom: 1px solid var(--rule); text-align: left; }
+    .sw-set-row .sw-row-t { display: block; font-size: 15px; }
+    .sw-set-row .sw-hint { margin-top: 2px; }
+    .sw-set-row > .ms { font-size: 20px; color: var(--ink-2); }
+    .sw-toggle { width: 44px; height: 24px; box-shadow: inset 0 0 0 2px var(--ink); position: relative; flex-shrink: 0; }
+    .sw-toggle::after { content: ''; position: absolute; top: 5px; left: 5px; width: 14px; height: 14px; background: var(--ink); transition: left .15s; }
+    .sw-toggle.is-on { background: var(--ink); }
+    .sw-toggle.is-on::after { left: 25px; background: var(--bg); }
+    .sw-colophon { font-size: 12px; color: var(--ink-2); margin-top: 16px; line-height: 1.6; }
+    .sw-colophon b { color: var(--ink); }
+
+    /* ---------- 播放栏：手机是从底下滑上来的全屏页，电脑是右边一栏 ---------- */
+    .dc-nowplaying {
+      position: fixed; inset: 0; z-index: 60; background: var(--bg); display: flex; flex-direction: column;
+      padding: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) calc(16px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))) calc(16px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) calc(16px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
+      transform: translateY(100%); visibility: hidden;
+      transition: transform .32s cubic-bezier(.2, .9, .3, 1), visibility 0s linear .32s;
     }
-    /* 滚动条：颜色跟随当前主题（--scrollbar-thumb / --scrollbar-thumb-hover 在根节点上按主题赋值），
-       避免深色模式下露出系统默认的浅色滚动条 */
-    .dc-scrollbar { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
-    .dc-scrollbar::-webkit-scrollbar { width: 10px; height: 10px; }
-    .dc-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .dc-scrollbar::-webkit-scrollbar-thumb { background-color: var(--scrollbar-thumb); border-radius: 8px; background-clip: padding-box; border: 3px solid transparent; }
-    .dc-scrollbar::-webkit-scrollbar-thumb:hover { background-color: var(--scrollbar-thumb-hover); }
-    /* 全局提示条 */
-    .dc-toast {
-      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-      z-index: 200; max-width: calc(100vw - 32px); animation: toastIn .25s cubic-bezier(.2, .9, .3, 1);
+    .dc-nowplaying.dc-open { transform: none; visibility: visible; transition: transform .32s cubic-bezier(.2, .9, .3, 1); }
+    .sw-np-head { height: 48px; display: flex; align-items: center; justify-content: space-between; margin: 0 -12px; flex-shrink: 0; position: relative; }
+    .sw-np-head > .sw-icon-btn { width: 48px; height: 48px; color: var(--ink); }
+    .sw-np-head > .sw-icon-btn .ms { font-size: 26px; }
+    .sw-np-label { display: none; }
+    .sw-tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin-bottom: 16px; flex-shrink: 0; }
+    .sw-tab { height: 40px; font-size: 15px; color: var(--ink-2); position: relative; display: flex; align-items: center; gap: 6px; }
+    .sw-tab.is-on { color: var(--ink); font-weight: 700; }
+    .sw-tab.is-on::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--ink); }
+    .sw-badge { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 500; color: var(--ink-2); }
+    .dc-media-viewport { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: flex-start; position: relative; }
+    .dc-media-viewport.is-fill { align-items: stretch; }
+    /* 方形封面：在媒体区里取宽高里小的那个当边长（容器查询单位）；不认这个单位的老 WebView 退回宽度撑满 */
+    .sw-big-cover { width: 100%; max-height: 100%; aspect-ratio: 1; background: var(--cover-empty) center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 96px; font-weight: 700; color: var(--ink-3); cursor: pointer; flex-shrink: 0; }
+    @supports (width: 1cqh) {
+      .dc-media-viewport { container-type: size; }
+      .sw-big-cover { width: min(100cqw, 100cqh); max-height: none; }
     }
-  </style>
-  <style>
-    /* 手机端断点：宽度以上保持桌面三栏布局不变，宽度以下用 !important 覆盖内联样式改成单栏 + 底部导航 */
-    @media (max-width: 860px) {
-      .dc-sidebar {
-        position: fixed !important;
-        /* 顶栏在有安全区的环境下会长高一截，抽屉顶边贴着顶栏底边，要跟着走 */
-        top: calc(48px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) !important;
-        bottom: 0 !important;
-        left: 0 !important;
-        width: 78vw !important;
-        max-width: 280px !important;
-        min-width: 0 !important;
-        z-index: 56 !important;
-        transform: translateX(-100%);
-        transition: transform .28s cubic-bezier(.2, .9, .3, 1);
-        box-shadow: 2px 0 16px rgba(0,0,0,.3);
-        border-radius: 0 20px 20px 0 !important;
-        overflow: hidden;
-        padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) !important;
-        box-sizing: border-box !important;
-      }
-      .dc-sidebar.dc-open { transform: translateX(0) !important; }
-      .dc-sidebar-close { display: flex !important; }
-      .dc-sidebar-scrim {
-        display: block !important;
-        position: fixed !important;
-        inset: 0;
-        z-index: 55;
-        background: rgba(0,0,0,.5);
-        animation: fadeIn .2s ease;
-      }
+    .sw-np-meta { flex-shrink: 0; margin-top: 20px; }
+    .sw-np-title { font-size: 28px; font-weight: 700; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
+    .sw-np-artist { font-size: 15px; color: var(--ink-2); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-progress { margin-top: 18px; flex-shrink: 0; }
+    /* 进度条本身 2px 高，上下各垫 11px 透明区当点按 / 拖动的热区 */
+    .sw-bar-hit { padding: 11px 0; margin: -11px 0; cursor: pointer; touch-action: none; }
+    .sw-bar { position: relative; height: 2px; background: var(--rule); }
+    .sw-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--red); }
+    .sw-bar-thumb { position: absolute; top: 50%; width: 10px; height: 10px; background: var(--red); transform: translate(-50%, -50%); transition: width .15s, height .15s; }
+    .sw-bar-thumb.is-seeking { width: 16px; height: 16px; transition: none; }
+    .sw-times { display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2); margin-top: 10px; font-variant-numeric: tabular-nums; }
+    /* 底下一排五等分：每个键一格、图标居中，中心等距，播放键在正中间。格子写 minmax(0, 1fr)：只写 1fr 时
+       格子至少有内容那么宽，播放键比格子宽就会把中间一格撑大，五个键就不等距了 */
+    .sw-controls { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; justify-items: center; margin-top: 14px; flex-shrink: 0; }
+    .sw-ctrl { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--ink); }
+    .sw-ctrl .ms { font-size: 26px; }
+    .sw-ctrl.is-dim { color: var(--ink-2); }
+    .sw-ctrl.is-on, .sw-ctrl.is-liked { color: var(--red); }
+    .sw-ctrl.is-liked .ms, .sw-skip .ms { font-variation-settings: 'FILL' 1; }
+    .sw-skip .ms { font-size: 34px; }
+    .sw-play-big { width: 72px; height: 72px; background: var(--red); color: var(--on-red); display: flex; align-items: center; justify-content: center; }
+    .sw-play-big .ms { font-size: 44px; font-variation-settings: 'FILL' 1; }
+    .sw-volume { display: none; }
+    /* 歌词：左对齐，每行固定 48px（renderVals 里的滚动定位按这个算），一行最多两行字 */
+    .sw-lyrics { width: 100%; height: 100%; overflow: hidden; position: relative; cursor: pointer;
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%); }
+    .sw-lyrics-inner { position: absolute; left: 0; right: 0; top: 0; transition: transform .5s ease; }
+    .sw-ly { height: 48px; display: flex; align-items: center; font-size: 16px; line-height: 1.25; color: var(--ink-2); overflow: hidden; transition: color .3s; }
+    .sw-ly > span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .sw-ly.is-cur { color: var(--red); font-size: 20px; font-weight: 700; line-height: 1.15; }
+    .sw-lyrics-empty { width: 100%; align-self: center; cursor: pointer; }
+    /* 队列：手机上每行有上移 / 下移（触屏没有原生拖拽），电脑上换成拖动手柄 */
+    .sw-queue { width: 100%; height: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; border-top: 2px solid var(--ink); }
+    .sw-qrow { display: flex; align-items: center; gap: 10px; min-height: 58px; border-bottom: 1px solid var(--rule); cursor: pointer; }
+    .sw-qrow .sw-idx { width: 22px; flex-shrink: 0; }
+    .sw-qrow .sw-cover { width: 40px; height: 40px; font-size: 16px; }
+    .sw-qrow .sw-row-main { flex: 1; }
+    .sw-qrow .sw-t { font-size: 14px; }
+    .sw-qdur { font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    /* 往右伸 5px：× 图标的右边缘正好对齐分隔线的右端（按钮两边各有 5px 空白）；多出来的空白被 .sw-queue 裁掉，
+       不会让队列能横着划 */
+    .sw-qbtns { display: flex; margin-right: -5px; flex-shrink: 0; }
+    .sw-qbtns .sw-icon-btn { width: 30px; height: 40px; }
+    .sw-qbtns .sw-icon-btn .ms { font-size: 20px; }
+    .dc-queue-drag-handle { display: none; font-size: 18px; color: var(--ink-3); cursor: grab; }
+    .dc-queue-move-btns { display: flex; }
 
-      .dc-nowplaying {
-        position: fixed !important;
-        inset: 0 !important;
-        z-index: 60 !important;
-        transform: translateY(100%);
-        transition: transform .32s cubic-bezier(.2, .9, .3, 1);
-        padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) !important;
-        padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) !important;
-        box-sizing: border-box !important;
-        overflow: hidden !important;
-      }
-      .dc-nowplaying.dc-open { transform: translateY(0) !important; }
-      .dc-nowplaying-close { display: none; top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) !important; }
-      .dc-nowplaying.dc-open .dc-nowplaying-close { display: flex !important; }
-      .dc-nowplaying-share { top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))) !important; }
+    /* ---------- 迷你播放条 / 提示条 / 横幅 / 弹窗 ---------- */
+    .sw-mini {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; height: calc(64px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+      padding: 0 calc(4px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))) var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) calc(16px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
+      display: flex; align-items: center; gap: 12px; background: var(--bg); border-top: 1px solid var(--rule); cursor: pointer;
+    }
+    .sw-mini-progress { position: absolute; left: 0; top: -1px; height: 2px; background: var(--red); }
+    .sw-mini .sw-cover { width: 44px; height: 44px; font-size: 16px; }
+    .sw-mini-text { flex: 1; min-width: 0; }
+    .sw-mini-t { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-mini-a { font-size: 12.5px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sw-play-sq { width: 44px; height: 44px; background: var(--red); color: var(--on-red); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sw-play-sq .ms { font-size: 28px; font-variation-settings: 'FILL' 1; }
+    .sw-mini .sw-icon-btn { color: var(--ink); }
+    .sw-mini .sw-icon-btn .ms { font-size: 26px; font-variation-settings: 'FILL' 1; }
+    .sw-toast {
+      position: fixed; left: calc(16px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); right: calc(16px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); bottom: calc(16px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); z-index: 200;
+      min-height: 48px; padding: 12px 16px; display: flex; align-items: center; background: var(--ink); color: var(--bg); font-size: 14px; font-weight: 500;
+      animation: swToastIn .2s ease;
+    }
+    .dc-app-shell.has-mini .sw-toast { bottom: calc(76px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+    .sw-banner {
+      position: fixed; left: calc(16px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); right: calc(16px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); top: calc(56px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); z-index: 150;
+      background: var(--bg); border: 2px solid var(--ink); padding: 14px 16px; animation: swFade .2s ease;
+    }
+    .sw-banner p { font-size: 13px; line-height: 1.55; }
+    .sw-banner-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    /* 弹窗：手机是底部弹层，电脑是屏幕中间的方框 */
+    .dc-modal-overlay { position: fixed; inset: 0; z-index: 100; background: var(--scrim); display: flex; align-items: flex-end; justify-content: center; animation: swFade .15s ease; }
+    .dc-modal {
+      width: 100%; max-height: 85vh; overflow-y: auto; background: var(--bg); border-top: 2px solid var(--ink);
+      padding: 20px calc(16px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))) calc(12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) calc(16px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
+      animation: swSheetUp .22s cubic-bezier(.2, .9, .3, 1);
+    }
+    .sw-sheet-title { font-size: 20px; font-weight: 700; }
+    .sw-sheet-sub { font-size: 13px; color: var(--ink-2); margin: 4px 0 16px; line-height: 1.5; word-break: break-all; }
+    .sw-sheet-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-top: 16px; }
+    .dc-modal .sw-lib-row { min-height: 56px; }
+    .sw-input {
+      display: block; width: 100%; height: 48px; border: 0; border-bottom: 2px solid var(--ink); border-radius: 0; background: transparent;
+      color: var(--ink); font: inherit; font-size: 16px; padding: 0; outline: none; margin-bottom: 12px; -webkit-appearance: none; appearance: none;
+    }
+    .sw-input::placeholder { color: var(--ink-3); opacity: 1; }
+    .sw-input:focus { border-bottom-color: var(--red); }
+    .sw-input:focus-visible { outline: none; }
+    .sw-share-box { white-space: pre-line; word-break: break-all; padding: 14px 16px; box-shadow: inset 0 0 0 1px var(--rule); font-size: 13px; line-height: 1.7; -webkit-user-select: text; user-select: text; }
 
-      /* 全屏播放页手机端专属：封面氛围背景、更大的唱片和控制键 */
-      .dc-ambient { display: block !important; }
-      .dc-disc { width: min(258px, 66vw) !important; height: min(258px, 66vw) !important; }
-      .dc-play-btn { width: 58px !important; height: 58px !important; }
-      .dc-play-btn > span { font-size: 28px !important; }
-      .dc-skip-btn { width: 46px !important; height: 46px !important; }
-      .dc-skip-btn > span { font-size: 26px !important; }
-      .dc-side-btn { width: 42px !important; height: 42px !important; }
+    /* ---------- 横过来的手机（宽但矮）：播放页分左右两栏——左边封面 / 歌词 / 队列，切换标签挪到顶上那一行；
+       右边歌名、进度、按键，上下居中。竖着排的话封面只剩一百来像素高 ---------- */
+    @media (max-height: 559px) and (min-width: 600px) {
+      .dc-nowplaying { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 48px minmax(0, 1fr) auto auto auto minmax(0, 1fr); column-gap: 32px; }
+      .sw-np-head { grid-column: 1 / -1; grid-row: 1; }
+      .sw-tabs { grid-column: 1; grid-row: 1; align-self: stretch; margin: 0 0 0 40px; border-bottom: 0; }
+      .sw-tab { height: 48px; }
+      .sw-tab.is-on::after { bottom: 0; }
+      .dc-media-viewport { grid-column: 1; grid-row: 2 / -1; padding-bottom: 8px; }
+      .sw-np-meta { grid-column: 2; grid-row: 3; margin-top: 0; }
+      .sw-progress { grid-column: 2; grid-row: 4; }
+      .sw-controls { grid-column: 2; grid-row: 5; margin-top: 10px; }
+    }
 
-      .dc-mobile-only { display: flex !important; }
-      /* 歌单删除按钮桌面端靠鼠标 hover 才出现，触屏没有 hover 状态，手机端强制常驻显示 */
-      .dc-pl-delete-btn { display: flex !important; }
-      .dc-mobile-miniplayer {
-        display: flex !important;
-        bottom: calc(12px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important;
-      }
-      .dc-search-input-wrap { min-width: 120px !important; }
-      .dc-desktop-only { display: none !important; }
-
-      /* 搜索按钮手机端收成圆形图标，把宽度让给输入框 */
-      .dc-search-btn { width: 42px !important; padding: 0 !important; border-radius: 50% !important; }
-      .dc-search-btn-icon { display: flex !important; }
-      .dc-search-btn-label { display: none !important; }
-
-      .dc-scroll-area { padding-bottom: calc(96px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important; }
-
-      /* 弹窗手机端改为底部弹层 */
-      .dc-modal-overlay { align-items: flex-end !important; }
-      .dc-modal {
-        width: 100% !important;
-        max-width: none !important;
-        box-sizing: border-box !important;
-        border-radius: 28px 28px 0 0 !important;
-        padding-bottom: calc(24px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important;
-        animation: sheetUp .26s cubic-bezier(.2, .9, .3, 1);
-      }
-
-      .dc-toast { bottom: calc(86px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important; }
-
-      .dc-queue-drag-handle { display: none !important; }
-      .dc-queue-move-btns { display: flex !important; }
+    /* ---------- 电脑 / 平板：够宽也够高才分栏 ---------- */
+    @media (min-width: 861px) and (min-height: 560px) {
+      .dc-topbar { padding-left: calc(12px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); padding-right: calc(12px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); }
+      .sw-main, .dc-app-shell.has-mini .sw-main { padding-bottom: 0; }
+      .sw-page { padding: 28px 40px 40px; max-width: 1040px; }
+      .sw-title { font-size: 40px; margin: 0 0 24px; }
+      .dc-search-input { height: 64px; font-size: 36px; }
+      .sw-search-clear { top: 14px; }
+      .sw-search-btn { height: 64px; padding: 0 28px; }
+      .sw-mini, .sw-mobile-only { display: none !important; }
+      .sw-toast, .dc-app-shell.has-mini .sw-toast { left: 24px; right: auto; bottom: 48px; min-width: 320px; max-width: 480px; }
+      .sw-banner { left: auto; right: 24px; top: 60px; width: 420px; }
+      .dc-modal-overlay { align-items: center; }
+      .dc-modal { width: 420px; max-width: calc(100vw - 48px); border: 2px solid var(--ink); padding: 24px 24px 20px; animation: swFade .15s ease; }
+      .dc-nowplaying { position: static; inset: auto; z-index: auto; transform: none; visibility: visible; transition: none; width: 340px; flex-shrink: 0; border-left: 1px solid var(--rule); padding: 0 24px 24px; }
+      .sw-np-head { margin: 0 -10px 0 0; }
+      .sw-np-head > .sw-collapse { display: none; }
+      .sw-np-label { display: block; }
+      .sw-np-head > .sw-icon-btn { width: 40px; }
+      .sw-np-head .sw-menu { right: 10px; }
+      /* 平板上播放栏里一格不到 60px，播放键收小一点，免得跟左右两个键挤在一起 */
+      .sw-play-big { width: 64px; height: 64px; }
+      .sw-play-big .ms { font-size: 40px; }
+      .sw-volume { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--ink-2); flex-shrink: 0; }
+      .sw-volume .ms { font-size: 20px; }
+      .sw-volume .sw-ctrl { width: 28px; height: 28px; }
+      .sw-volume .sw-ctrl .ms { font-size: 20px; }
+      .sw-volume .sw-bar-hit { flex: 1; margin: 0; }
+      .sw-volume .sw-bar-fill { background: var(--ink); }
+      .sw-footer { display: flex; flex-shrink: 0; height: 32px; align-items: center; padding: 0 24px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-2); }
+      /* 搜索结果排成表格：歌名一栏，歌手和来源一栏 */
+      .sw-main .sw-row { grid-template-columns: 32px 48px minmax(0, 1.6fr) minmax(0, 1fr) auto; min-height: 64px; }
+      .sw-main .sw-row-main { display: contents; }
+      .sw-main .sw-row .sw-m { margin-top: 0; font-size: 13px; }
+      .dc-queue-drag-handle { display: inline-block; }
+      .dc-queue-move-btns { display: none; }
+    }
+    @media (min-width: 1200px) and (min-height: 560px) {
+      .sw-lib-col { display: block; width: 248px; flex-shrink: 0; border-right: 1px solid var(--rule); overflow-y: auto; padding: 24px; }
+      .sw-lib-col .sw-head-acts { gap: 14px; }
+      .sw-lib-col .sw-lib-list { border-top: 0; }
+      .sw-lib-col .sw-lib-row { grid-template-columns: 26px minmax(0, 1fr) auto; min-height: 46px; }
+      .sw-lib-col .sw-lib-name { font-size: 14px; }
+      .sw-lib-col .sw-lib-count { font-size: 13px; }
+      /* 当前打开的歌单：反白（和分段切换的选中态同一个规则） */
+      .sw-lib-col .sw-lib-row.is-selected { background: var(--ink); color: var(--bg); margin: 0 -8px; padding: 0 8px; width: calc(100% + 16px); border-bottom-color: var(--ink); }
+      .sw-lib-col .sw-lib-row.is-selected .sw-idx, .sw-lib-col .sw-lib-row.is-selected .sw-lib-count { color: var(--bg); }
+      .sw-lib-col .sw-lib-row.is-selected .sw-lib-name { font-weight: 700; }
+      .dc-nowplaying { width: 400px; }
+    }
+    /* 跟随系统的「减少动态效果」 */
+    @media (prefers-reduced-motion: reduce) {
+      .dc-app-shell *, .dc-app-shell *::before, .dc-app-shell *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
   </style>
 </helmet>
 
-<div class="dc-app-shell" style="width:100vw;display:flex;flex-direction:column;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:{{ v.c.bg }};box-sizing:border-box;overflow:hidden;--ring:{{ v.c.primary }};--glass:{{ v.c.glass }};--scrollbar-thumb:{{ v.c.outlineVariant }};--scrollbar-thumb-hover:{{ v.c.outline }};">
+<div class="{{ v.shellClass }}">
 
-  <div class="dc-topbar" style="flex-shrink:0;display:flex;align-items:center;justify-content:space-between;background:{{ v.c.surfaceLow }};border-bottom:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
-    <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-      <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;">封寒月</span>
-      <span style="width:3px;height:3px;border-radius:50%;background:{{ v.c.outline }};flex-shrink:0;"></span>
-      <span style="font-size:14px;font-weight:600;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">听音乐</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-      <a href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer" style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ v.c.onSurfaceVariant }};text-decoration:none;padding:6px 12px;border-radius:20px;transition:background .15s,color .15s;flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="background:{{ v.c.press }};">
-        <span style="font-family:'Material Symbols Outlined';font-size:16px;">code</span><span class="dc-desktop-only" style="display:inline;">GitHub</span>
-      </a>
-      <sc-if value="{{ v.showOfflineChip }}">
-      <button onclick="{{ H.openStoragePanel }}" title="{{ v.offlineChipText }}" style="height:28px;padding:0 10px;border-radius:14px;border:none;background:{{ v.c.secondaryContainer }};color:{{ v.c.onSecondaryContainer }};display:flex;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;font-size:12px;font-weight:600;font-family:inherit;" style-active="transform:scale(0.94);">
-        <span style="font-family:'Material Symbols Outlined';font-size:16px;">{{ v.offlineChipIcon }}</span><span class="dc-desktop-only" style="display:inline;">{{ v.offlineChipText }}</span>
-      </button>
-      </sc-if>
-      <button onclick="{{ H.openStoragePanel }}" title="缓存与离线" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
-        <span style="font-family:'Material Symbols Outlined';font-size:19px;">download_for_offline</span>
-      </button>
-      <button onclick="{{ H.copyDiagLog }}" title="复制切歌诊断记录" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-hover="background:{{ v.c.hover }};color:{{ v.c.onSurface }};" style-active="transform:scale(0.9);">
-        <span style="font-family:'Material Symbols Outlined';font-size:19px;">bug_report</span>
-      </button>
-      <button onclick="{{ H.toggleTheme }}" style="width:52px;height:28px;border-radius:14px;border:none;cursor:pointer;position:relative;padding:0;flex-shrink:0;background:{{ v.switchTrackBg }};transition:background .25s;">
-        <span style="position:absolute;top:2px;left:{{ v.switchThumbLeft }}px;width:24px;height:24px;border-radius:50%;background:{{ v.switchThumbBg }};display:flex;align-items:center;justify-content:center;transition:left .25s;box-shadow:0 1px 2px rgba(0,0,0,.35);">
-          <span style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.switchIconColor }};">{{ v.themeIcon }}</span>
-        </span>
-      </button>
-    </div>
+  <div class="dc-topbar">
+    <nav class="sw-nav" aria-label="页面">
+      <button class="{{ v.navSearchClass }}" onclick="{{ H.goSearch }}" aria-label="搜索" title="搜索"><span class="ms">search</span></button>
+      <button class="{{ v.navLibraryClass }}" onclick="{{ H.goLibrary }}" aria-label="歌单" title="歌单"><span class="ms">queue_music</span></button>
+      <button class="{{ v.navSettingsClass }}" onclick="{{ H.goSettings }}" aria-label="设置" title="设置"><span class="ms">settings</span></button>
+    </nav>
+    <sc-if value="{{ v.showOfflineChip }}">
+      <button class="sw-status-btn" onclick="{{ H.openSettings }}" aria-label="{{ v.offlineChipText }}" title="{{ v.offlineChipText }}"><span class="ms">{{ v.offlineChipIcon }}</span></button>
+    </sc-if>
   </div>
 
-  <div style="flex:1;min-height:0;display:flex;position:relative;overflow:hidden;">
+  <div class="sw-body">
 
-    <sc-if value="{{ v.mobileSidebarOpen }}">
-      <div class="dc-sidebar-scrim" onclick="{{ H.closeMobileSidebar }}" style="display:none;"></div>
-    </sc-if>
-
-    <div class="{{ v.sidebarClass }}" style="width:220px;min-width:220px;background:{{ v.c.surfaceLow }};display:flex;flex-direction:column;position:relative;">
-      <button onclick="{{ H.closeMobileSidebar }}" class="dc-sidebar-close" style="display:none;position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};z-index:2;">
-        <span style="font-family:'Material Symbols Outlined';font-size:18px;">close</span>
-      </button>
-      <div style="height:72px;display:flex;align-items:center;padding:0 18px;flex-shrink:0;">
-        <div style="display:flex;align-items:center;gap:8px;font-size:17px;font-weight:500;color:{{ v.c.onSurface }};">
-          <span style="font-family:'Material Symbols Outlined';font-size:21px;color:{{ v.c.onSurface }};">library_music</span>我的歌单
-        </div>
+    <aside class="sw-lib-col dc-scrollbar">
+      <div class="sw-head-rule">
+        <span class="sw-label">歌单</span>
+        <span class="sw-head-acts"><button class="sw-btn-text" onclick="{{ H.openImportModal }}">导入</button><button class="sw-btn-text" onclick="{{ H.openCreateModal }}">新建</button></span>
       </div>
-      <div style="flex:1;padding:6px 10px;display:flex;flex-direction:column;gap:2px;">
+      <div class="sw-lib-list">
         <sc-for list="{{ v.playlistsRender }}" as="pl" hint-placeholder-count="3">
-          <div onclick="{{ pl.onClick }}" onmouseenter="{{ pl.onMouseEnter }}" onmouseleave="{{ pl.onMouseLeave }}" style="{{ pl.rowStyle }}" style-active="background:{{ v.c.press }};">
-            <span style="width:30px;height:30px;border-radius:8px;background:{{ pl.tileBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <span style="font-family:'Material Symbols Outlined';font-size:15px;color:#fff;font-variation-settings:'FILL' {{ pl.iconFill }};">{{ pl.glyph }}</span>
-            </span>
-            <div style="min-width:0;flex:1;">
-              <div style="font-size:12.5px;font-weight:500;color:{{ pl.nameColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ pl.name }}</div>
-              <div style="font-size:11.5px;color:{{ pl.countColor }};">{{ pl.countLabel }} 首</div>
-            </div>
-            <button class="{{ pl.deleteBtnClass }}" onclick="{{ pl.onDelete }}" style="width:26px;height:26px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ pl.countColor }};flex-shrink:0;display:{{ pl.deleteDisplay }};" style-hover="background:{{ v.c.press }};color:{{ v.c.heart }};">
-              <span style="font-family:'Material Symbols Outlined';font-size:16px;">delete</span>
-            </button>
-          </div>
+          <button class="{{ pl.sideRowClass }}" onclick="{{ pl.onClick }}"><span class="sw-idx">{{ pl.indexLabel }}</span><span class="sw-lib-name"><span>{{ pl.name }}</span></span><span class="sw-lib-count">{{ pl.countLabel }}</span></button>
         </sc-for>
       </div>
-      <div style="padding:16px;display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        <button onclick="{{ H.openImportModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:16px;">upload</span>导入</button>
-        <button onclick="{{ H.openCreateModal }}" style="flex:1;padding:8px 0;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.onSurfaceVariant }};font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:16px;">add</span>新建歌单</button>
-      </div>
-    </div>
+    </aside>
 
-    <div style="flex:1.5;min-width:0;display:flex;flex-direction:column;position:relative;overflow:hidden;background:{{ v.c.bg }};">
+    <main class="sw-main dc-scroll-area dc-scrollbar">
+      <section class="sw-page">
 
-      <sc-if value="{{ v.rightIsQueue }}">
-        <div style="padding:20px 24px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-          <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">当前播放列表 · {{ v.queueCount }}</span>
-          <button onclick="{{ H.closeQueuePanel }}" style="display:flex;align-items:center;gap:4px;padding:7px 14px 7px 10px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:12.5px;font-weight:500;cursor:pointer;">
-            <span style="font-family:'Material Symbols Outlined';font-size:17px;">expand_more</span>收起
-          </button>
-        </div>
-        <div class="dc-scroll-area dc-scrollbar" style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
-          <!-- 这段 <sc-for> 播放列表行模板和移动端全屏播放器内的播放列表二级页面是手工保持一致的两份
-               相同代码（搜索 v.showQueueInPlayer 定位另一处）。原因：那个页面在 .dc-nowplaying 全屏
-               浮层内，z-index 盖住了这里，没法直接复用这份 DOM，只能整段复制。改这里队列行的字段/
-               样式/交互时，务必同步改那边，不要只改一处。 -->
-          <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
-            <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
-              <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
-              <span class="dc-queue-drag-handle" style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
-              <div class="dc-queue-move-btns" style="display:none;align-items:center;gap:0;flex-shrink:0;">
-                <button onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveUpOpacity }};flex-shrink:0;">
-                  <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_up</span>
-                </button>
-                <button onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveDownOpacity }};flex-shrink:0;">
-                  <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_down</span>
-                </button>
-              </div>
-              <div style="width:38px;height:38px;border-radius:8px;{{ item.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                <sc-if value="{{ item.showCoverIcon }}">
-                  <span style="font-family:'Material Symbols Outlined';font-size:16px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
+        <sc-if value="{{ v.isSearchPage }}">
+          <div class="sw-search">
+            <div class="sw-search-field">
+              <input class="dc-search-input" type="search" enterKeyHint="search" autoComplete="off" value="{{ v.searchQuery }}" oninput="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" onfocus="{{ H.focusSearch }}" onblur="{{ H.blurSearch }}" placeholder="歌名、歌手" aria-label="搜索歌名、歌手">
+              <sc-if value="{{ v.showClear }}">
+                <button class="sw-search-clear" onclick="{{ H.clearSearch }}" aria-label="清空搜索" title="清空"><span class="ms">close</span></button>
+              </sc-if>
+              <sc-if value="{{ v.isSearching }}"><div class="sw-search-loading"></div></sc-if>
+            </div>
+            <button class="sw-btn sw-btn-primary sw-search-btn" onclick="{{ H.doSearch }}">搜索</button>
+            <sc-if value="{{ v.showSuggest }}">
+              <div class="sw-suggest dc-scrollbar">
+                <sc-if value="{{ v.suggestIsHistory }}">
+                  <div class="sw-head-rule"><span>最近搜索</span><span class="sw-btn-text" onmousedown="{{ H.clearHistory }}">清空</span></div>
                 </sc-if>
+                <sc-for list="{{ v.suggestRender }}" as="sg" hint-placeholder-count="6">
+                  <div class="{{ sg.rowClass }}" onmousedown="{{ sg.onPick }}"><span class="ms">{{ sg.icon }}</span><span class="sw-sg-t">{{ sg.title }}</span><sc-if value="{{ sg.hasSub }}"><span class="sw-sg-a">{{ sg.subtitle }}</span></sc-if></div>
+                </sc-for>
               </div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
-                <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artistDisplay }} · {{ item.sourceLabel }}</div>
-              </div>
-              <sc-if value="{{ item.isCached }}"><span title="已缓存，断网也能播" style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.c.primary }};flex-shrink:0;">download_done</span></sc-if>
-              <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
-              <button onclick="{{ item.onRemove }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
-                <span style="font-family:'Material Symbols Outlined';font-size:16px;">close</span>
-              </button>
-            </div>
-          </sc-for>
-        </div>
-      </sc-if>
-
-      <sc-if value="{{ v.rightIsBrowse }}">
-
-      <div style="padding:20px 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;flex-shrink:0;">
-        <button onclick="{{ H.toggleMobileSidebar }}" class="dc-mobile-only" style="display:none;width:42px;height:42px;border-radius:50%;border:none;background:{{ v.c.surfaceHigh }};align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};flex-shrink:0;" style-active="background:{{ v.c.press }};transform:scale(0.94);">
-          <span style="font-family:'Material Symbols Outlined';font-size:20px;">library_music</span>
-        </button>
-        <div class="dc-search-input-wrap" style="flex:1;min-width:200px;position:relative;display:flex;align-items:center;">
-          <span style="font-family:'Material Symbols Outlined';font-size:19px;position:absolute;left:16px;color:{{ v.c.onSurfaceVariant }};pointer-events:none;">search</span>
-          <input class="dc-search-input" type="search" enterkeyhint="search" autocomplete="off" value="{{ v.searchQuery }}" oninput="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" onfocus="{{ H.focusSearch }}" onblur="{{ H.blurSearch }}" placeholder="输入歌名 / 歌手，实时联想…" style="width:100%;min-width:0;padding:11px 40px 11px 46px;border-radius:28px;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};font-size:13.5px;border:none;outline:none;font-family:inherit;box-sizing:border-box;">
-          <sc-if value="{{ v.showClear }}">
-          <button onclick="{{ H.clearSearch }}" aria-label="清空搜索" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:24px;height:24px;padding:0;border:none;border-radius:50%;background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurfaceVariant }};display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="color:{{ v.c.onSurface }};">
-            <span style="font-family:'Material Symbols Outlined';font-size:16px;">close</span>
-          </button>
-          </sc-if>
-          <sc-if value="{{ v.showSuggest }}">
-          <div class="dc-suggest-panel dc-scrollbar" style="position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:60;background:{{ v.c.surface }};border:1px solid {{ v.c.outlineVariant }};border-radius:16px;box-shadow:{{ v.c.e3 }};overflow-y:auto;max-height:320px;padding:4px 0;">
-            <sc-if value="{{ v.suggestIsHistory }}">
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 14px 4px;font-size:11px;color:{{ v.c.onSurfaceVariant }};">
-              <span>最近搜索</span>
-              <span onmousedown="{{ H.clearHistory }}" style="cursor:pointer;padding:2px 4px;" style-hover="color:{{ v.c.onSurface }};">清空</span>
-            </div>
             </sc-if>
-            <sc-for list="{{ v.suggestRender }}" as="sg" hint-placeholder-count="6">
-              <div class="dc-suggest-row" data-active="{{ sg.active }}" onmousedown="{{ sg.onPick }}" style="{{ sg.rowStyle }}" style-hover="background:{{ v.c.hover }};">
-                <span style="font-family:'Material Symbols Outlined';font-size:18px;color:{{ sg.subColor }};flex-shrink:0;">{{ sg.icon }}</span>
-                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;color:{{ sg.titleColor }};">{{ sg.title }}</span>
-                <sc-if value="{{ sg.hasSub }}"><span style="flex-shrink:0;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:{{ sg.subColor }};">{{ sg.subtitle }}</span></sc-if>
-              </div>
+          </div>
+          <div class="sw-filters">
+            <span class="sw-filter-group">
+              <sc-for list="{{ v.sourcesRender }}" as="src" hint-placeholder-count="2">
+                <button class="{{ src.cls }}" onclick="{{ src.onClick }}" aria-pressed="{{ src.checked }}">{{ src.label }}</button>
+              </sc-for>
+            </span>
+            <sc-if value="{{ v.showGroupChips }}">
+              <span class="sw-filter-group">
+                <span class="sw-opts-label">分组</span>
+                <sc-for list="{{ v.groupChipsRender }}" as="grp" hint-placeholder-count="3">
+                  <button class="{{ grp.cls }}" onclick="{{ grp.onClick }}" aria-pressed="{{ grp.active }}"><span>{{ grp.label }}</span></button>
+                </sc-for>
+              </span>
+            </sc-if>
+          </div>
+          <sc-if value="{{ v.showRecents }}">
+            <div class="sw-head-rule"><span class="sw-label">最近搜索</span><button class="sw-btn-text" onclick="{{ H.clearHistoryNow }}">清空</button></div>
+            <sc-for list="{{ v.recentRender }}" as="r" hint-placeholder-count="4">
+              <button class="{{ r.rowClass }}" onclick="{{ r.onPick }}"><span class="ms">history</span><span>{{ r.text }}</span></button>
+            </sc-for>
+          </sc-if>
+          <sc-if value="{{ v.showPrompt }}">
+            <p class="sw-empty-note">网易云音乐、QQ音乐一起搜；网易云歌单链接可以在「歌单」页导入。</p>
+          </sc-if>
+          <sc-if value="{{ v.isSearching }}">
+            <div class="sw-head-rule"><span>正在搜索…</span></div>
+          </sc-if>
+          <sc-if value="{{ v.showStatusText }}">
+            <div class="sw-head-rule"><span><b>{{ v.statusLead }}</b>{{ v.statusTail }}</span></div>
+          </sc-if>
+        </sc-if>
+
+        <sc-if value="{{ v.isLibraryRoot }}">
+          <div class="sw-page-head">
+            <h1 class="sw-title">歌单</h1>
+            <div class="sw-head-acts">
+              <button class="sw-btn sw-btn-outline" onclick="{{ H.openImportModal }}"><span class="ms">upload</span>导入</button>
+              <button class="sw-btn sw-btn-primary" onclick="{{ H.openCreateModal }}"><span class="ms">add</span>新建</button>
+            </div>
+          </div>
+          <div class="sw-lib-list">
+            <sc-for list="{{ v.playlistsRender }}" as="pl" hint-placeholder-count="3">
+              <button class="sw-lib-row sw-press" onclick="{{ pl.onClick }}">
+                <span class="sw-idx">{{ pl.indexLabel }}</span>
+                <span class="sw-lib-name"><span>{{ pl.name }}</span><sc-if value="{{ pl.hasGlyph }}"><span class="ms">{{ pl.glyph }}</span></sc-if></span>
+                <span class="sw-lib-count">{{ pl.countLabel }}</span>
+              </button>
             </sc-for>
           </div>
+        </sc-if>
+
+        <sc-if value="{{ v.isPlaylistView }}">
+          <div class="{{ v.backRowClass }}">
+            <button class="sw-back" onclick="{{ H.backFromPlaylist }}"><span class="ms">arrow_back</span>歌单</button>
+            <button class="sw-icon-btn" onclick="{{ H.togglePlaylistMenu }}" aria-label="更多" title="更多"><span class="ms">more_vert</span></button>
+            <sc-if value="{{ v.playlistMenuOpen }}">
+              <div class="sw-menu-scrim" onclick="{{ H.closeMenu }}"></div>
+              <div class="sw-menu" role="menu">
+                <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuExportPlaylist }}"><span class="ms">ios_share</span><span>导出歌单</span></button>
+                <sc-if value="{{ v.canDeletePlaylist }}">
+                  <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuDeletePlaylist }}"><span class="ms">delete</span><span>删除歌单</span></button>
+                </sc-if>
+              </div>
+            </sc-if>
+          </div>
+          <h1 class="sw-title">{{ v.playlistHeaderName }}</h1>
+          <p class="sw-pl-meta">{{ v.statusText }}</p>
+          <sc-if value="{{ v.showPlayAll }}">
+            <div class="sw-pl-btns">
+              <button class="sw-btn sw-btn-primary" onclick="{{ H.playAllInPlaylist }}"><span class="ms fill">play_arrow</span>播放全部</button>
+              <sc-if value="{{ v.showCacheAll }}">
+                <button class="sw-btn sw-btn-outline" onclick="{{ H.cachePlaylist }}"><span class="{{ v.cacheAllIconClass }}">{{ v.cacheAllIcon }}</span>{{ v.cacheAllLabel }}</button>
+              </sc-if>
+            </div>
           </sc-if>
-        </div>
-        <button class="dc-search-btn" onclick="{{ H.doSearch }}" style="padding:0 22px;height:42px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-weight:500;font-size:13.5px;cursor:pointer;flex-shrink:0;transition:opacity .15s,transform .1s;display:flex;align-items:center;justify-content:center;" style-hover="opacity:0.88;" style-active="transform:scale(0.95);">
-          <span class="dc-search-btn-icon" style="font-family:'Material Symbols Outlined';font-size:19px;">search</span>
-          <span class="dc-search-btn-label">搜索</span>
-        </button>
-      </div>
-
-      <sc-if value="{{ v.isPlaylistView }}">
-      <div style="padding:0 24px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
-        <button onclick="{{ H.backFromPlaylist }}" style="width:32px;height:32px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}"><span style="font-family:'Material Symbols Outlined';font-size:20px;">arrow_back</span></button>
-        <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">{{ v.playlistHeaderName }}</span>
-      </div>
-      <sc-if value="{{ v.showPlayAll }}">
-      <div style="padding:0 24px 18.75px;flex-shrink:0;display:flex;flex-wrap:wrap;gap:8px;">
-        <button onclick="{{ H.playAllInPlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
-          <span style="font-family:'Material Symbols Outlined';font-size:18px;font-variation-settings:'FILL' 1;">play_arrow</span>播放全部
-        </button>
-        <button onclick="{{ H.exportPlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
-          <span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ v.exportBtnIcon }}</span>{{ v.exportBtnLabel }}
-        </button>
-        <sc-if value="{{ v.showCacheAll }}">
-        <button onclick="{{ H.cachePlaylist }}" style="display:flex;align-items:center;gap:8px;padding:9px 20px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:13.5px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s;" style-hover="opacity:0.88;" style-active="transform:scale(0.96);">
-          <span style="font-family:'Material Symbols Outlined';font-size:18px;{{ v.cacheAllIconStyle }}">{{ v.cacheAllIcon }}</span>{{ v.cacheAllLabel }}
-        </button>
         </sc-if>
-      </div>
-      </sc-if>
-      </sc-if>
 
-      <sc-if value="{{ v.isLibraryView }}">
-      <div style="padding:0 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;flex-shrink:0;">
-        <sc-for list="{{ v.sourcesRender }}" as="src" hint-placeholder-count="5">
-          <span onclick="{{ src.onClick }}" style="{{ src.chipStyle }}">
-            <sc-if value="{{ src.checked }}"><span style="font-family:'Material Symbols Outlined';font-size:15px;">check</span></sc-if>
-            <span style="width:7px;height:7px;border-radius:50%;background:{{ src.dot }};flex-shrink:0;"></span>{{ src.label }}
-          </span>
-        </sc-for>
-      </div>
-      </sc-if>
-
-      <sc-if value="{{ v.showGroupChips }}">
-      <div style="padding:0 24px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;flex-shrink:0;">
-        <span style="color:{{ v.c.onSurfaceVariant }};font-weight:500;flex-shrink:0;">分组</span>
-        <sc-for list="{{ v.groupChipsRender }}" as="grp" hint-placeholder-count="3">
-          <span onclick="{{ grp.onClick }}" style="{{ grp.chipStyle }}">
-            <sc-if value="{{ grp.active }}"><span style="font-family:'Material Symbols Outlined';font-size:15px;">check</span></sc-if>
-            {{ grp.label }}
-          </span>
-        </sc-for>
-      </div>
-      </sc-if>
-
-      <sc-if value="{{ v.showStatusText }}">
-      <div style="padding:0 24px 14px;font-size:12px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ v.statusText }}</div>
-      </sc-if>
-
-      <div class="dc-scroll-area dc-scrollbar" style="flex:1;overflow-y:auto;padding:0 24px 24px;">
-        <sc-if value="{{ v.showPrompt }}">
-          <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
-            <div style="display:flex;justify-content:center;margin-bottom:16px;"><span style="width:72px;height:72px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:32px;">search</span></span></div>
-            <div style="font-size:15px;font-weight:600;color:{{ v.c.onSurface }};">想听点什么？</div>
-            <div style="font-size:12.5px;margin-top:6px;">支持网易云音乐 · QQ音乐，也可以导入歌单</div>
+        <sc-if value="{{ v.isSettingsPage }}">
+          <h1 class="sw-title">设置</h1>
+          <div class="sw-sec">
+            <span class="sw-label">缓存与离线</span>
+            <p class="sw-note">{{ v.netStatusText }}</p>
+            <div class="sw-kv"><span>已缓存 {{ v.cachedCount }} 首</span><span class="num">{{ v.cacheUsageText }}</span></div>
+            <sc-if value="{{ v.showCacheBar }}">
+              <div class="sw-meter"><div style="width:{{ v.cacheUsagePct }}%;"></div></div>
+            </sc-if>
+            <div class="sw-field-label">缓存上限</div>
+            <div class="sw-seg">
+              <sc-for list="{{ v.capChoicesRender }}" as="cap" hint-placeholder-count="5">
+                <button class="{{ cap.cls }}" onclick="{{ cap.onClick }}" aria-pressed="{{ cap.active }}">{{ cap.label }}</button>
+              </sc-for>
+            </div>
+            <span class="sw-hint">超过上限时自动删掉最久没听的歌。无损音质一首大约 30MB</span>
+            <div class="sw-set-list">
+              <button class="sw-set-row" onclick="{{ H.toggleOfflineOnly }}" role="switch" aria-checked="{{ v.offlineOnly }}">
+                <span><span class="sw-row-t">只播已缓存的歌</span><span class="sw-hint">断网时自动按这个来；联网时打开可以省流量</span></span>
+                <span class="{{ v.offlineToggleClass }}"></span>
+              </button>
+              <button class="sw-set-row" onclick="{{ H.clearAudioCache }}"><span class="sw-row-t">清空缓存</span><span class="ms">delete</span></button>
+            </div>
+          </div>
+          <div class="sw-sec">
+            <span class="sw-label">外观</span>
+            <div class="sw-seg">
+              <button class="{{ v.themeLightClass }}" onclick="{{ H.setThemeLight }}" aria-pressed="{{ v.isLightTheme }}">白</button>
+              <button class="{{ v.themeDarkClass }}" onclick="{{ H.setThemeDark }}" aria-pressed="{{ v.isDarkTheme }}">黑</button>
+            </div>
+          </div>
+          <div class="sw-sec">
+            <span class="sw-label">关于</span>
+            <sc-if value="{{ v.isNative }}">
+              <div class="sw-set-row"><span class="sw-row-t">版本 <span class="num">{{ v.appVersionText }}</span></span><button class="sw-btn-text" onclick="{{ H.checkUpdateNow }}">检查更新</button></div>
+              <button class="sw-set-row" onclick="{{ H.openBatterySettings }}"><span class="sw-row-t">后台运行设置</span><span class="ms">arrow_forward</span></button>
+            </sc-if>
+            <button class="sw-set-row" onclick="{{ H.copyDiagLog }}"><span class="sw-row-t">复制切歌诊断记录</span><span class="ms">content_copy</span></button>
+            <a class="sw-set-row" href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer"><span class="sw-row-t">GitHub</span><span class="ms">arrow_outward</span></a>
+            <p class="sw-colophon"><b>听音乐</b> · 封寒月<br>本页面仅供学习交流使用，请勿用于任何商业用途</p>
           </div>
         </sc-if>
-        <sc-if value="{{ v.isSearching }}">
-          <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
-            <div style="display:flex;justify-content:center;margin-bottom:16px;"><span style="width:72px;height:72px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:32px;animation:searchPulse 1.2s ease-in-out infinite;">search</span></span></div>
-            <div>搜索中…</div>
-          </div>
-        </sc-if>
+
         <sc-if value="{{ v.hasNoResults }}">
-          <div style="text-align:center;padding:60px 20px;color:{{ v.c.onSurfaceVariant }};">
-            <div style="display:flex;justify-content:center;margin-bottom:16px;"><span style="width:72px;height:72px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Outlined';font-size:32px;">{{ v.emptyIcon }}</span></span></div>
-            <div>{{ v.emptyText }}</div>
+          <div class="sw-empty">
+            <div class="sw-empty-title">{{ v.emptyTitle }}</div>
+            <div class="sw-empty-text">{{ v.emptyText }}</div>
           </div>
         </sc-if>
+
         <sc-if value="{{ v.viewIsList }}">
-          <div style="display:flex;flex-direction:column;gap:2px;">
+          <div class="{{ v.listClass }}">
             <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
               <sc-if value="{{ t.isHeader }}">
-                <div class="dc-group-header" data-group-count="{{ t.groupCount }}" style="display:flex;align-items:center;gap:7px;padding:14px 6px 6px;">
-                  <span style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ t.groupIcon }}</span>
-                  <span style="font-size:12px;font-weight:700;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.groupLabel }}</span>
-                  <span style="font-size:11px;font-weight:500;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ t.groupCount }}</span>
+                <div class="sw-group-head dc-group-header" data-group-count="{{ t.groupCount }}">
+                  <span class="ms">{{ t.groupIcon }}</span><span class="sw-group-name">{{ t.groupLabel }}</span><span class="sw-group-count">{{ t.groupCount }}</span>
                 </div>
               </sc-if>
               <sc-if value="{{ t.isRow }}">
-                <div class="dc-result-row" style="display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:{{ t.cardBg }};opacity:{{ t.rowOpacity }};transition:background .1s;" style-active="background:{{ v.c.press }};">
-                  <div style="width:44px;height:44px;border-radius:8px;{{ t.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;" onclick="{{ t.onPlay }}">
-                    <sc-if value="{{ t.showCoverIcon }}">
-                      <span style="font-family:'Material Symbols Outlined';font-size:19px;color:rgba(255,255,255,.9);">music_note</span>
-                    </sc-if>
+                <div class="{{ t.rowClass }}" onclick="{{ t.onPlay }}" style="opacity:{{ t.rowOpacity }};">
+                  <span class="sw-idx"><sc-if value="{{ t.isCurrent }}"><span class="ms">graphic_eq</span></sc-if><sc-if value="{{ t.notCurrent }}">{{ t.indexLabel }}</sc-if></span>
+                  <div class="sw-cover" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
+                  <div class="sw-row-main">
+                    <div class="sw-t">{{ t.title }}</div>
+                    <div class="sw-m"><span class="sw-a">{{ t.artistDisplay }}</span><span>·</span><span class="sw-src">{{ t.sourceLabel }}</span><sc-if value="{{ t.isCached }}"><span class="ms" title="已缓存，断网也能播">download_done</span></sc-if></div>
                   </div>
-                  <div style="flex:1;min-width:0;cursor:pointer;" onclick="{{ t.onPlay }}">
-                    <div style="font-size:13px;font-weight:500;color:{{ t.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
-                    <div style="display:flex;align-items:center;gap:5px;margin-top:3px;">
-                      <span style="width:6px;height:6px;border-radius:50%;background:{{ t.sourceDot }};flex-shrink:0;"></span>
-                      <span style="font-size:11px;font-weight:500;color:{{ t.sourceLabelColor }};white-space:nowrap;flex-shrink:0;">{{ t.sourceLabel }}</span>
-                      <sc-if value="{{ t.isCached }}"><span title="已缓存，断网也能播" style="font-family:'Material Symbols Outlined';font-size:13px;color:{{ t.cachedColor }};flex-shrink:0;">download_done</span></sc-if>
-                      <span style="font-size:11.5px;color:{{ t.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">· {{ t.artistDisplay }}</span>
-                    </div>
+                  <div class="sw-acts">
+                    <button class="sw-icon-btn" onclick="{{ t.onAdd }}" aria-label="{{ t.primaryActionLabel }}" title="{{ t.primaryActionLabel }}"><span class="ms">{{ t.primaryActionIcon }}</span></button>
+                    <button class="{{ t.likeBtnClass }}" onclick="{{ t.onLike }}" aria-label="喜欢" title="喜欢"><span class="ms">favorite</span></button>
                   </div>
-                  <button onclick="{{ t.onAdd }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.primaryActionIcon }}</span></button>
-                  <button onclick="{{ t.onLike }}" style="width:36px;height:36px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ t.likeColor }};flex-shrink:0;" style-active="background:{{ v.c.press }};"><span class="{{ t.likeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:18px;">{{ t.likeGlyph }}</span></button>
                 </div>
               </sc-if>
             </sc-for>
           </div>
         </sc-if>
-      </div>
-      </sc-if>
 
-    </div>
+      </section>
+    </main>
 
-    <div class="{{ v.nowPlayingClass }}" style="flex:1;min-width:0;display:flex;flex-direction:column;background:{{ v.c.surfaceLow }};position:relative;">
-     <sc-if value="{{ v.showNowPlayingBody }}">
-     <div class="dc-ambient" style="{{ v.ambientStyle }}"></div>
-     <div class="dc-ambient" style="{{ v.ambientOverlayStyle }}"></div>
-     <button onclick="{{ H.closeMobileNowPlaying }}" class="dc-nowplaying-close" style="display:none;position:absolute;top:10px;left:10px;width:36px;height:36px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};z-index:2;" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.92);">
-       <span style="font-family:'Material Symbols Outlined';font-size:20px;">expand_more</span>
-     </button>
-     <sc-if value="{{ v.hasTrack }}">
-     <button onclick="{{ H.openShareModal }}" class="dc-nowplaying-share" title="分享这首歌" style="display:flex;position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;border:none;background:none;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};z-index:2;" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.92);">
-       <span style="font-family:'Material Symbols Outlined';font-size:20px;">share</span>
-     </button>
-     </sc-if>
-     <div style="flex:1;min-height:0;width:100%;height:100%;box-sizing:border-box;padding:10px 30px 24px;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1;">
-      <div style="width:100%;height:36px;display:flex;align-items:center;justify-content:center;margin-bottom:6px;flex-shrink:0;">
-        <span style="font-size:11.5px;font-weight:700;letter-spacing:.06em;color:{{ v.c.onSurfaceVariant }};">正在播放</span>
-      </div>
-
-      <div class="dc-media-viewport" onclick="{{ H.toggleMediaView }}" style="flex:1;width:100%;min-height:0;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;">
-        <sc-if value="{{ v.mediaIsCover }}" hint-placeholder-val="{{ true }}">
-          <div class="dc-disc" style="{{ v.mediaDiscStyle }}">
-            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:78px;height:78px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px rgba(0,0,0,.1);">
-              <span style="font-family:'Material Symbols Outlined';font-size:28px;color:{{ v.c.onSurfaceVariant }};">music_note</span>
-            </div>
+    <div class="{{ v.nowPlayingClass }}">
+      <div class="{{ v.npHeadClass }}">
+        <button class="sw-icon-btn sw-collapse" onclick="{{ H.closeMobileNowPlaying }}" aria-label="收起" title="收起"><span class="ms">keyboard_arrow_down</span></button>
+        <span class="sw-label sw-np-label">正在播放</span>
+        <sc-if value="{{ v.hasTrack }}">
+          <button class="sw-icon-btn" onclick="{{ H.togglePlayerMenu }}" aria-label="更多" title="更多"><span class="ms">more_vert</span></button>
+        </sc-if>
+        <sc-if value="{{ v.playerMenuOpen }}">
+          <div class="sw-menu-scrim" onclick="{{ H.closeMenu }}"></div>
+          <div class="sw-menu" role="menu">
+            <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuShare }}"><span class="ms">share</span><span>分享</span></button>
+            <button class="{{ v.exportItemClass }}" role="menuitem" onclick="{{ H.menuExport }}"><span class="ms">download</span><span><span>下载</span><sc-if value="{{ v.exportDisabled }}"><span class="sw-menu-hint">听完一遍才能下载</span></sc-if></span></button>
           </div>
+        </sc-if>
+      </div>
+      <div class="sw-tabs" role="tablist">
+        <button class="{{ v.tabCoverClass }}" role="tab" aria-selected="{{ v.mediaIsCover }}" onclick="{{ H.showCover }}">封面</button>
+        <button class="{{ v.tabLyricsClass }}" role="tab" aria-selected="{{ v.mediaIsLyrics }}" onclick="{{ H.showLyrics }}">歌词</button>
+        <button class="{{ v.tabQueueClass }}" role="tab" aria-selected="{{ v.mediaIsQueue }}" onclick="{{ H.showQueue }}">队列 <span class="sw-badge">{{ v.queueCount }}</span></button>
+      </div>
+      <div class="{{ v.mediaViewportClass }}">
+        <sc-if value="{{ v.mediaIsCover }}" hint-placeholder-val="{{ true }}">
+          <div class="sw-big-cover" style="{{ v.track.coverStyle }}" onclick="{{ H.toggleMediaView }}">{{ v.track.coverInitial }}</div>
         </sc-if>
         <sc-if value="{{ v.mediaIsLyrics }}">
           <sc-if value="{{ v.hasLyrics }}">
-          <div class="dc-lyrics-mask" style="width:100%;height:100%;overflow:hidden;position:relative;">
-            <div style="position:absolute;left:0;right:0;top:0;transform:translateY({{ v.lyricsOffset }}px);transition:transform .5s ease;">
-              <sc-for list="{{ v.lyricsRender }}" as="line" hint-placeholder-count="6">
-                <div style="{{ line.style }}">{{ line.text }}</div>
-              </sc-for>
+            <div class="sw-lyrics" onclick="{{ H.toggleMediaView }}">
+              <div class="sw-lyrics-inner" style="transform:translateY({{ v.lyricsOffset }}px);">
+                <sc-for list="{{ v.lyricsRender }}" as="line" hint-placeholder-count="6">
+                  <div class="{{ line.cls }}"><span>{{ line.text }}</span></div>
+                </sc-for>
+              </div>
             </div>
-          </div>
           </sc-if>
           <sc-if value="{{ v.lyricsEmpty }}">
-          <div style="text-align:center;padding:40px 20px;color:{{ v.c.onSurfaceVariant }};">
-            <div style="display:flex;justify-content:center;margin-bottom:14px;">
-              <span style="width:64px;height:64px;border-radius:50%;background:{{ v.c.surfaceHigh }};display:flex;align-items:center;justify-content:center;">
-                <span style="font-family:'Material Symbols Outlined';font-size:28px;{{ v.lyricsEmptyIconStyle }}">{{ v.lyricsEmptyIcon }}</span>
-              </span>
+            <div class="sw-lyrics-empty" onclick="{{ H.toggleMediaView }}">
+              <div class="{{ v.lyricsEmptyClass }}">{{ v.lyricsEmptyText }}</div>
             </div>
-            <div style="font-size:13px;">{{ v.lyricsEmptyText }}</div>
-          </div>
           </sc-if>
         </sc-if>
+        <sc-if value="{{ v.mediaIsQueue }}">
+          <div class="sw-queue dc-scrollbar">
+            <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
+              <div class="{{ item.rowClass }}" draggable="true" onDragStart="{{ item.onDragStart }}" onDragOver="{{ item.onDragOver }}" onDrop="{{ item.onDrop }}" onDragEnd="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="opacity:{{ item.rowOpacity }};">
+                <span class="sw-idx"><sc-if value="{{ item.isCurrent }}"><span class="ms">graphic_eq</span></sc-if><sc-if value="{{ item.notCurrent }}">{{ item.indexLabel }}</sc-if></span>
+                <span class="ms dc-queue-drag-handle" title="拖动排序">drag_indicator</span>
+                <div class="sw-cover" style="{{ item.coverStyle }}">{{ item.coverInitial }}</div>
+                <div class="sw-row-main">
+                  <div class="sw-t">{{ item.title }}</div>
+                  <div class="sw-m"><span class="sw-a">{{ item.artistDisplay }}</span><span>·</span><span class="sw-src">{{ item.sourceLabel }}</span><sc-if value="{{ item.isCached }}"><span class="ms" title="已缓存，断网也能播">download_done</span></sc-if></div>
+                </div>
+                <span class="sw-qdur">{{ item.durationStr }}</span>
+                <div class="sw-qbtns">
+                  <span class="dc-queue-move-btns">
+                    <button class="sw-icon-btn" onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" aria-label="上移" title="上移"><span class="ms">keyboard_arrow_up</span></button>
+                    <button class="sw-icon-btn" onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" aria-label="下移" title="下移"><span class="ms">keyboard_arrow_down</span></button>
+                  </span>
+                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="移出队列" title="移出队列"><span class="ms">close</span></button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
       </div>
-
-      <div style="width:100%;text-align:center;margin-top:14px;flex-shrink:0;">
-        <div style="font-size:17px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
-        <div style="font-size:13px;color:{{ v.c.onSurfaceVariant }};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artistDisplay }}</div>
+      <div class="sw-np-meta">
+        <div class="sw-np-title">{{ v.track.title }}</div>
+        <div class="sw-np-artist">{{ v.track.artistDisplay }}</div>
       </div>
-
-      <div style="width:100%;display:flex;align-items:center;gap:8px;margin-top:16px;flex-shrink:0;">
-        <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:28px;text-align:right;flex-shrink:0;">{{ v.currentTimeStr }}</span>
-        <div onmousedown="{{ H.seekStart }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;">
-          <div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.primary }};width:{{ v.progressPct }}%;"></div>
-          <div style="{{ v.thumbStyle }}"></div>
+      <div class="sw-progress">
+        <div class="sw-bar-hit" onPointerDown="{{ H.seekStart }}">
+          <div class="sw-bar">
+            <div class="sw-bar-fill" style="width:{{ v.progressPct }}%;"></div>
+            <div class="{{ v.thumbClass }}" style="left:{{ v.progressPct }}%;"></div>
+          </div>
         </div>
-        <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};width:28px;flex-shrink:0;">{{ v.durationStr }}</span>
+        <div class="sw-times"><span>{{ v.currentTimeStr }}</span><span>{{ v.durationStr }}</span></div>
       </div>
-
-      <div style="width:100%;display:flex;align-items:center;margin-top:14px;flex-shrink:0;">
-        <div style="flex:1;display:flex;align-items:center;">
-          <button onclick="{{ H.toggleQueuePanel }}" class="dc-side-btn" style="position:relative;width:34px;height:34px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;background:{{ v.queueBtnBg }};color:{{ v.queueBtnColor }};" style-active="transform:scale(0.9);">
-            <span style="font-family:'Material Symbols Outlined';font-size:19px;">queue_music</span>
-            <span style="position:absolute;top:1px;right:1px;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:9px;font-weight:700;min-width:14px;height:14px;border-radius:7px;display:flex;align-items:center;justify-content:center;padding:0 2px;">{{ v.queueCount }}</span>
-          </button>
-        </div>
-        <div style="flex-shrink:0;display:flex;align-items:center;gap:2px;">
-          <button onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_previous</span></button>
-          <button onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" class="dc-play-btn" style="width:46px;height:46px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};margin:0 4px;box-shadow:{{ v.c.e2 }};" style-active="transform:scale(0.94);"><span style="font-family:'Material Symbols Outlined';font-size:24px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span></button>
-          <button onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" class="dc-skip-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurface }};" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};transform:scale(0.92);"><span style="font-family:'Material Symbols Outlined';font-size:22px;">skip_next</span></button>
-        </div>
-        <div style="flex:1;display:flex;align-items:center;justify-content:flex-end;gap:4px;">
-          <button onclick="{{ H.cycleMode }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.modeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">{{ v.modeIcon }}</span></button>
-          <button onclick="{{ H.toggleCurrentLike }}" disabled="{{ v.playDisabled }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.nowPlayingLikeColor }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span class="{{ v.nowPlayingLikeIconClass }}" style="font-family:'Material Symbols Outlined';font-size:19px;">favorite</span></button>
-          <button onclick="{{ H.exportCurrent }}" title="{{ v.exportTooltip }}" class="dc-side-btn" style="width:34px;height:34px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:{{ v.exportCursor }};color:{{ v.c.onSurfaceVariant }};opacity:{{ v.exportOpacity }};" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:19px;">download</span></button>
-        </div>
+      <div class="sw-controls">
+        <button class="{{ v.modeBtnClass }}" onclick="{{ H.cycleMode }}" aria-label="{{ v.modeLabel }}" title="{{ v.modeLabel }}"><span class="ms">{{ v.modeIcon }}</span></button>
+        <button class="sw-ctrl sw-skip" onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" aria-label="上一首" title="上一首"><span class="ms">skip_previous</span></button>
+        <button class="sw-play-big" onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" aria-label="{{ v.playLabel }}" title="{{ v.playLabel }}"><span class="{{ v.playIconClass }}">{{ v.playIcon }}</span></button>
+        <button class="sw-ctrl sw-skip" onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" aria-label="下一首" title="下一首"><span class="ms">skip_next</span></button>
+        <button class="{{ v.likeBtnClass }}" onclick="{{ H.toggleCurrentLike }}" disabled="{{ v.playDisabled }}" aria-label="喜欢" title="喜欢"><span class="ms">favorite</span></button>
       </div>
-
-      <div class="dc-desktop-only" style="width:100%;display:flex;align-items:center;gap:8px;margin-top:14px;flex-shrink:0;">
-        <button onclick="{{ H.toggleAdaptiveVolume }}" class="dc-side-btn" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.adaptiveVolumeColor }};flex-shrink:0;" style-hover="background:{{ v.c.hover }}" style-active="transform:scale(0.9);"><span style="font-family:'Material Symbols Outlined';font-size:17px;">graphic_eq</span></button>
-        <span style="font-family:'Material Symbols Outlined';font-size:18px;color:{{ v.c.onSurfaceVariant }};">volume_up</span>
-        <div onclick="{{ H.setVolume }}" style="flex:1;height:4px;border-radius:2px;background:{{ v.c.outlineVariant }};position:relative;cursor:pointer;"><div style="position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:{{ v.c.onSurfaceVariant }};width:{{ v.volume }}%;"></div></div>
+      <div class="sw-volume">
+        <button class="{{ v.adaptiveBtnClass }}" onclick="{{ H.toggleAdaptiveVolume }}" aria-label="自动音量" title="自动音量：响的歌调小、轻的歌调大"><span class="ms">graphic_eq</span></button>
+        <span class="ms">volume_up</span>
+        <div class="sw-bar-hit" onclick="{{ H.setVolume }}"><div class="sw-bar"><div class="sw-bar-fill" style="width:{{ v.volume }}%;"></div></div></div>
       </div>
-     </div>
-     </sc-if>
-
-     <sc-if value="{{ v.showQueueInPlayer }}">
-     <div style="flex:1;min-height:0;width:100%;display:flex;flex-direction:column;box-sizing:border-box;">
-       <div style="padding:20px 24px 14px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
-         <span style="font-size:16px;font-weight:600;color:{{ v.c.onSurface }};">当前播放列表 · {{ v.queueCount }}</span>
-         <button onclick="{{ H.closeQueuePanel }}" style="display:flex;align-items:center;gap:4px;padding:7px 14px 7px 10px;border-radius:20px;border:none;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurfaceVariant }};font-size:12.5px;font-weight:500;cursor:pointer;">
-           <span style="font-family:'Material Symbols Outlined';font-size:17px;">expand_more</span>收起
-         </button>
-       </div>
-       <div class="dc-scrollbar" style="flex:1;overflow-y:auto;padding:0 24px 24px;display:flex;flex-direction:column;gap:2px;">
-         <!-- 这段 <sc-for> 播放列表行模板和桌面/中间栏的播放队列视图是手工保持一致的两份相同代码
-              （搜索 v.rightIsQueue 定位另一处）。改这里队列行的字段/样式/交互时，务必同步改那边，
-              不要只改一处。 -->
-         <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
-           <div draggable="true" ondragstart="{{ item.onDragStart }}" ondragover="{{ item.onDragOver }}" ondrop="{{ item.onDrop }}" ondragend="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="{{ item.rowStyle }}">
-             <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};width:16px;text-align:center;flex-shrink:0;">{{ item.index }}</span>
-             <span class="dc-queue-drag-handle" style="font-family:'Material Symbols Outlined';font-size:16px;color:{{ v.c.onSurfaceVariant }};cursor:grab;flex-shrink:0;">drag_indicator</span>
-             <div class="dc-queue-move-btns" style="display:none;align-items:center;gap:0;flex-shrink:0;">
-               <button onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveUpOpacity }};flex-shrink:0;">
-                 <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_up</span>
-               </button>
-               <button onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" style="width:24px;height:24px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};opacity:{{ item.moveDownOpacity }};flex-shrink:0;">
-                 <span style="font-family:'Material Symbols Outlined';font-size:15px;">keyboard_arrow_down</span>
-               </button>
-             </div>
-             <div style="width:38px;height:38px;border-radius:8px;{{ item.coverStyle }}display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-               <sc-if value="{{ item.showCoverIcon }}">
-                 <span style="font-family:'Material Symbols Outlined';font-size:16px;color:rgba(255,255,255,.9);">{{ item.playingGlyph }}</span>
-               </sc-if>
-             </div>
-             <div style="flex:1;min-width:0;">
-               <div style="font-size:13.5px;font-weight:500;color:{{ item.titleColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.title }}</div>
-               <div style="font-size:11.5px;color:{{ item.artistColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.artistDisplay }} · {{ item.sourceLabel }}</div>
-             </div>
-             <sc-if value="{{ item.isCached }}"><span title="已缓存，断网也能播" style="font-family:'Material Symbols Outlined';font-size:14px;color:{{ v.c.primary }};flex-shrink:0;">download_done</span></sc-if>
-             <span style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">{{ item.durationStr }}</span>
-             <button onclick="{{ item.onRemove }}" style="width:28px;height:28px;border-radius:50%;border:none;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onSurfaceVariant }};flex-shrink:0;">
-               <span style="font-family:'Material Symbols Outlined';font-size:16px;">close</span>
-             </button>
-           </div>
-         </sc-for>
-       </div>
-     </div>
-     </sc-if>
     </div>
 
   </div>
 
-  <div class="dc-desktop-only" style="height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:{{ v.c.surfaceLow }};border-top:1px solid {{ v.c.outlineVariant }};box-sizing:border-box;">
-    <span style="font-size:11px;color:{{ v.c.onSurfaceVariant }};">本页面仅供学习交流使用，请勿用于任何商业用途</span>
-  </div>
+  <div class="sw-footer">本页面仅供学习交流使用，请勿用于任何商业用途</div>
 
   <sc-if value="{{ v.hasTrack }}">
-  <div class="dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;height:60px;padding:0 8px 0 10px;align-items:center;gap:10px;background:{{ v.c.surfaceHigh }};border-radius:20px;box-shadow:{{ v.c.e2 }};box-sizing:border-box;z-index:51;cursor:pointer;overflow:hidden;">
-    <div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:{{ v.c.outlineVariant }};">
-      <div style="height:100%;border-radius:0 2px 2px 0;background:{{ v.c.primary }};width:{{ v.progressPct }}%;"></div>
+    <div class="sw-mini dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}">
+      <div class="sw-mini-progress" style="width:{{ v.progressPct }}%;"></div>
+      <div class="sw-cover" style="{{ v.track.coverStyle }}">{{ v.track.coverInitial }}</div>
+      <div class="sw-mini-text">
+        <div class="sw-mini-t">{{ v.track.title }}</div>
+        <div class="sw-mini-a">{{ v.track.artistDisplay }}</div>
+      </div>
+      <button class="sw-play-sq" onclick="{{ H.miniPlayToggle }}" disabled="{{ v.playDisabled }}" aria-label="{{ v.playLabel }}" title="{{ v.playLabel }}"><span class="{{ v.playIconClass }}">{{ v.playIcon }}</span></button>
+      <button class="sw-icon-btn" onclick="{{ H.miniNext }}" disabled="{{ v.nextDisabled }}" aria-label="下一首" title="下一首"><span class="ms">skip_next</span></button>
     </div>
-    <div style="width:40px;height:40px;border-radius:8px;{{ v.track.coverStyle }}flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.25);"></div>
-    <div style="flex:1;min-width:0;">
-      <div style="font-size:13px;font-weight:600;color:{{ v.c.onSurface }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.title }}</div>
-      <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.track.artistDisplay }}</div>
-    </div>
-    <button onclick="{{ H.miniPlayToggle }}" disabled="{{ v.playDisabled }}" style="width:40px;height:40px;border-radius:50%;border:none;background:{{ v.c.primary }};display:flex;align-items:center;justify-content:center;cursor:pointer;color:{{ v.c.onPrimary }};flex-shrink:0;" style-active="transform:scale(0.92);">
-      <span style="font-family:'Material Symbols Outlined';font-size:20px;font-variation-settings:'FILL' 1;{{ v.playIconAnimStyle }}">{{ v.playIcon }}</span>
-    </button>
-  </div>
   </sc-if>
 
   <sc-if value="{{ v.hasToast }}">
-  <div class="dc-toast" key="toast-{{ v.toastKey }}" style="background:{{ v.c.inverse }};color:{{ v.c.onInverse }};padding:11px 20px;border-radius:24px;font-size:13px;font-weight:500;box-shadow:{{ v.c.e3 }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ v.toastText }}</div>
+    <div class="sw-toast dc-toast" key="toast-{{ v.toastKey }}" role="status">{{ v.toastText }}</div>
   </sc-if>
 
   <sc-if value="{{ v.showBatteryHint }}">
-  <div class="dc-mobile-only" style="display:none;flex-direction:column;position:fixed;left:12px;right:12px;top:calc(12px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));z-index:150;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};border-radius:16px;padding:14px 16px;box-shadow:{{ v.c.e3 }};box-sizing:border-box;">
-    <div style="font-size:13px;line-height:1.5;">{{ v.batteryHintText }}</div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
-      <sc-if value="{{ v.isNative }}">
-      <button onclick="{{ H.openBatterySettings }}" style="padding:6px 16px;border-radius:16px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.primary }};font-size:12.5px;font-weight:500;cursor:pointer;">去设置</button>
-      </sc-if>
-      <button onclick="{{ H.dismissBatteryHint }}" style="padding:6px 16px;border-radius:16px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:12.5px;font-weight:500;cursor:pointer;">知道了</button>
+    <div class="sw-banner sw-mobile-only">
+      <p>{{ v.batteryHintText }}</p>
+      <div class="sw-banner-acts">
+        <sc-if value="{{ v.isNative }}">
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.openBatterySettings }}">去设置</button>
+        </sc-if>
+        <button class="sw-btn sw-btn-primary" onclick="{{ H.dismissBatteryHint }}">知道了</button>
+      </div>
     </div>
-  </div>
   </sc-if>
 
   <sc-if value="{{ v.showUpdateBanner }}">
-  <div style="display:flex;flex-direction:column;position:fixed;left:12px;right:12px;top:calc(12px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));z-index:150;background:{{ v.c.surfaceHigh }};color:{{ v.c.onSurface }};border-radius:16px;padding:14px 16px;box-shadow:{{ v.c.e3 }};box-sizing:border-box;">
-    <div style="font-size:13px;line-height:1.5;">{{ v.updateBannerText }}</div>
-    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
-      <button onclick="{{ H.dismissUpdate }}" style="padding:6px 16px;border-radius:16px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.primary }};font-size:12.5px;font-weight:500;cursor:pointer;">以后再说</button>
-      <button onclick="{{ H.downloadUpdate }}" style="padding:6px 16px;border-radius:16px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:12.5px;font-weight:500;cursor:pointer;">下载新版</button>
+    <div class="sw-banner">
+      <p>{{ v.updateBannerText }}</p>
+      <div class="sw-banner-acts">
+        <button class="sw-btn sw-btn-outline" onclick="{{ H.dismissUpdate }}">以后再说</button>
+        <button class="sw-btn sw-btn-primary" onclick="{{ H.downloadUpdate }}">下载新版</button>
+      </div>
     </div>
-  </div>
   </sc-if>
 
   <sc-if value="{{ v.hasAddModal }}">
-    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeAddModal }}">
-      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
-        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">添加到歌单</div>
-        <sc-for list="{{ v.playlistOptions }}" as="pl" hint-placeholder-count="3">
-          <div onclick="{{ pl.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;" style-hover="background:{{ v.c.hover }}" style-active="background:{{ v.c.press }};">
-            <span style="width:32px;height:32px;border-radius:8px;background:{{ pl.tileBg }};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span style="font-family:'Material Symbols Outlined';font-size:16px;color:#fff;">{{ pl.icon }}</span></span>
-            <span style="font-size:13.5px;font-weight:500;color:{{ v.c.onSurface }};">{{ pl.name }}</span>
-          </div>
-        </sc-for>
-        <button onclick="{{ H.closeAddModal }}" style="width:100%;margin-top:10px;padding:10px 0;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">取消</button>
+    <div class="dc-modal-overlay" onclick="{{ H.closeAddModal }}">
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="加到歌单">
+        <div class="sw-sheet-title">加到歌单</div>
+        <div class="sw-sheet-sub">{{ v.addModalTrackText }}</div>
+        <div class="sw-lib-list">
+          <sc-for list="{{ v.playlistOptions }}" as="pl" hint-placeholder-count="3">
+            <button class="sw-lib-row sw-press" onclick="{{ pl.onClick }}"><span class="sw-idx">{{ pl.indexLabel }}</span><span class="sw-lib-name"><span>{{ pl.name }}</span></span><span class="sw-lib-count">{{ pl.countLabel }}</span></button>
+          </sc-for>
+        </div>
+        <div class="sw-sheet-foot"><button class="sw-btn sw-btn-outline" onclick="{{ H.closeAddModal }}">取消</button></div>
       </div>
     </div>
   </sc-if>
 
   <sc-if value="{{ v.hasImportModal }}">
-    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeImportModal }}">
-      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
-        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">导入歌单</div>
-        <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">支持网易云音乐歌单链接，或粘贴本站导出的歌单字符串</div>
-        <input class="dc-input" value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:10px;box-sizing:border-box;font-family:inherit;transition:border-color .15s;">
-        <input class="dc-input" value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="歌单名称（可选）" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:8px;box-sizing:border-box;font-family:inherit;transition:border-color .15s;">
-        <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">同名歌单会被直接覆盖；留空则整体替换「喜欢的音乐」（不是合并）</div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button onclick="{{ H.closeImportModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">取消</button>
-          <button onclick="{{ H.confirmImport }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">导入</button>
+    <div class="dc-modal-overlay" onclick="{{ H.closeImportModal }}">
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="导入歌单">
+        <div class="sw-sheet-title">导入歌单</div>
+        <div class="sw-sheet-sub">网易云歌单链接，或者本站导出的歌单字符串</div>
+        <input class="sw-input dc-input" value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" aria-label="歌单链接或导出字符串">
+        <input class="sw-input dc-input" value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="歌单名称（可选）" aria-label="歌单名称">
+        <span class="sw-hint">同名歌单会被直接覆盖；名称留空则整体替换「喜欢的音乐」（不是合并）</span>
+        <div class="sw-sheet-foot">
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeImportModal }}">取消</button>
+          <button class="sw-btn sw-btn-primary" onclick="{{ H.confirmImport }}">导入</button>
         </div>
       </div>
     </div>
   </sc-if>
 
   <sc-if value="{{ v.hasCreateModal }}">
-    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeCreateModal }}">
-      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(340px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
-        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:16px;">新建歌单</div>
-        <input class="dc-input" value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="歌单名称…" maxlength="50" autofocus="{{ true }}" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid {{ v.c.outlineVariant }};background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:14px;outline:none;margin-bottom:16px;box-sizing:border-box;font-family:inherit;transition:border-color .15s;">
-        <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button onclick="{{ H.closeCreateModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">取消</button>
-          <button onclick="{{ H.confirmCreate }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">创建</button>
+    <div class="dc-modal-overlay" onclick="{{ H.closeCreateModal }}">
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="新建歌单">
+        <div class="sw-sheet-title">新建歌单</div>
+        <div class="sw-sheet-sub">建好之后在搜索结果里点 ＋ 把歌加进来</div>
+        <input class="sw-input dc-input" value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="歌单名称…" maxLength="50" autofocus="{{ true }}" aria-label="歌单名称">
+        <div class="sw-sheet-foot">
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeCreateModal }}">取消</button>
+          <button class="sw-btn sw-btn-primary" onclick="{{ H.confirmCreate }}">创建</button>
         </div>
       </div>
     </div>
   </sc-if>
 
   <sc-if value="{{ v.shareModalOpen }}">
-    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeShareModal }}">
-      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
-        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">分享这首歌</div>
-        <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">把下面这段文字发给朋友，链接在微信 / QQ 里可以直接点开</div>
-        <div style="white-space:pre-line;word-break:break-all;padding:14px 16px;border-radius:12px;background:{{ v.c.surfaceHighest }};color:{{ v.c.onSurface }};font-size:13px;line-height:1.7;">{{ v.shareTextPreview }}</div>
+    <div class="dc-modal-overlay" onclick="{{ H.closeShareModal }}">
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="分享这首歌">
+        <div class="sw-sheet-title">分享这首歌</div>
+        <div class="sw-sheet-sub">把下面这段文字发给朋友，链接在微信 / QQ 里可以直接点开</div>
+        <div class="sw-share-box">{{ v.shareTextPreview }}</div>
         <sc-if value="{{ v.shareNoLink }}">
-          <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-top:10px;">这首歌拿不到官方页面链接，只能分享歌曲信息，朋友需要自己搜一下</div>
+          <span class="sw-hint">这首歌拿不到官方页面链接，只能分享歌曲信息，朋友需要自己搜一下</span>
         </sc-if>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
-          <button onclick="{{ H.closeShareModal }}" style="padding:10px 20px;border-radius:20px;border:none;background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">取消</button>
+        <div class="sw-sheet-foot">
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeShareModal }}">取消</button>
           <sc-if value="{{ v.shareCanSystemShare }}">
-            <button onclick="{{ H.systemShare }}" style="padding:10px 20px;border-radius:20px;border:1px solid {{ v.c.outlineVariant }};background:none;color:{{ v.c.primary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">分享到…</button>
+            <button class="sw-btn sw-btn-outline" onclick="{{ H.systemShare }}">分享到…</button>
           </sc-if>
-          <button onclick="{{ H.copyShareText }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">复制</button>
+          <button class="sw-btn sw-btn-primary" onclick="{{ H.copyShareText }}">复制</button>
         </div>
-      </div>
-    </div>
-  </sc-if>
-
-  <sc-if value="{{ v.storagePanelOpen }}">
-    <div class="dc-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;" onclick="{{ H.closeStoragePanel }}">
-      <div class="dc-modal" style="background:{{ v.c.surfaceHigh }};border-radius:28px;padding:24px;width:min(380px, calc(100vw - 32px));box-shadow:{{ v.c.e3 }};" onclick="{{ H.stop }}">
-        <div style="font-size:19px;font-weight:500;color:{{ v.c.onSurface }};margin-bottom:6px;">缓存与离线</div>
-        <div style="font-size:12px;color:{{ v.c.onSurfaceVariant }};margin-bottom:16px;">{{ v.netStatusText }}</div>
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:13px;color:{{ v.c.onSurface }};">
-          <span>已缓存 {{ v.cachedCount }} 首</span>
-          <span style="color:{{ v.c.onSurfaceVariant }};white-space:nowrap;">{{ v.cacheUsageText }}</span>
-        </div>
-        <sc-if value="{{ v.showCacheBar }}">
-        <div style="height:6px;border-radius:3px;background:{{ v.c.outlineVariant }};margin-top:8px;overflow:hidden;">
-          <div style="height:100%;border-radius:3px;background:{{ v.c.primary }};width:{{ v.cacheUsagePct }}%;"></div>
-        </div>
-        </sc-if>
-        <div style="font-size:13px;font-weight:500;color:{{ v.c.onSurface }};margin:18px 0 8px;">缓存上限</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          <sc-for list="{{ v.capChoicesRender }}" as="cap" hint-placeholder-count="5">
-            <span onclick="{{ cap.onClick }}" style="{{ cap.chipStyle }}">{{ cap.label }}</span>
-          </sc-for>
-        </div>
-        <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-top:8px;">超过上限时自动删掉最久没听的歌。无损音质一首大约 30MB</div>
-        <div onclick="{{ H.toggleOfflineOnly }}" style="display:flex;align-items:center;gap:12px;margin-top:18px;cursor:pointer;">
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:13px;font-weight:500;color:{{ v.c.onSurface }};">只播已缓存的歌</div>
-            <div style="font-size:11.5px;color:{{ v.c.onSurfaceVariant }};margin-top:2px;">断网时自动按这个来；联网时打开可以省流量</div>
-          </div>
-          <span style="width:44px;height:24px;border-radius:12px;position:relative;flex-shrink:0;background:{{ v.offlineSwitchBg }};transition:background .2s;">
-            <span style="position:absolute;top:2px;left:{{ v.offlineThumbLeft }}px;width:20px;height:20px;border-radius:50%;background:{{ v.offlineThumbBg }};transition:left .2s;box-shadow:0 1px 2px rgba(0,0,0,.35);"></span>
-          </span>
-        </div>
-        <div style="display:flex;gap:8px;justify-content:space-between;margin-top:22px;">
-          <button onclick="{{ H.clearAudioCache }}" style="padding:10px 16px;border-radius:20px;border:none;background:none;color:{{ v.c.heart }};font-size:14px;font-weight:500;cursor:pointer;" style-active="background:{{ v.c.press }};">清空缓存</button>
-          <button onclick="{{ H.closeStoragePanel }}" style="padding:10px 24px;border-radius:20px;border:none;background:{{ v.c.primary }};color:{{ v.c.onPrimary }};font-size:14px;font-weight:500;cursor:pointer;" style-active="opacity:0.85;">完成</button>
-        </div>
-        <sc-if value="{{ v.isNative }}">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding-top:14px;border-top:1px solid {{ v.c.outlineVariant }};font-size:12px;color:{{ v.c.onSurfaceVariant }};">
-          <span>版本 {{ v.appVersionText }}</span>
-          <span style="display:flex;gap:16px;">
-            <span onclick="{{ H.openBatterySettings }}" style="color:{{ v.c.primary }};cursor:pointer;">后台运行设置</span>
-            <span onclick="{{ H.checkUpdateNow }}" style="color:{{ v.c.primary }};cursor:pointer;">检查更新</span>
-          </span>
-        </div>
-        </sc-if>
       </div>
     </div>
   </sc-if>
@@ -796,50 +906,20 @@ if ('serviceWorker' in navigator) {
 <script type="text/x-dc" data-dc-script>
 
 
-const THEMES = {
-  dark: {
-    bg: '#141218', surfaceLow: '#1D1B20', surface: '#211F26', surfaceHigh: '#2B2930', surfaceHighest: '#36343B',
-    onSurface: '#E6E0E9', onSurfaceVariant: '#CAC4D0', outline: '#948F99', outlineVariant: '#49454F',
-    primary: '#D0BCFF', onPrimary: '#381E72', primaryContainer: '#4F378B', onPrimaryContainer: '#EADDFF',
-    secondaryContainer: '#4A4458', onSecondaryContainer: '#E8DEF8', heart: '#FFB4AB',
-    hover: 'rgba(230,224,233,0.08)', press: 'rgba(230,224,233,0.12)',
-    e2: '0 1px 2px rgba(0,0,0,.45), 0 2px 6px 2px rgba(0,0,0,.25)',
-    e3: '0 4px 8px 3px rgba(0,0,0,.25), 0 1px 3px rgba(0,0,0,.4)',
-    glass: 'rgba(43,41,48,0.72)', inverse: '#E6E0E9', onInverse: '#322F35',
-  },
-  light: {
-    bg: '#FFFBFE', surfaceLow: '#F7F2FA', surface: '#F3EDF7', surfaceHigh: '#ECE6F0', surfaceHighest: '#E6E0E9',
-    onSurface: '#1D1B20', onSurfaceVariant: '#49454F', outline: '#79747E', outlineVariant: '#CAC4D0',
-    primary: '#6750A4', onPrimary: '#FFFFFF', primaryContainer: '#EADDFF', onPrimaryContainer: '#21005D',
-    secondaryContainer: '#E8DEF8', onSecondaryContainer: '#1D192B', heart: '#BA1A1A',
-    hover: 'rgba(29,27,32,0.06)', press: 'rgba(29,27,32,0.10)',
-    e2: '0 1px 2px rgba(0,0,0,.12), 0 2px 6px 2px rgba(0,0,0,.08)',
-    e3: '0 4px 8px 3px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.14)',
-    glass: 'rgba(236,230,240,0.72)', inverse: '#322F35', onInverse: '#F5EFF7',
-  },
-};
-
-const SOURCE_COLORS = { netease: '#ff6b6b', qq: '#4dd0e1', soundcloud: '#ff8800' };
 const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', soundcloud: 'SoundCloud' };
 
 // 可搜索的音源。SoundCloud 反复修不好（client_id 失效 / HLS 流打不开），已从搜索里下掉：
 // 不出现在筛选芯片里，也不参与聚合搜索。但它仍然是一个合法的 source 取值——已经在歌单 /
 // 播放队列里的 SoundCloud 曲目照旧显示、照旧能试着播放，详情 / 分享 / 缓存那套代码一行没删，
-// 所以上面 SOURCE_COLORS / SOURCE_LABELS 和下面 GRADIENTS 里的 soundcloud 条目都得留着。
+// 所以上面 SOURCE_LABELS 里的 soundcloud 条目得留着。
 // 特别注意：千万不要拿这份数组去 DRY 下面的 EXPORT_SOURCE_CODES / EXPORT_SOURCE_LIST——
 // 那两个是歌单导出串的位置相关编码，少了 soundcloud 会把用户已经存下的导出串解错。
 // 想恢复搜索：把 'soundcloud' 加回这个数组即可（筛选芯片和 state.sources 都从这里推导），
 // 另外 src/api/index.js 里 searchAll 的默认 sources 也同步去掉了 soundcloud。
 const SEARCH_SOURCES = ['netease', 'qq'];
 
-// 侧栏「已缓存」那一项的 id。它不是真歌单，不进持久化的 playlists；起个不会和 'liked' / 'pl_…' 撞的名字
+// 歌单列表里「已缓存」那一项的 id。它不是真歌单，不进持久化的 playlists；起个不会和 'liked' / 'pl_…' 撞的名字
 const CACHED_VIEW_ID = '__cached';
-const GRADIENTS = {
-  netease: 'linear-gradient(135deg, rgba(255,107,107,.55), rgba(255,107,107,.14))',
-  qq: 'linear-gradient(135deg, rgba(77,208,225,.55), rgba(77,208,225,.14))',
-  soundcloud: 'linear-gradient(135deg, rgba(255,136,0,.55), rgba(255,136,0,.16))',
-  empty: 'linear-gradient(135deg, rgba(148,148,158,.32), rgba(148,148,158,.10))',
-};
 
 function makeQueue() {
   return [
@@ -860,16 +940,23 @@ function fmtTime(s) {
 }
 
 function fmtArtistAlbum(t) {
-  return t.album ? `${t.artist} - ${t.album}` : t.artist;
+  return t.album ? `${t.artist} — ${t.album}` : t.artist;
 }
 
-// 缩略图/卡片背景：优先用 track.cover 真实封面图，缺失时回退音源渐变色。
+// 列表编号：01、02…（等宽数字，瑞士风格的索引）
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// 缩略图 / 大封面：有 track.cover 真实封面图就当背景图；没有就留空，由 CSS 画灰色方块，上面写歌名首字（coverInitial）。
 // 已缓存的歌如果存了封面字节，用本地那份（coverSrc），断网时列表和播放页也有图
 function coverStyle(t) {
   const src = coverSrc(t.cover);
-  return src
-    ? `background-image:url('${src}');background-size:cover;background-position:center;`
-    : `background:${GRADIENTS[t.source] || GRADIENTS.netease};`;
+  return src ? `background-image:url('${src}');` : '';
+}
+
+function coverInitial(t) {
+  return coverSrc(t.cover) ? '' : String(t.title || '').trim().charAt(0);
 }
 
 // 运行在 APK（Capacitor 原生壳）里还是普通浏览器里。原生壳会在页面任何脚本之前注入 window.Capacitor，
@@ -922,7 +1009,7 @@ async function nativeFetchBlob(url, timeoutMs) {
 const AUDIO_CACHE_DB = 'listening-audio-cache';
 const AUDIO_CACHE_STORE = 'tracks';
 
-// 缓存上限：在「缓存与离线」面板里选，存 localStorage，单位 MB，0 表示不限。
+// 缓存上限：在设置页「缓存与离线」里选，存 localStorage，单位 MB，0 表示不限。
 // 网页版默认保持原来的 300MB；APK 默认 2GB——QQ 默认挑无损，一首 25~35MB，300MB 只够十来首，
 // 满了就按"最久没听"静默删，断网时就会出现"明明听过却放不了"
 const CACHE_CAP_STORAGE_KEY = 'listening-cache-cap-mb-v1';
@@ -1583,11 +1670,12 @@ function savePersistedLibrary(s) {
 // 另外歌单库每 5 秒跟着播放进度落盘一次，主题只是个 UI 偏好，没必要跟着高频写
 const THEME_STORAGE_KEY = 'listening-player-theme-v1';
 
+// 默认白底（瑞士风格改版之前默认是黑底）：存的是 dark 才用黑底，和 <head> 首屏脚本的判断一致
 function loadTheme() {
   try {
-    return localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark';
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
   } catch (e) {
-    return 'dark';
+    return 'light';
   }
 }
 
@@ -1595,7 +1683,7 @@ function saveTheme(theme) {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);
   } catch (e) {
-    /* 隐私模式下存不了就下次打开回到默认夜间，不影响播放主功能 */
+    /* 隐私模式下存不了就下次打开回到默认白底，不影响播放主功能 */
   }
 }
 
@@ -1802,6 +1890,11 @@ class Component extends DCLogic {
   state = (() => {
     const base = {
       theme: loadTheme(), searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
+      // 当前页：顶栏三个图标 search（搜索）/ library（歌单，viewingPlaylistId 有值时是歌单详情）/ settings（设置）。
+      // 不存盘，每次打开都从搜索页开始
+      page: 'search',
+      // 右上角 ⋮ 菜单：'player'（播放页：分享 / 下载）、'playlist'（歌单详情：导出 / 删除）或 null
+      openMenu: null,
       searchResults: [],
       // 搜索联想 / 历史：suggestions = 逐字联想的曲目（只查网易云）；searchFocused 跟随输入框真实焦点；
       // suggestDismissed = 主动收起下拉（Esc / 已发起搜索），输入或重新聚焦时复位；两者分开，避免
@@ -1820,33 +1913,32 @@ class Component extends DCLogic {
       lyrics: [], lyricsTrackId: null, lyricsLoading: false,
       // queue = 曲库：所有搜过/导入过/收藏过的曲目数据，只增不减（歌单、喜欢的音乐都靠它按 id 解析内容）
       queue: [],
-      // playOrder = 当前播放队列：驱动下一曲/上一曲和右侧队列面板的曲目 id 顺序，和曲库是两回事
+      // playOrder = 当前播放队列：驱动下一曲/上一曲和播放页「队列」的曲目 id 顺序，和曲库是两回事
       playOrder: [],
       currentId: null, currentTime: 0, seeking: false, volume: 70, adaptiveVolume: false, playing: false, playMode: 0, loadingTrackId: null,
       // 当前曲目是否已整段缓存好（= 导出按钮是否可点）。运行时状态，不持久化，每次播放重新推导
       exportReady: false,
+      // mediaView：播放页看封面还是歌词；rightPanel === 'queue' 时播放页改看队列（电脑右栏 / 手机全屏播放页都一样）
       mediaView: 'cover', rightPanel: 'browse', dragId: null,
-      mobileSidebarOpen: false, mobileNowPlayingExpanded: false,
+      mobileNowPlayingExpanded: false,
       toast: null, toastKey: 0,
       addModalId: null, createModalOpen: false, createName: '',
-      importModalOpen: false, importUrl: '', importPlaylistName: '', exportedPlaylistId: null,
+      importModalOpen: false, importUrl: '', importPlaylistName: '',
       shareModalOpen: false,
       playlists: [
         { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
       ],
-      selectedPlaylist: 'liked', hoverPlaylistId: null,
       // 离线相关（运行时状态，都不进歌单库存档）：online 跟着浏览器的 online/offline 事件走；
-      // offlineOnly / cacheCapMB 是面板里的两个设置，各自存自己的 localStorage key；
+      // offlineOnly / cacheCapMB 是设置页里的两个设置，各自存自己的 localStorage key；
       // cacheRev / cachedCount / cachedBytes 在已缓存索引重读后更新（索引本身在 this._cachedKeys 等实例字段上）；
       // batchCache 是「缓存全部」的进度 { pid, done, total, failed }；localSearch 标记当前搜索结果来自本地曲库
       online: navigator.onLine !== false,
       offlineOnly: loadOfflineOnly(),
       cacheCapMB: loadCacheCapMB(),
       cacheRev: 0, cachedCount: 0, cachedBytes: 0,
-      storagePanelOpen: false,
       batchCache: null,
       localSearch: false,
-      // APK 专属：App 版本号（检查更新 / 面板里显示）、发现的新版本 { tag }
+      // APK 专属：App 版本号（检查更新 / 设置页里显示）、发现的新版本 { tag }
       appVersion: '', updateInfo: null,
     };
     const persisted = loadPersistedLibrary();
@@ -1887,6 +1979,7 @@ class Component extends DCLogic {
     clearTimeout(this._loadWatchdogTimer);
     clearTimeout(this._toastTimer);
     window.removeEventListener('resize', this._onResizeMeasureLyrics);
+    if (this._lyricsResizeObserver) this._lyricsResizeObserver.disconnect();
     document.removeEventListener('visibilitychange', this._onDiagVisibility);
     document.removeEventListener('freeze', this._onDiagFreeze);
     document.removeEventListener('resume', this._onDiagResume);
@@ -1934,7 +2027,15 @@ class Component extends DCLogic {
     // 挂载后量一次，横竖屏切换/软键盘收起等触发的 resize 再量一次；量不到就让 renderVals 用兜底值
     this._onResizeMeasureLyrics = () => this.measureLyricsViewport();
     window.addEventListener('resize', this._onResizeMeasureLyrics);
-    setTimeout(() => this.measureLyricsViewport(), 0);
+    setTimeout(() => {
+      this.measureLyricsViewport();
+      // 歌名折成两行、切换横竖屏等都会让歌词区变高变矮，不一定触发窗口 resize：有 ResizeObserver 就直接盯着它
+      const el = document.querySelector('.dc-media-viewport');
+      if (el && window.ResizeObserver) {
+        this._lyricsResizeObserver = new ResizeObserver(() => this.measureLyricsViewport());
+        this._lyricsResizeObserver.observe(el);
+      }
+    }, 0);
     this.syncThemeChrome();
     // 诊断记录：前后台切换、页面被系统冻结 / 恢复、网络断开 / 恢复——后台切歌卡住时拿这些时间点对照
     this._onDiagVisibility = () => diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' });
@@ -1997,7 +2098,7 @@ class Component extends DCLogic {
   // 连同正在放的歌一起销毁
   handleNativeBack() {
     const s = this.state;
-    if (s.storagePanelOpen) { this.closeStoragePanel(); return; }
+    if (s.openMenu) { this.closeMenu(); return; }
     if (s.shareModalOpen) { this.closeShareModal(); return; }
     if (s.importModalOpen) { this.closeImportModal(); return; }
     if (s.createModalOpen) { this.closeCreateModal(); return; }
@@ -2006,9 +2107,9 @@ class Component extends DCLogic {
       if (s.rightPanel === 'queue') this.closeQueuePanel(); else this.closeMobileNowPlaying();
       return;
     }
-    if (s.mobileSidebarOpen) { this.closeMobileSidebar(); return; }
-    if (s.rightPanel === 'queue') { this.closeQueuePanel(); return; }
-    if (s.viewingPlaylistId) { this.backFromPlaylist(); return; }
+    if (s.page === 'library' && s.viewingPlaylistId) { this.backFromPlaylist(); return; }
+    // 歌单页、设置页按返回先回到搜索页（起始页），在搜索页再按才切到后台
+    if (s.page !== 'search') { this.setPage('search'); return; }
     nativeCall('App', 'minimizeApp').catch(() => {});
   }
 
@@ -2027,7 +2128,7 @@ class Component extends DCLogic {
     nativeCall('AppShell', 'openBatterySettings', { target: 'auto' }).catch(() => this.showToast('打不开系统设置，请手动在设置里找到「听音乐」'));
   }
 
-  // 检查更新：自动检查每天最多一次，手动（面板里点「检查更新」）随时查。失败都不打扰，手动的才提示
+  // 检查更新：自动检查每天最多一次，手动（设置页里点「检查更新」）随时查。失败都不打扰，手动的才提示
   async checkForUpdate(manual) {
     let info;
     try { info = await nativeCall('App', 'getInfo'); } catch (e) { return; }
@@ -2341,8 +2442,9 @@ class Component extends DCLogic {
     if (next) this.startAdaptiveLoop(); else this.stopAdaptiveLoop();
   }
 
-  selectPlaylist(id) { this.patch({ selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse', mobileSidebarOpen: false }); }
-  backFromPlaylist() { this.patch({ viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse' }); }
+  // 打开歌单详情（歌单页里的一行 / 电脑左栏）。不碰 rightPanel：队列在播放栏里，看歌单时不该把它关掉
+  selectPlaylist(id) { this.patch({ page: 'library', viewingPlaylistId: id, openMenu: null }); }
+  backFromPlaylist() { this.patch({ viewingPlaylistId: null, openMenu: null }); }
   removeFromPlaylist(trackId) {
     const pid = this.state.viewingPlaylistId;
     if (!pid) return;
@@ -2352,8 +2454,6 @@ class Component extends DCLogic {
     this.persist();
     this.showToast('已从歌单移除');
   }
-  hoverPlaylist(id) { this.patch({ hoverPlaylistId: id }); }
-  unhoverPlaylist() { this.patch({ hoverPlaylistId: null }); }
   deletePlaylist(id, e) {
     e.stopPropagation();
     const pl = this.state.playlists.find(p => p.id === id);
@@ -2361,7 +2461,6 @@ class Component extends DCLogic {
     if (!confirm(`确定删除歌单「${pl.name}」？`)) return;
     this.patch(s => ({
       playlists: s.playlists.filter(p => p.id !== id),
-      selectedPlaylist: s.selectedPlaylist === id ? null : s.selectedPlaylist,
       viewingPlaylistId: s.viewingPlaylistId === id ? null : s.viewingPlaylistId,
     }));
     this.persist();
@@ -2370,8 +2469,10 @@ class Component extends DCLogic {
 
   stop(e) { e.stopPropagation(); }
 
-  toggleTheme() {
-    const next = this.state.theme === 'dark' ? 'light' : 'dark';
+  toggleTheme() { this.setTheme(this.state.theme === 'dark' ? 'light' : 'dark'); }
+
+  setTheme(next) {
+    if (next !== 'light' && next !== 'dark') return;
     this.patch({ theme: next });
     // 主题存自己的 key，不走 persist()——那个只管歌单库，theme 从来就不在它的字段里
     saveTheme(next);
@@ -2390,7 +2491,7 @@ class Component extends DCLogic {
     });
   }
 
-  // ==== 离线：已缓存索引 / 离线挑歌 / 缓存与离线面板 / 一键缓存歌单 / 本地搜索 ====
+  // ==== 离线：已缓存索引 / 离线挑歌 / 设置页的缓存与离线 / 一键缓存歌单 / 本地搜索 ====
 
   // 缓存写入往往一连串（写音频、写元数据、补封面各广播一次），合并成一次重读
   scheduleCacheRefresh() {
@@ -2516,11 +2617,21 @@ class Component extends DCLogic {
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
 
-  openStoragePanel() {
-    this.patch({ storagePanelOpen: true });
-    this.refreshCacheIndex(); // 面板上的占用以打开这一刻为准
+  // 切页（顶栏三个图标）。设置页上的缓存占用以打开这一刻为准，进去时重读一次已缓存索引
+  setPage(page) {
+    this.patch({ page, openMenu: null });
+    if (page === 'settings') this.refreshCacheIndex();
   }
-  closeStoragePanel() { this.patch({ storagePanelOpen: false }); }
+  openSettings() { this.setPage('settings'); }
+  // 已经在歌单页的歌单详情里，再点顶栏「歌单」回到歌单列表；否则回到上次停留的地方
+  goLibrary() {
+    if (this.state.page === 'library' && this.state.viewingPlaylistId) this.backFromPlaylist();
+    else this.setPage('library');
+  }
+
+  // 右上角 ⋮ 菜单（播放页 / 歌单详情）：同一时间最多开一个
+  toggleMenu(name) { this.patch(s => ({ openMenu: s.openMenu === name ? null : name })); }
+  closeMenu() { this.patch({ openMenu: null }); }
 
   setCacheCap(mb) {
     if (mb === this.state.cacheCapMB) return;
@@ -2659,7 +2770,7 @@ class Component extends DCLogic {
     if (seq !== this._searchSeq) return true;
     const results = this.searchLocalLibrary(q);
     if (!results.length && reason !== 'offline') return false;
-    this.patch({ appliedQuery: q, hasSearched: true, isSearching: false, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: results, localSearch: true, suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
+    this.patch({ page: 'search', appliedQuery: q, hasSearched: true, isSearching: false, searchResults: results, localSearch: true, suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
     const cachedN = results.filter(t => this.isTrackCached(t)).length;
     if (reason === 'offline') {
       this.showToast(results.length ? `离线中，在本地曲库里找到 ${results.length} 首（${cachedN} 首已缓存）` : `离线中，本地曲库里没有「${q}」`);
@@ -2682,15 +2793,15 @@ class Component extends DCLogic {
   // 还留着深色地址栏。对安装版 PWA 的系统状态栏**无效**——实测那条状态栏跟的是手机系统的
   // 深浅色设置，既不看这个 meta 也不看 manifest 的 theme_color。别再试图从这里控制它，
   // 详见 docs/mobile-status-bar.md。
-  // 同时把 data-app-theme 写到 <html> 上，body 底色（整页回弹露出的颜色）和 color-scheme
-  // （原生滚动条、输入框、光标的明暗）由 <head> 里的静态 CSS 接管——这两个在 React 挂载前
-  // 就得是对的，不能靠重渲染。<head> 的防闪脚本已经按 localStorage 设过一遍，这里挂载后和
-  // 每次切主题时再按 THEMES 的真值校准一次，防止那边写死的副本和 THEMES 漂移
+  // 同时把 data-app-theme 写到 <html> 上：所有颜色都是 <head> 里按这个属性定义的 CSS 变量，
+  // 整页底色和 color-scheme（原生滚动条、输入框、光标的明暗）跟着一起切。<head> 的防闪脚本已经按
+  // localStorage 设过一遍，这里挂载后和每次切主题时再校准一次；meta 的颜色直接读 --bg，不另抄色值
   syncThemeChrome(theme) {
     const t = theme || this.state.theme;
     document.documentElement.setAttribute('data-app-theme', t);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute('content', THEMES[t].surfaceLow);
+    const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    if (meta && bg) meta.setAttribute('content', bg);
     // APK 里状态栏由页面自己画（沉浸），系统只画图标：图标深浅要跟着主题换，见 docs/mobile-status-bar.md
     if (IS_NATIVE) nativeSetBarStyle(t);
   }
@@ -2820,7 +2931,7 @@ class Component extends DCLogic {
     const seq = this._searchSeq;
     // 断网时联网搜索必然失败，直接在本地曲库里搜
     if (!navigator.onLine) { this.showLocalSearch(q, seq, 'offline'); return; }
-    this.patch({ appliedQuery: q, hasSearched: true, isSearching: true, localSearch: false, viewingPlaylistId: null, selectedPlaylist: null, rightPanel: 'browse', searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
+    this.patch({ page: 'search', appliedQuery: q, hasSearched: true, isSearching: true, localSearch: false, searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
     this.showToast(`正在搜索 "${q}" …`);
     // 从 SEARCH_SOURCES 而不是 state.sources 的 key 出发：让可搜索源只有这一个卡口，即使
     // state.sources 里残留了已下掉的源（部分回退 / 手改 / 以后改成持久化）也注不进搜索；
@@ -3054,7 +3165,7 @@ class Component extends DCLogic {
     const id = 'pl_' + Date.now();
     this.patch(s => ({
       playlists: [...s.playlists, { id, name, builtin: false, trackIds: [], glyph: 'queue_music', iconFill: 0, tileBg: pickTileColor() }],
-      createModalOpen: false, createName: '', selectedPlaylist: id, viewingPlaylistId: id, rightPanel: 'browse',
+      createModalOpen: false, createName: '', page: 'library', viewingPlaylistId: id,
     }));
     this.persist();
     this.showToast(`已创建歌单「${name}」`);
@@ -3107,13 +3218,7 @@ class Component extends DCLogic {
 
     const text = await encodePlaylistExport(ctx.name, tracks);
     this.copyToClipboard(text).then(ok => {
-      if (!ok) { this.showToast('复制失败，请手动复制'); return; }
-      if (this._exportRevertTimer) clearTimeout(this._exportRevertTimer);
-      this.patch({ exportedPlaylistId: pid });
-      this._exportRevertTimer = setTimeout(() => {
-        // 只在还是同一次导出结果时才复原，避免旧定时器把用户刚点的新反馈提前擦掉
-        if (this.state.exportedPlaylistId === pid) this.patch({ exportedPlaylistId: null });
-      }, 2000);
+      this.showToast(ok ? `已复制「${ctx.name}」，发给朋友在「导入」里粘贴` : '复制失败，请手动复制');
     });
   }
 
@@ -3179,12 +3284,15 @@ class Component extends DCLogic {
 
   toggleQueuePanel() { this.patch(s => ({ rightPanel: s.rightPanel === 'queue' ? 'browse' : 'queue' })); }
   closeQueuePanel() { this.patch({ rightPanel: 'browse' }); }
-  // 手机端：左侧歌单栏改为滑入抽屉
-  toggleMobileSidebar() { this.patch(s => ({ mobileSidebarOpen: !s.mobileSidebarOpen })); }
-  closeMobileSidebar() { this.patch({ mobileSidebarOpen: false }); }
-  // 手机端：正在播放栏收起为迷你条，点击展开为全屏
-  toggleMobileNowPlaying() { this.patch(s => ({ mobileNowPlayingExpanded: !s.mobileNowPlayingExpanded })); }
-  closeMobileNowPlaying() { this.patch({ mobileNowPlayingExpanded: false }); }
+  // 播放页顶部「封面 / 歌词 / 队列」三选一
+  setMediaView(view) {
+    if (view === 'queue') { this.patch({ rightPanel: 'queue' }); return; }
+    this.patch({ mediaView: view, rightPanel: 'browse' });
+    if (view === 'lyrics') this.ensureLyricsForCurrent();
+  }
+  // 手机端：底部迷你播放条，点开是全屏播放页
+  toggleMobileNowPlaying() { this.patch(s => ({ mobileNowPlayingExpanded: !s.mobileNowPlayingExpanded, openMenu: null })); }
+  closeMobileNowPlaying() { this.patch({ mobileNowPlayingExpanded: false, openMenu: null }); }
   cycleMode() { this.patch(s => ({ playMode: (s.playMode + 1) % 3 })); this.persist(); }
 
   // ==== Real audio playback ====
@@ -3602,9 +3710,10 @@ class Component extends DCLogic {
   }
 
   // 按下开始拖动进度条：立即按当前位置预览一次（等价于原来的点击跳转），
-  // 之后监听 document 级别的 mousemove/mouseup 而不是绑在窄窄的 4px 进度条上，
-  // 这样鼠标拖出进度条范围也能继续跟手；真正的音频跳转只在松手时提交一次，
-  // 避免流式（HLS）音源在拖动过程中被逐像素地反复 seek
+  // 之后监听 document 级别的 pointermove/pointerup 而不是绑在窄窄的进度条上，
+  // 这样拖出进度条范围也能继续跟手；真正的音频跳转只在松手时提交一次，
+  // 避免流式（HLS）音源在拖动过程中被逐像素地反复 seek。用指针事件而不是鼠标事件：
+  // 手机上手指也能拖（鼠标事件在触屏上只会在抬手时模拟一次点击）
   seekStart(e) {
     const a = this._audio;
     if (!a || !a.duration) return;
@@ -3618,14 +3727,16 @@ class Component extends DCLogic {
       a.currentTime = finalTime;
       this.setState({ currentTime: finalTime, seeking: false });
       mediaSessionBridge.setPosition(a.duration, finalTime);
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
       document.body.style.userSelect = '';
     };
     move(e.clientX);
     document.body.style.userSelect = 'none';
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   }
 
   setVolume(e) {
@@ -3637,7 +3748,7 @@ class Component extends DCLogic {
     this.persist();
   }
 
-  // 用户主动点某一首（搜索结果 / 歌单详情 / 队列面板）：这首歌已经在播放队列里就直接播放、
+  // 用户主动点某一首（搜索结果 / 歌单详情 / 播放页的队列）：这首歌已经在播放队列里就直接播放、
   // 不打乱队列顺序；不在队列里才插到最前面——跟 startTrack 的区别是这个会按需要改 playOrder
   playTrackAt(id) {
     const s = this.state;
@@ -3711,17 +3822,17 @@ class Component extends DCLogic {
 
   renderVals() {
     const s = this.state;
-    const c = THEMES[s.theme];
     // 离线挑歌模式下没缓存的歌在列表里变淡，一眼看出哪些现在放不了
     const offlineMode = this.isOfflineMode(s);
     const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]) || null;
     const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
-    const track = { ...rawTrack, coverGradient: GRADIENTS[rawTrack.source] || GRADIENTS.netease, artistDisplay: fmtArtistAlbum(rawTrack), coverStyle: coverStyle(rawTrack) };
+    const track = {
+      ...rawTrack, artistDisplay: fmtArtistAlbum(rawTrack),
+      coverStyle: coverStyle(rawTrack), coverInitial: matchedTrack ? coverInitial(rawTrack) : '',
+    };
     const nowPlayingLiked = !!s.liked[track.id];
     const duration = Math.max(track.duration || 0, 0.1);
     const progressPct = Math.min(100, (s.currentTime / duration) * 100);
-    const thumbSize = s.seeking ? 16 : 12;
-    const thumbStyle = `position:absolute;top:50%;left:${progressPct}%;width:${thumbSize}px;height:${thumbSize}px;border-radius:50%;background:${c.primary};transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.35);${s.seeking ? '' : 'transition:width .15s,height .15s;'}`;
 
     // 动态歌词（从 API 解析的实时歌词）——必须和当前曲目对得上号才展示，对不上宁可显示"暂无歌词"，
     // 也不能拿别的内容凑数（历史上这里曾经在没有歌词时回退到一段写死的示例歌词，会显示成"别的歌的歌词"）
@@ -3734,35 +3845,26 @@ class Component extends DCLogic {
       && (s.lyricsLoading || (s.loadingTrackId != null && s.loadingTrackId === s.currentId));
     let curLyricIdx = 0;
     for (let i = 0; i < lyricsForRender.length; i++) { if (lyricsForRender[i].time <= s.currentTime) curLyricIdx = i; }
+    // 每行高度和 CSS 里 .sw-ly 的 48px 是同一个数，改一处要改另一处
     const lineHeight = 48;
-    // 手机端全屏播放页的歌词可视区高度实测不到 300px（更矮的机型/横屏尤其明显），硬编码会让当前行明显偏上；
-    // componentDidMount/resize 里测量真实高度存进 state，这里只在还没测量到时兜底用 300
+    // 歌词可视区的真实高度在 componentDidMount / ResizeObserver 里量了存进 state，这里只在还没量到时兜底用 300
     const viewportH = s.lyricsViewportH || 300;
     const offset = viewportH / 2 - (curLyricIdx * lineHeight + lineHeight / 2);
-    const lyricsRender = lyricsForRender.map((l, i) => {
-      const d = Math.abs(i - curLyricIdx);
-      let style;
-      if (d === 0) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:700;color:${c.primary};transition:all .4s ease;padding:0 12px;text-align:center;line-height:1.35;`;
-      else if (d === 1) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;color:${c.onSurface};opacity:0.55;transition:all .4s ease;padding:0 12px;text-align:center;`;
-      else if (d === 2) style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:400;color:${c.onSurfaceVariant};opacity:0.32;transition:all .4s ease;padding:0 12px;text-align:center;`;
-      else style = `height:${lineHeight}px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:400;color:${c.onSurfaceVariant};opacity:0.14;transition:all .4s ease;padding:0 12px;text-align:center;`;
-      return { text: l.text, style, key: 'ly' + i };
-    });
+    const lyricsRender = lyricsForRender.map((l, i) => ({ text: l.text, cls: i === curLyricIdx ? 'sw-ly is-cur' : 'sw-ly', key: 'ly' + i }));
 
-    // 队列面板显示的是播放队列（playOrder），不是整个曲库——按 id 从曲库里取曲目数据
+    // 队列显示的是播放队列（playOrder），不是整个曲库——按 id 从曲库里取曲目数据
     const queueRender = s.playOrder.map(id => s.queue.find(t => t.id === id)).filter(Boolean).map((t, i, arr) => {
       const isCurrent = t.id === s.currentId;
       const isFirst = i === 0, isLast = i === arr.length - 1;
       const cached = this.isTrackCached(t);
       return {
-        ...t, index: i + 1, isCurrent, coverStyle: coverStyle(t), showCoverIcon: !t.cover,
-        sourceLabel: SOURCE_LABELS[t.source], durationStr: fmtTime(t.duration),
+        ...t, index: i + 1, indexLabel: pad2(i + 1), isCurrent, notCurrent: !isCurrent,
+        coverStyle: coverStyle(t), coverInitial: coverInitial(t),
+        sourceLabel: SOURCE_LABELS[t.source] || t.source, durationStr: t.duration ? fmtTime(t.duration) : '',
         artistDisplay: fmtArtistAlbum(t),
-        playingGlyph: isCurrent ? 'graphic_eq' : 'music_note',
         isCached: cached,
-        rowStyle: `display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;cursor:grab;background:${isCurrent ? c.secondaryContainer : 'transparent'};transition:background .15s;opacity:${offlineMode && !cached ? 0.45 : 1};`,
-        titleColor: isCurrent ? c.onSecondaryContainer : c.onSurface,
-        artistColor: isCurrent ? c.onSecondaryContainer : c.onSurfaceVariant,
+        rowClass: 'sw-qrow sw-press' + (isCurrent ? ' is-current' : ''),
+        rowOpacity: offlineMode && !cached ? '0.45' : '1',
         onClick: () => this.playTrackAt(t.id),
         onRemove: (e) => { e.stopPropagation(); this.removeTrack(t.id); },
         onDragStart: () => this.dragStart(t.id),
@@ -3770,51 +3872,45 @@ class Component extends DCLogic {
         onDrop: (e) => e.preventDefault(),
         // 手机端上移/下移按钮（触屏没有原生拖拽），复用同一份 playOrder 排序状态
         isFirst, isLast,
-        moveUpOpacity: isFirst ? 0.35 : 1,
-        moveDownOpacity: isLast ? 0.35 : 1,
         onMoveUp: (e) => { e.stopPropagation(); this.moveQueueItem(t.id, -1); },
         onMoveDown: (e) => { e.stopPropagation(); this.moveQueueItem(t.id, 1); },
       };
     });
 
-    const isPlaylistView = !!s.viewingPlaylistId;
-    const isCachedView = s.viewingPlaylistId === CACHED_VIEW_ID;
-    const viewCtx = isPlaylistView ? this.playlistContext(s.viewingPlaylistId, s) : null;
+    // 当前页：顶栏三个图标。歌单页里有 viewingPlaylistId（而且这个歌单还在）时是歌单详情，否则是歌单列表
+    const isSearchPage = s.page === 'search';
+    const isLibraryPage = s.page === 'library';
+    const isSettingsPage = s.page === 'settings';
+    const viewCtx = (isLibraryPage && s.viewingPlaylistId) ? this.playlistContext(s.viewingPlaylistId, s) : null;
+    const isPlaylistView = !!viewCtx;
+    const isCachedView = isPlaylistView && s.viewingPlaylistId === CACHED_VIEW_ID;
+    const isLibraryRoot = isLibraryPage && !isPlaylistView;
     const q = s.appliedQuery;
-    let displayTracks;
-    if (isPlaylistView && viewCtx) {
+    let displayTracks = [];
+    if (isPlaylistView) {
       // 按歌单自己的顺序取曲目（playlistContext 里按 ids 逐个找），不能用 s.queue.filter——那是曲库的顺序
-      // （曲目第一次被搜到/导入时落进去的顺序），跟歌单/喜欢自己的顺序是两回事，之前这里写成 filter
-      // 导致列表显示顺序对不上实际的 trackIds/likedOrder
+      // （曲目第一次被搜到/导入时落进去的顺序），跟歌单/喜欢自己的顺序是两回事
       displayTracks = viewCtx.tracks;
-    } else if (s.hasSearched) {
-      // 直接用各平台搜索接口返回的结果，不再在客户端按关键词做子串过滤——
-      // 平台搜索本身是分词/模糊匹配（比如「明日方舟终末地」能搜到相关曲目，但标题/歌手里未必含这个完整子串），
-      // 之前那层 title/artist.includes(q) 的过滤会把这类结果全滤掉，导致顶部/空状态显示「找到 0 首」，
-      // 跟搜索完成时 toast 里的「找到 N 首」对不上
+    } else if (isSearchPage && s.hasSearched) {
+      // 直接用各平台搜索接口返回的结果，不在客户端按关键词做子串过滤——平台搜索本身是分词/模糊匹配，
+      // 标题/歌手里未必含完整的关键词，再过滤一遍会把这些结果全滤掉，跟提示条里的「找到 N 首」对不上
       displayTracks = s.searchResults;
-    } else {
-      displayTracks = [];
     }
-    const showPrompt = !isPlaylistView && !s.hasSearched;
-    const rowsRender = displayTracks.map(t => {
+    const rowsRender = displayTracks.map((t, i) => {
       const isCurrent = t.id === s.currentId;
       const liked = !!s.liked[t.id];
       const cached = this.isTrackCached(t);
       return {
         ...t, isHeader: false, isRow: true,
-        isCached: cached, cachedColor: isCurrent ? c.onPrimaryContainer : c.primary,
+        indexLabel: pad2(i + 1), isCurrent, notCurrent: !isCurrent,
+        isCached: cached,
         rowOpacity: offlineMode && !cached ? '0.45' : '1',
-        coverStyle: coverStyle(t), showCoverIcon: !t.cover, sourceLabel: SOURCE_LABELS[t.source],
-        sourceDot: SOURCE_COLORS[t.source] || SOURCE_COLORS.netease,
+        rowClass: 'sw-row sw-press dc-result-row' + (isCurrent ? ' is-current' : ''),
+        coverStyle: coverStyle(t), coverInitial: coverInitial(t), sourceLabel: SOURCE_LABELS[t.source] || t.source,
         artistDisplay: fmtArtistAlbum(t),
-        cardBg: isCurrent ? c.primaryContainer : c.surface,
-        titleColor: isCurrent ? c.onPrimaryContainer : c.onSurface,
-        artistColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
-        sourceLabelColor: isCurrent ? c.onPrimaryContainer : c.onSurfaceVariant,
-        likeGlyph: 'favorite', likeIconClass: liked ? 'dc-heart-icon dc-heart-filled' : 'dc-heart-icon',
-        likeColor: liked ? c.heart : c.onSurfaceVariant,
+        likeBtnClass: liked ? 'sw-icon-btn is-liked' : 'sw-icon-btn',
         primaryActionIcon: isCachedView ? 'delete' : (isPlaylistView ? 'playlist_remove' : 'playlist_add'),
+        primaryActionLabel: isCachedView ? '删除缓存' : (isPlaylistView ? '移出歌单' : '加到歌单'),
         onPlay: () => this.playTrackAt(t.id),
         onAdd: isPlaylistView ? (e) => { e.stopPropagation(); this.removeFromPlaylist(t.id); } : (e) => { e.stopPropagation(); this.openAddModal(t.id); },
         onLike: (e) => { e.stopPropagation(); this.toggleLike(t.id); },
@@ -3822,7 +3918,7 @@ class Component extends DCLogic {
     });
 
     // 分组只作用于搜索结果视图；歌单/喜欢视图保持扁平（避免打乱拖拽顺序 / 播放全部语义）
-    const groupingActive = !isPlaylistView && s.hasSearched && s.groupBy !== 'none';
+    const groupingActive = isSearchPage && s.hasSearched && s.groupBy !== 'none';
     let tracksRender = rowsRender;
     if (groupingActive) {
       const groupKeyOf = (r) => {
@@ -3841,198 +3937,188 @@ class Component extends DCLogic {
       for (const k of order) {
         const g = groups.get(k);
         flat.push({ isHeader: true, isRow: false, key: 'grp-' + k, groupLabel: g.label, groupCount: g.items.length, groupIcon });
-        for (const r of g.items) flat.push(r);
+        // 序号在组内重新从 01 数，不然一组里会是 03、05、07 这样跳着排
+        g.items.forEach((r, j) => flat.push({ ...r, indexLabel: pad2(j + 1) }));
       }
       tracksRender = flat;
     }
 
-    // 搜索结果视图下的「分组」切换芯片
-    const showGroupChips = !isPlaylistView && s.hasSearched;
+    // 搜索结果视图下的「分组」切换；音源勾选。都是文字按钮，选中的加粗加下划线 / 方块填实
+    const showGroupChips = isSearchPage && s.hasSearched;
     const groupChipsRender = [['none', '不分组'], ['artist', '歌手'], ['source', '来源']].map(([key, label]) => {
       const active = s.groupBy === key;
-      return {
-        key, label, active,
-        chipStyle: `display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;flex-shrink:0;cursor:pointer;background:${active ? c.secondaryContainer : 'transparent'};color:${active ? c.onSecondaryContainer : c.onSurfaceVariant};border:1px solid ${active ? 'transparent' : c.outlineVariant};`,
-        onClick: () => this.setGroupBy(key),
-      };
+      return { key, label, active, cls: active ? 'sw-opt is-on' : 'sw-opt', onClick: () => this.setGroupBy(key) };
     });
-
     const sourcesRender = SEARCH_SOURCES.map(key => {
-      const checked = s.sources[key];
-      return {
-        key, label: SOURCE_LABELS[key], dot: SOURCE_COLORS[key], checked,
-        chipStyle: `display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:20px;flex-shrink:0;cursor:pointer;background:${checked ? c.secondaryContainer : 'transparent'};color:${checked ? c.onSecondaryContainer : c.onSurfaceVariant};border:1px solid ${checked ? 'transparent' : c.outlineVariant};`,
-        onClick: () => this.toggleSource(key),
-      };
+      const checked = !!s.sources[key];
+      return { key, label: SOURCE_LABELS[key], checked, cls: checked ? 'sw-check is-on' : 'sw-check', onClick: () => this.toggleSource(key) };
     });
 
-    // 搜索联想 / 历史下拉：有输入内容时展示网易云联想曲目，输入为空时展示最近搜索历史
+    // 搜索联想 / 历史：输入框有字时下拉展示网易云联想曲目；没字时是搜索历史——还没搜过的时候历史直接列在页面上
+    // （「最近搜索」），这时就不再弹同一份历史的下拉；键盘上下键照样能选，高亮落在页面上的那一行
     const suggestIsHistory = !s.searchQuery.trim();
     const suggestData = suggestIsHistory ? s.searchHistory : s.suggestions;
-    const showSuggest = s.searchFocused && !s.suggestDismissed && suggestData.length > 0;
-    const suggestRowStyle = (active) => `display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;background:${active ? c.secondaryContainer : 'transparent'};transition:background .12s;`;
+    const showPrompt = isSearchPage && !s.hasSearched;
+    const showRecents = showPrompt && s.searchHistory.length > 0;
+    const showSuggest = isSearchPage && s.searchFocused && !s.suggestDismissed && suggestData.length > 0 && !(suggestIsHistory && showRecents);
     const suggestRender = suggestIsHistory
-      ? s.searchHistory.map((kw, i) => {
-          const active = i === s.suggestActiveIdx;
-          return {
-            key: 'h' + i, title: kw, subtitle: '', hasSub: false, icon: 'history', active,
-            rowStyle: suggestRowStyle(active),
-            titleColor: active ? c.onSecondaryContainer : c.onSurface,
-            subColor: active ? c.onSecondaryContainer : c.onSurfaceVariant,
-            onPick: (e) => { e.preventDefault(); this.pickHistory(i); },
-          };
-        })
-      : s.suggestions.map((t, i) => {
-          const active = i === s.suggestActiveIdx;
-          return {
-            key: t.uid || ('s' + i), title: t.title || '', subtitle: t.artist || '', hasSub: !!t.artist, icon: 'music_note', active,
-            rowStyle: suggestRowStyle(active),
-            titleColor: active ? c.onSecondaryContainer : c.onSurface,
-            subColor: active ? c.onSecondaryContainer : c.onSurfaceVariant,
-            onPick: (e) => { e.preventDefault(); this.pickSuggest(i); },
-          };
-        });
+      ? s.searchHistory.map((kw, i) => ({
+          key: 'h' + i, title: kw, subtitle: '', hasSub: false, icon: 'history',
+          rowClass: 'sw-sg-row' + (i === s.suggestActiveIdx ? ' is-active' : ''),
+          onPick: (e) => { e.preventDefault(); this.pickHistory(i); },
+        }))
+      : s.suggestions.map((t, i) => ({
+          key: t.uid || ('s' + i), title: t.title || '', subtitle: t.artist || '', hasSub: !!t.artist, icon: 'music_note',
+          rowClass: 'sw-sg-row' + (i === s.suggestActiveIdx ? ' is-active' : ''),
+          onPick: (e) => { e.preventDefault(); this.pickSuggest(i); },
+        }));
+    const recentRender = s.searchHistory.map((kw, i) => ({
+      key: 'r' + i, text: kw,
+      rowClass: 'sw-recent-row' + (s.searchFocused && suggestIsHistory && i === s.suggestActiveIdx ? ' is-active' : ''),
+      onPick: () => this.pickHistory(i),
+    }));
+
+    // 列表上方那一行：搜索页是「“关键词” 找到 N 首」（关键词加粗），歌单详情是标题下面的「N 首 · 已缓存 M 首」。
+    // statusText 是整句，测试和读屏用；页面上搜索页拆成 statusLead（加粗）+ statusTail 两段排
+    const offlineNote = offlineMode && !isCachedView
+      ? (s.online ? ' · 只播已缓存：灰色的歌先跳过' : ' · 离线中：灰色的歌没缓存，暂时放不了')
+      : '';
+    let statusLead = '', statusTail = '';
+    if (isPlaylistView) {
+      const n = displayTracks.length;
+      if (isCachedView) {
+        statusTail = `${n} 首 · 占用 ${formatBytes(s.cachedBytes)} · 断网也能播`;
+      } else {
+        const cachedN = displayTracks.filter(t => this.isTrackCached(t)).length;
+        statusTail = `${n} 首` + (cachedN ? ` · 已缓存 ${cachedN} 首` : '');
+      }
+      statusTail += offlineNote;
+    } else if (s.localSearch) {
+      statusLead = `“${q}”`;
+      statusTail = ` 在本地曲库里找到 ${displayTracks.length} 首（不是联网搜索结果）` + offlineNote;
+    } else {
+      statusLead = q ? `“${q}”` : '';
+      statusTail = `${q ? ' ' : ''}找到 ${displayTracks.length} 首` + offlineNote;
+    }
+    const hasNoResults = !s.isSearching && (isPlaylistView || (isSearchPage && s.hasSearched)) && displayTracks.length === 0;
+    let emptyTitle = '', emptyText = '';
+    if (isCachedView) { emptyTitle = '还没有缓存好的歌'; emptyText = '听过一遍的歌会自动缓存；也可以打开一个歌单，点「缓存全部」'; }
+    else if (isPlaylistView) { emptyTitle = '这个歌单还没有歌'; emptyText = '去搜索页找歌，点 ＋ 加进来'; }
+    else if (s.localSearch) { emptyTitle = `本地曲库里没有“${q}”`; emptyText = '离线时只能搜听过、存过的歌，联网后再搜'; }
+    else { emptyTitle = `没有找到“${q}”`; emptyText = '换个关键词试试，或者把另一个音源也勾上'; }
 
     const idx = s.playOrder.indexOf(s.currentId);
     const MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
+    const MODE_LABELS = ['列表循环', '随机播放', '单曲循环'];
     const modeActive = s.playMode !== 0;
     const isLoadingCurrent = s.loadingTrackId != null && s.loadingTrackId === s.currentId;
-    // 导出按钮是否可点：有当前曲目、且它已整段缓存好
+    // 「下载」能不能点：有当前曲目、且它已整段缓存好
     const canExport = s.exportReady && !!matchedTrack;
     // 分享面板的文本预览。API bundle 还没加载好时留空，按钮照常在，点了会提示
     const shareAPI = window.ListeningAPI;
     const shareTextPreview = (shareAPI && matchedTrack) ? shareAPI.shareText(matchedTrack) : '';
     const shareHasLink = !!(shareAPI && matchedTrack && shareAPI.officialSongUrl(matchedTrack));
 
-    const playlistOptions = s.playlists.map(pl => ({ id: pl.id, name: pl.name, icon: pl.glyph, tileBg: pl.tileBg, onClick: () => this.confirmAdd(pl.id, pl.name) }));
-
-    const playlistRowLook = (selected) => ({
-      rowStyle: `display:flex;align-items:center;gap:12px;padding:9px 10px 9px 14px;border-radius:28px;cursor:pointer;background:${selected ? c.secondaryContainer : 'transparent'};transition:background .15s;`,
-      nameColor: selected ? c.onSecondaryContainer : c.onSurface,
-      countColor: selected ? c.onSecondaryContainer : c.onSurfaceVariant,
-    });
-    // 「已缓存」排在最上面：它不是真歌单（不进持久化的 playlists），不能删，数量就是能列出来的已缓存首数
-    const cachedEntry = {
-      id: CACHED_VIEW_ID, name: '已缓存', builtin: true, glyph: 'download_done', iconFill: 0,
-      tileBg: 'linear-gradient(135deg,#5B9BD5,#3A6EA8)',
-      countLabel: s.cachedCount,
-      ...playlistRowLook(s.selectedPlaylist === CACHED_VIEW_ID),
-      deleteDisplay: 'none', deleteBtnClass: '',
-      onClick: () => this.selectPlaylist(CACHED_VIEW_ID),
-      onMouseEnter: () => {}, onMouseLeave: () => {},
-      onDelete: (e) => e.stopPropagation(),
-    };
-    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => {
-      const selected = pl.id === s.selectedPlaylist;
-      const hovered = s.hoverPlaylistId === pl.id;
+    // 歌单数量：和歌单详情页用同一套「在 queue 里能查到」的过滤逻辑算，避免 trackIds/liked 里有 queue 已经删掉的
+    // 悬空 id 时，外面数量和点进去的数量对不上
+    const playlistCount = (pl) => pl.id === 'liked'
+      ? s.queue.filter(t => s.liked[t.id]).length
+      : s.queue.filter(t => (pl.trackIds || []).includes(t.id)).length;
+    // 「已缓存」排在最上面：它不是真歌单（不进持久化的 playlists），不能删，数量就是能列出来的已缓存首数。
+    // 编号 01、02…；内置的两个（已缓存、喜欢的音乐）名字后面带个小图标。歌单里存的 tileBg 不再画出来，但数据原样留着
+    const cachedEntry = { id: CACHED_VIEW_ID, name: '已缓存', builtin: true, glyph: 'download_done', countLabel: s.cachedCount };
+    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => ({ ...pl, countLabel: playlistCount(pl) }))].map((pl, i) => {
+      const selected = isPlaylistView && pl.id === s.viewingPlaylistId;
       return {
-        ...pl,
-        // 和歌单详情页用同一套「在 queue 里能查到」的过滤逻辑算数量，避免 trackIds/liked 里有 queue 已经删掉的悬空 id 时，外面数量和点进去的数量对不上
-        countLabel: pl.id === 'liked' ? s.queue.filter(t => s.liked[t.id]).length : s.queue.filter(t => (pl.trackIds || []).includes(t.id)).length,
-        ...playlistRowLook(selected),
-        deleteDisplay: (hovered && !pl.builtin) ? 'flex' : 'none',
-        // 手机端没有 hover，删除图标靠 CSS 断点强制常驻显示（见 .dc-pl-delete-btn 规则）；
-        // 内置歌单（喜欢的音乐）本来就不该有删除按钮，这里不给它加这个 class，断点样式就不会误命中它
-        deleteBtnClass: pl.builtin ? '' : 'dc-pl-delete-btn',
+        ...pl, indexLabel: pad2(i + 1),
+        hasGlyph: !!pl.builtin, glyph: pl.builtin ? (pl.glyph || '') : '',
+        sideRowClass: 'sw-lib-row sw-press' + (selected ? ' is-selected' : ''),
         onClick: () => this.selectPlaylist(pl.id),
-        onMouseEnter: () => this.hoverPlaylist(pl.id),
-        onMouseLeave: () => this.unhoverPlaylist(),
-        onDelete: (e) => this.deletePlaylist(pl.id, e),
       };
-    })];
+    });
+    const playlistOptions = s.playlists.map((pl, i) => ({
+      id: pl.id, name: pl.name, indexLabel: pad2(i + 1), countLabel: playlistCount(pl),
+      onClick: () => this.confirmAdd(pl.id, pl.name),
+    }));
+    const addTrack = s.addModalId != null
+      ? (s.searchResults.find(t => t.id === s.addModalId) || s.queue.find(t => t.id === s.addModalId))
+      : null;
+    const viewedPlaylist = isPlaylistView ? s.playlists.find(p => p.id === s.viewingPlaylistId) : null;
 
     const batchHere = !!(s.batchCache && s.batchCache.pid === s.viewingPlaylistId);
-    // 「缓存与离线」面板
+    // 设置页「缓存与离线」
     const capChoicesRender = CACHE_CAP_CHOICES_MB.map(mb => {
       const active = mb === s.cacheCapMB;
-      return {
-        key: 'cap' + mb, label: capLabel(mb),
-        chipStyle: `display:flex;align-items:center;padding:7px 14px;border-radius:20px;cursor:pointer;font-size:12.5px;background:${active ? c.secondaryContainer : 'transparent'};color:${active ? c.onSecondaryContainer : c.onSurfaceVariant};border:1px solid ${active ? 'transparent' : c.outlineVariant};`,
-        onClick: () => this.setCacheCap(mb),
-      };
+      return { key: 'cap' + mb, label: capLabel(mb), active, cls: active ? 'is-on' : '', onClick: () => this.setCacheCap(mb) };
     });
 
     const rightIsQueue = s.rightPanel === 'queue';
-    const mediaIsLyrics = s.mediaView === 'lyrics';
-    const sidebarClass = 'dc-sidebar' + (s.mobileSidebarOpen ? ' dc-open' : '');
-    const nowPlayingClass = 'dc-nowplaying' + (s.mobileNowPlayingExpanded ? ' dc-open' : '');
-    const showQueueInPlayer = s.mobileNowPlayingExpanded && rightIsQueue;
+    const mediaIsQueue = rightIsQueue;
+    const mediaIsLyrics = !rightIsQueue && s.mediaView === 'lyrics';
+    const mediaIsCover = !mediaIsQueue && !mediaIsLyrics;
+    const playerMenuOpen = s.openMenu === 'player' && !!matchedTrack;
+    const playlistMenuOpen = s.openMenu === 'playlist' && isPlaylistView;
 
     return {
       v: {
-        c, track,
-        currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, thumbStyle, volume: s.volume,
-        adaptiveVolumeColor: s.adaptiveVolume ? c.primary : c.onSurfaceVariant,
+        // 有当前曲目时手机底部有迷你播放条，列表和提示条要给它让位
+        shellClass: 'dc-app-shell' + (matchedTrack ? ' has-mini' : ''),
+        navSearchClass: 'sw-nav-btn' + (isSearchPage ? ' is-active' : ''),
+        navLibraryClass: 'sw-nav-btn' + (isLibraryPage ? ' is-active' : ''),
+        navSettingsClass: 'sw-nav-btn' + (isSettingsPage ? ' is-active' : ''),
+        page: s.page, isSearchPage, isLibraryPage, isSettingsPage, isLibraryRoot, isPlaylistView,
+        track,
+        currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, volume: s.volume,
+        thumbClass: 'sw-bar-thumb' + (s.seeking ? ' is-seeking' : ''),
+        adaptiveBtnClass: 'sw-ctrl' + (s.adaptiveVolume ? ' is-on' : ' is-dim'),
         lyricsRender, lyricsOffset: offset,
         hasLyrics, lyricsEmpty: !hasLyrics,
-        lyricsEmptyIcon: lyricsPending ? 'lyrics' : 'music_off',
         lyricsEmptyText: lyricsPending ? '歌词加载中…' : '暂无歌词',
-        lyricsEmptyIconStyle: lyricsPending ? 'animation:searchPulse 1.2s ease-in-out infinite;' : '',
+        lyricsEmptyClass: 'sw-empty-title' + (lyricsPending ? ' is-pulsing' : ''),
         queueRender, queueCount: s.playOrder.length, tracksRender,
+        listClass: isPlaylistView ? 'sw-list has-rule' : 'sw-list',
         searchQuery: s.searchQuery,
         showSuggest, suggestIsHistory, suggestRender, showClear: !!s.searchQuery,
-        isPlaylistView, isLibraryView: !isPlaylistView,
+        showRecents, recentRender,
         playlistHeaderName: viewCtx ? viewCtx.name : '',
+        backRowClass: 'sw-back-row' + (playlistMenuOpen ? ' has-menu' : ''),
+        playlistMenuOpen,
+        canDeletePlaylist: !!(viewedPlaylist && !viewedPlaylist.builtin),
         showPlayAll: isPlaylistView && displayTracks.length > 0,
         // 「缓存全部」：「已缓存」视图里没意义；正在缓存这个歌单时按钮变成进度，再点是停止
         showCacheAll: isPlaylistView && !isCachedView && displayTracks.length > 0,
         cacheAllLabel: batchHere ? `缓存中 ${s.batchCache.done + s.batchCache.failed}/${s.batchCache.total} · 点此停止` : '缓存全部',
         cacheAllIcon: batchHere ? 'progress_activity' : 'download',
-        cacheAllIconStyle: batchHere ? 'animation:iconSpin .9s linear infinite;display:inline-block;' : '',
-        exportBtnLabel: s.exportedPlaylistId === s.viewingPlaylistId ? '已导出到剪贴板' : '导出歌单',
-        exportBtnIcon: s.exportedPlaylistId === s.viewingPlaylistId ? 'check' : 'ios_share',
-        isSearching: s.isSearching,
-        hasNoResults: !showPrompt && !s.isSearching && displayTracks.length === 0,
-        showPrompt, showStatusText: !showPrompt && !s.isSearching,
-        emptyIcon: isCachedView ? 'download_done' : (isPlaylistView ? 'queue_music' : 'search_off'),
-        emptyText: isCachedView
-          ? '还没有缓存好的歌：听过一遍的歌会自动缓存，也可以在歌单里点「缓存全部」'
-          : (isPlaylistView
-            ? '这个歌单还没有歌曲，去搜索页添加吧'
-            : (s.localSearch ? '离线中，本地曲库里没有找到，联网后再搜' : '没有找到相关歌曲，换个关键词试试')),
-        statusText: (isPlaylistView
-          ? (isCachedView
-            ? `已缓存 · ${displayTracks.length} 首 · 占用 ${formatBytes(s.cachedBytes)}（断网也能播 · 点垃圾桶删除缓存）`
-            : `${viewCtx ? viewCtx.name : ''} · ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · － 移出歌单）`)
-          : (s.localSearch
-            ? `本地曲库里匹配“${q}”的 ${displayTracks.length} 首（不是联网搜索结果）`
-            : (q
-              ? `“${q}” 找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`
-              : `找到 ${displayTracks.length} 首（点击播放 · ♡ 喜欢 · ＋ 加到歌单）`)))
-          + (offlineMode && !isCachedView ? (s.online ? ' · 只播已缓存：灰色的歌先跳过' : ' · 离线中：灰色的歌没缓存，暂时放不了') : ''),
-        viewIsList: !showPrompt && displayTracks.length > 0,
-        mediaIsCover: !mediaIsLyrics, mediaIsLyrics,
-        mediaDiscStyle: `width:230px;height:230px;border-radius:50%;position:relative;box-shadow:${c.e3};flex-shrink:0;background-image:repeating-radial-gradient(circle at center, rgba(0,0,0,.16) 0px, rgba(0,0,0,.16) 1.5px, transparent 1.5px, transparent 9px), ${track.cover ? `url('${coverSrc(track.cover)}')` : track.coverGradient};background-size:auto, cover;background-position:center;animation:vinylSpin 9s linear infinite;animation-play-state:${s.playing ? 'running' : 'paused'};`,
-        // 全屏播放页手机端的封面氛围背景：一层放大模糊的封面图（无封面时退化成来源渐变）+ 一层主题面色半透明遮罩，
-        // 分成两个 div 叠加，省得手写 hex->rgba 换算
-        ambientStyle: track.cover
-          ? `position:absolute;inset:-24px;z-index:0;background-image:url('${coverSrc(track.cover)}');background-size:cover;background-position:center;filter:blur(48px) saturate(1.35) brightness(${s.theme === 'dark' ? 0.6 : 0.9});transform:scale(1.3);`
-          : `position:absolute;inset:-24px;z-index:0;background:${track.coverGradient};`,
-        ambientOverlayStyle: `position:absolute;inset:0;z-index:0;background:${c.surfaceLow};opacity:0.8;`,
-        rightIsQueue, rightIsBrowse: !rightIsQueue,
-        showQueueInPlayer, showNowPlayingBody: !showQueueInPlayer,
-        queueBtnBg: rightIsQueue ? c.primaryContainer : 'transparent',
-        queueBtnColor: rightIsQueue ? c.onPrimaryContainer : c.onSurface,
+        cacheAllIconClass: batchHere ? 'ms is-spinning' : 'ms',
+        isSearching: isSearchPage && s.isSearching,
+        hasNoResults, emptyTitle, emptyText,
+        showPrompt, showStatusText: isSearchPage && s.hasSearched && !s.isSearching,
+        statusLead, statusTail, statusText: (statusLead + statusTail).trim(),
+        viewIsList: displayTracks.length > 0 && (isPlaylistView || (isSearchPage && s.hasSearched)),
+        mediaIsCover, mediaIsLyrics, mediaIsQueue,
+        mediaViewportClass: 'dc-media-viewport' + (mediaIsCover ? '' : ' is-fill'),
+        tabCoverClass: 'sw-tab' + (mediaIsCover ? ' is-on' : ''),
+        tabLyricsClass: 'sw-tab' + (mediaIsLyrics ? ' is-on' : ''),
+        tabQueueClass: 'sw-tab' + (mediaIsQueue ? ' is-on' : ''),
+        nowPlayingClass: 'dc-nowplaying' + (s.mobileNowPlayingExpanded ? ' dc-open' : ''),
+        npHeadClass: 'sw-np-head' + (playerMenuOpen ? ' has-menu' : ''),
+        playerMenuOpen,
+        // 「下载」没缓存完时也照样能点（点了提示还没缓存完），只是灰一点、下面带一行说明
+        exportDisabled: !canExport,
+        exportItemClass: 'sw-menu-item' + (canExport ? '' : ' is-dim'),
         sourcesRender,
         showGroupChips, groupChipsRender,
         prevDisabled: !(idx >= 0 && s.playOrder.length > 1), nextDisabled: !(idx >= 0 && s.playOrder.length > 1),
         playDisabled: !matchedTrack, hasTrack: !!matchedTrack,
-        themeIcon: s.theme === 'dark' ? 'dark_mode' : 'light_mode',
-        switchTrackBg: s.theme === 'dark' ? c.primary : c.outlineVariant,
-        switchThumbBg: s.theme === 'dark' ? c.onPrimary : c.surfaceLow,
-        switchThumbLeft: s.theme === 'dark' ? 26 : 2,
-        switchIconColor: s.theme === 'dark' ? c.primary : c.onSurfaceVariant,
         playIcon: isLoadingCurrent ? 'progress_activity' : (s.playing ? 'pause' : 'play_arrow'),
-        playIconAnimStyle: isLoadingCurrent ? 'animation:iconSpin .9s linear infinite;display:inline-block;' : '',
-        modeIcon: MODE_ICONS[s.playMode], modeColor: modeActive ? c.primary : c.onSurfaceVariant,
-        nowPlayingLikeIconClass: nowPlayingLiked ? 'dc-heart-icon dc-heart-filled' : 'dc-heart-icon',
-        nowPlayingLikeColor: nowPlayingLiked ? c.heart : c.onSurfaceVariant,
-        // 导出按钮：未缓存完时 38% 不透明度置灰 + 默认指针 + 提示"听一遍之后可以导出"
-        exportOpacity: canExport ? '1' : '0.38',
-        exportCursor: canExport ? 'pointer' : 'default',
-        exportTooltip: canExport ? '导出这首歌到本地' : '听一遍之后可以导出',
+        playIconClass: 'ms' + (isLoadingCurrent ? ' is-spinning' : ''),
+        playLabel: isLoadingCurrent ? '加载中' : (s.playing ? '暂停' : '播放'),
+        modeIcon: MODE_ICONS[s.playMode], modeLabel: MODE_LABELS[s.playMode],
+        modeBtnClass: 'sw-ctrl' + (modeActive ? ' is-on' : ' is-dim'),
+        likeBtnClass: 'sw-ctrl' + (nowPlayingLiked ? ' is-liked' : ' is-dim'),
         playlistsRender,
-        hasAddModal: !!s.addModalId, playlistOptions,
+        hasAddModal: s.addModalId != null, playlistOptions,
+        addModalTrackText: addTrack ? (addTrack.artist ? `${addTrack.title} · ${addTrack.artist}` : addTrack.title) : '',
         hasCreateModal: s.createModalOpen, createName: s.createName,
         hasImportModal: s.importModalOpen, importUrl: s.importUrl, importPlaylistName: s.importPlaylistName,
         shareModalOpen: s.shareModalOpen, shareTextPreview,
@@ -4050,11 +4136,10 @@ class Component extends DCLogic {
           ? `有新版本 ${s.updateInfo.tag}${s.appVersion ? `（当前 ${s.appVersion}）` : ''}。下载后点开安装，会直接覆盖这一版，歌单和缓存都还在。`
           : '',
         appVersionText: s.appVersion || '—',
-        // 离线：顶栏标签 + 「缓存与离线」面板
+        // 离线：顶栏右边的红色图标（点了进设置页），以及设置页里的「缓存与离线」
         showOfflineChip: offlineMode,
         offlineChipIcon: s.online ? 'download_done' : 'cloud_off',
         offlineChipText: s.online ? '只播缓存' : '离线',
-        storagePanelOpen: s.storagePanelOpen,
         netStatusText: s.online
           ? (s.offlineOnly ? '已联网 · 只播已缓存的歌（省流量）' : '已联网 · 听过的歌会自动缓存')
           : '没有网络 · 现在只能放已缓存的歌',
@@ -4063,15 +4148,19 @@ class Component extends DCLogic {
         showCacheBar: s.cacheCapMB > 0,
         cacheUsagePct: s.cacheCapMB > 0 ? Math.min(100, (s.cachedBytes / (s.cacheCapMB * 1024 * 1024)) * 100) : 0,
         capChoicesRender,
-        offlineSwitchBg: s.offlineOnly ? c.primary : c.outlineVariant,
-        offlineThumbBg: s.offlineOnly ? c.onPrimary : c.surfaceLow,
-        offlineThumbLeft: s.offlineOnly ? 22 : 2,
-        // 手机端：歌单抽屉是否打开（控制遮罩层显隐）
-        mobileSidebarOpen: s.mobileSidebarOpen,
-        sidebarClass, nowPlayingClass,
+        offlineOnly: s.offlineOnly,
+        offlineToggleClass: 'sw-toggle' + (s.offlineOnly ? ' is-on' : ''),
+        isLightTheme: s.theme === 'light', isDarkTheme: s.theme === 'dark',
+        themeLightClass: s.theme === 'light' ? 'is-on' : '',
+        themeDarkClass: s.theme === 'dark' ? 'is-on' : '',
       },
       H: {
-        toggleTheme: () => this.toggleTheme(),
+        goSearch: () => this.setPage('search'),
+        goLibrary: () => this.goLibrary(),
+        goSettings: () => this.setPage('settings'),
+        openSettings: () => this.openSettings(),
+        setThemeLight: () => this.setTheme('light'),
+        setThemeDark: () => this.setTheme('dark'),
         clearAudioCache: () => this.clearAudioCache(),
         copyDiagLog: () => this.copyDiagLog(),
         doSearch: () => this.doSearch(),
@@ -4080,16 +4169,25 @@ class Component extends DCLogic {
         focusSearch: () => this.focusSearch(),
         blurSearch: () => this.blurSearch(),
         clearSearch: () => this.clearSearch(),
+        // 下拉里的「清空」用 mousedown + preventDefault，免得输入框先失焦把下拉收掉；页面上那个是普通按钮
         clearHistory: (e) => { e.preventDefault(); this.clearHistory(); },
+        clearHistoryNow: () => this.clearHistory(),
         backFromPlaylist: () => this.backFromPlaylist(),
+        togglePlaylistMenu: (e) => { e.stopPropagation(); this.toggleMenu('playlist'); },
+        togglePlayerMenu: (e) => { e.stopPropagation(); this.toggleMenu('player'); },
+        closeMenu: () => this.closeMenu(),
+        menuShare: () => { this.closeMenu(); this.openShareModal(); },
+        menuExport: () => { this.closeMenu(); this.exportCurrentTrack(); },
+        menuExportPlaylist: () => { this.closeMenu(); this.exportPlaylist(); },
+        menuDeletePlaylist: (e) => { this.closeMenu(); this.deletePlaylist(this.state.viewingPlaylistId, e); },
+        showCover: () => this.setMediaView('cover'),
+        showLyrics: () => this.setMediaView('lyrics'),
+        showQueue: () => this.setMediaView('queue'),
         toggleMediaView: () => this.toggleMediaView(),
-        toggleQueuePanel: () => this.toggleQueuePanel(),
-        closeQueuePanel: () => this.closeQueuePanel(),
-        toggleMobileSidebar: () => this.toggleMobileSidebar(),
-        closeMobileSidebar: () => this.closeMobileSidebar(),
         toggleMobileNowPlaying: () => this.toggleMobileNowPlaying(),
         closeMobileNowPlaying: () => this.closeMobileNowPlaying(),
         miniPlayToggle: (e) => { e.stopPropagation(); this.togglePlay(); },
+        miniNext: (e) => { e.stopPropagation(); this.stepTrack(1); },
         togglePlay: () => this.togglePlay(),
         prev: () => this.stepTrack(-1),
         next: () => this.stepTrack(1),
@@ -4098,10 +4196,8 @@ class Component extends DCLogic {
         toggleAdaptiveVolume: () => this.toggleAdaptiveVolume(),
         cycleMode: () => this.cycleMode(),
         toggleCurrentLike: () => this.toggleLike(track.id),
-        exportCurrent: () => this.exportCurrentTrack(),
         dragEnd: () => this.dragEnd(),
         closeAddModal: () => this.closeAddModal(),
-        openShareModal: () => this.openShareModal(),
         closeShareModal: () => this.closeShareModal(),
         copyShareText: () => this.copyShareText(),
         systemShare: () => this.systemShare(),
@@ -4112,7 +4208,6 @@ class Component extends DCLogic {
         confirmCreate: () => this.confirmCreate(),
         stop: (e) => this.stop(e),
         playAllInPlaylist: () => this.playAllInPlaylist(),
-        exportPlaylist: () => this.exportPlaylist(),
         openImportModal: () => this.openImportModal(),
         closeImportModal: () => this.closeImportModal(),
         setImportUrl: (e) => this.setImportUrl(e),
@@ -4120,8 +4215,6 @@ class Component extends DCLogic {
         importKeyDown: (e) => this.importKeyDown(e),
         confirmImport: () => this.confirmImport(),
         dismissBatteryHint: () => this.dismissBatteryHint(),
-        openStoragePanel: () => this.openStoragePanel(),
-        closeStoragePanel: () => this.closeStoragePanel(),
         toggleOfflineOnly: () => this.toggleOfflineOnly(),
         cachePlaylist: () => this.cachePlaylist(),
         openBatterySettings: () => this.openBatterySettings(),

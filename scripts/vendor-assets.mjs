@@ -43,13 +43,13 @@ const SCRIPTS = [
 // Material Symbols 只保留 opsz / wght / FILL 三个轴：页面从来没设过 GRAD（用默认值 0），渲染结果和
 // 原来的全轴版一模一样，体积从约 4MB 降到约 2.4MB。刻意**不**按图标名做子集——子集要求每加一个
 // 新图标都得重新生成，漏一个离线时就会显示成英文单词，省下的体积不值这个坑。
-// Plus Jakarta Sans 要用区间写法 wght@400..800：页面原来那种 wght@400;500;600;700;800 离散写法，
-// Google 有时回原版可变字体（/s/…woff2），有时回现场按字重裁出来的 /l/font?kit=…，两次跑出来的
-// 文件不一样；区间写法稳定拿到原版可变字体，覆盖的字重也一样
+// 西文字体 Inter（瑞士风格改版换掉了原来的 Plus Jakarta Sans），中文走系统黑体，不打包。
+// 要用区间写法 wght@400..800：离散写法 wght@400;500;600;700 时 Google 有时回原版可变字体（/s/…woff2），
+// 有时回现场按字重裁出来的 /l/font?kit=…，两次跑出来的文件不一样；区间写法稳定拿到原版可变字体
 const FONTS = [
   {
-    name: 'plus-jakarta-sans',
-    css: 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..800&display=swap',
+    name: 'inter',
+    css: 'https://fonts.googleapis.com/css2?family=Inter:wght@400..800&display=swap',
   },
   {
     name: 'material-symbols-outlined',
@@ -80,7 +80,7 @@ async function vendorScripts() {
 }
 
 // 下载每个字体的 CSS，把里面的 fonts.gstatic.com 地址换成 ./fonts/ 下的本地文件。
-// Plus Jakarta Sans 是可变字体，5 个字重的 @font-face 指向同一批文件，按 URL 去重只下一次；
+// Inter 是可变字体，万一 Google 按字重拆出几段 @font-face 指向同一批文件，按 URL 去重只下一次；
 // 文件名取 CSS 里每段 @font-face 前面的子集注释（latin / latin-ext …），方便看出是哪一块。
 // Material Symbols 只有一个不分子集的文件，Google 给它的注释是 "fallback"，这种就不带后缀
 async function vendorFonts() {

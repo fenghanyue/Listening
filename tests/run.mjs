@@ -12,7 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.dirname(here);
 
 // 快的、不联网的排前面
-const ORDER = ['smoke', 'qq-cover', 'playlist', 'native', 'offline'];
+const ORDER = ['smoke', 'layout', 'qq-cover', 'playlist', 'native', 'offline'];
 const available = fs.readdirSync(here).filter(f => f.endsWith('.test.mjs')).map(f => f.slice(0, -'.test.mjs'.length));
 const known = [...ORDER.filter(n => available.includes(n)), ...available.filter(n => !ORDER.includes(n)).sort()];
 const wanted = process.argv.slice(2);

@@ -56,15 +56,16 @@ await page.waitForTimeout(1000);
 // --- 环境 / 状态栏 ---
 check('proxy base points at the Render instance', (await page.evaluate(() => window.LISTENING_PROXY_BASE)) === 'https://listening-5bnv.onrender.com');
 const barCalls0 = await calls('SystemBars', 'setStyle');
-check('status bar style set early (head script) and on mount: DARK', barCalls0.length >= 2 && barCalls0.every(c => c.options.style === 'DARK'), barCalls0.map(c => c.options.style));
+// 默认白底：状态栏图标是深色（LIGHT），切到黑底再换成浅色图标（DARK）
+check('status bar style set early (head script) and on mount: LIGHT', barCalls0.length >= 2 && barCalls0.every(c => c.options.style === 'LIGHT'), barCalls0.map(c => c.options.style));
 const topbar = await page.$eval('.dc-topbar', el => { const cs = getComputedStyle(el); return { h: el.getBoundingClientRect().height, pt: cs.paddingTop, bg: cs.backgroundColor }; });
 check('topbar extends under the 32px status bar (height 80, padding-top 32px)', Math.round(topbar.h) === 80 && topbar.pt === '32px', topbar);
-await page.screenshot({ path: `${OUT}/native-dark.png`, clip: { x: 0, y: 0, width: 412, height: 200 } });
+await page.screenshot({ path: `${OUT}/native-light.png`, clip: { x: 0, y: 0, width: 412, height: 200 } });
 await L(`logic.toggleTheme();`);
 await page.waitForTimeout(300);
-const barLight = (await calls('SystemBars', 'setStyle')).slice(-1)[0];
-check('switching to light theme -> SystemBars LIGHT (dark icons)', barLight && barLight.options.style === 'LIGHT', barLight);
-await page.screenshot({ path: `${OUT}/native-light.png`, clip: { x: 0, y: 0, width: 412, height: 200 } });
+const barDark = (await calls('SystemBars', 'setStyle')).slice(-1)[0];
+check('switching to dark theme -> SystemBars DARK (light icons)', barDark && barDark.options.style === 'DARK', barDark);
+await page.screenshot({ path: `${OUT}/native-dark.png`, clip: { x: 0, y: 0, width: 412, height: 200 } });
 await L(`logic.toggleTheme();`);
 
 // --- 电池提示 / 检查更新 ---
@@ -120,18 +121,22 @@ check('headphones unplugged -> paused + toast', noisyOk && afterNoisy && /耳机
 
 // --- 返回键 ---
 const back = () => fire('App:backButton', { canGoBack: false });
-await L(`logic.openStoragePanel();`); await back(); await page.waitForTimeout(100);
-check('back closes the storage panel', !(await L(`return logic.state.storagePanelOpen;`)));
+await L(`logic.openSettings();`); await back(); await page.waitForTimeout(100);
+check('back on the settings page returns to search', (await L(`return logic.state.page;`)) === 'search');
 await L(`logic.toggleMobileNowPlaying();`); await page.waitForTimeout(400);
 await page.screenshot({ path: `${OUT}/native-nowplaying.png` });
+await L(`logic.toggleMenu('player');`); await back(); await page.waitForTimeout(100);
+check('back in player closes the ⋮ menu first', (await L(`return [logic.state.openMenu, logic.state.mobileNowPlayingExpanded];`)).join() === ',true');
 await L(`logic.toggleQueuePanel();`); await back(); await page.waitForTimeout(100);
-check('back in player closes the queue first', (await L(`return [logic.state.mobileNowPlayingExpanded, logic.state.rightPanel];`)).join() === 'true,browse');
+check('back in player closes the queue next', (await L(`return [logic.state.mobileNowPlayingExpanded, logic.state.rightPanel];`)).join() === 'true,browse');
 await back(); await page.waitForTimeout(100);
 check('back closes the now-playing page', !(await L(`return logic.state.mobileNowPlayingExpanded;`)));
 await L(`logic.selectPlaylist('liked');`); await back(); await page.waitForTimeout(100);
-check('back leaves the playlist view', (await L(`return logic.state.viewingPlaylistId;`)) === null);
+check('back leaves the playlist view for the playlist list', (await L(`return [logic.state.viewingPlaylistId, logic.state.page];`)).join() === ',library');
 await back(); await page.waitForTimeout(100);
-check('back at the root minimizes the app (does not exit)', (await calls('App', 'minimizeApp')).length === 1);
+check('back on the playlist list returns to search', (await L(`return logic.state.page;`)) === 'search' && (await calls('App', 'minimizeApp')).length === 0);
+await back(); await page.waitForTimeout(100);
+check('back on the search page minimizes the app (does not exit)', (await calls('App', 'minimizeApp')).length === 1);
 
 // --- 导出 / 分享 ---
 await waitFor(`return logic.state.exportReady === true;`, 90000);
@@ -151,9 +156,9 @@ await L(`logic.systemShare();`);
 const shareText = (await calls('Share', 'share')).slice(-1)[0];
 check('share text goes through native share (text only, no url)', shareText && typeof shareText.options.text === 'string' && !shareText.options.url && shareText.options.text.includes('music.163.com'), shareText && shareText.options);
 
-// --- 面板里的版本号 ---
-await L(`logic.closeShareModal(); logic.openStoragePanel();`);
-check('storage panel shows app version (APK footer)', (await L(`const v = logic.renderVals().v; return v.isNative && v.appVersionText;`)) === '1.0.5');
+// --- 设置页里的版本号 ---
+await L(`logic.closeShareModal(); logic.openSettings();`);
+check('settings page shows app version (APK only)', (await L(`const v = logic.renderVals().v; return v.isNative && v.isSettingsPage && v.appVersionText;`)) === '1.0.5');
 
 check('no page errors', errors.length === 0, errors);
 await browser.close();
