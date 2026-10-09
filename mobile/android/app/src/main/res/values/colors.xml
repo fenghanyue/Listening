@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 和页面默认白底主题的底色（页面 <head> 里 html[data-app-theme="light"] 的 --bg）同一个值：启动画面、
+    <!-- 和页面默认白底主题的底色（页面 <head> 里 html[data-app-theme="light"] 定义的 bg 变量）同一个值：启动画面、
          窗口底色、WebView 底色都用它，页面第一帧画出来之前不会闪一下别的颜色。启动画面只能有一个颜色，
          选了黑底的人启动时会先看到一下白底 -->
     <color name="app_background">#F7F7F4</color>
