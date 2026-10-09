@@ -73,8 +73,8 @@ Chromium 在安卓 WebAPK 上并没有这么实现。**别照着 MDN 推断行�
 
 - `examples/Listening Player.dc.html` 的 `<head>` 里，`.dc-topbar` 那段 `padding-top`：安全区取值是
   `var(--safe-area-inset-top, env(safe-area-inset-top, 0px))`。**网页版 / PWA 里这个值恒为 0**，渲染和
-  没写一样；APK 里是原生壳注入的状态栏高度，顶栏的底色就一路铺到状态栏下面。同一段里 `.dc-sidebar` 的
-  `top`、全屏播放页、底部迷你播放条、弹层的避让都是同一套写法。
+  没写一样；APK 里是原生壳注入的状态栏高度，顶栏的底色就一路铺到状态栏下面。全屏播放页、底部迷你播放条、
+  弹层、提示条的避让都是同一套写法；横过来的手机导航栏和刘海在侧边，左右两边也按 `--safe-area-inset-left / right` 让开。
 - 同文件的 `syncThemeChrome()`：它写 `theme-color` meta **只对浏览器标签页的地址栏有用**，
   对安装版 PWA 无效；APK 里它另外调 `SystemBars.setStyle` 切状态栏图标的深浅。
 
@@ -101,8 +101,10 @@ Chromium 在安卓 WebAPK 上并没有这么实现。**别照着 MDN 推断行�
 4. 页面一律用 `var(--safe-area-inset-*, env(safe-area-inset-*, 0px))` 取值——APK 里取注入的真实值，
    网页版取不到变量就退回 `env()`（也是 0），不用分两套 CSS。
 5. 状态栏那块颜色**不由原生设**，就是页面自己的顶栏 / 播放页背景铺上去的，天然跟主题走；系统只画图标，
-   图标深浅用 `SystemBars.setStyle()` 按 App 主题切（夜间 `DARK` = 浅色图标，白天 `LIGHT` = 深色图标），
-   `<head>` 的首屏脚本先按存的主题切一次，免得白天主题下第一屏是看不见的浅色图标。
+   图标深浅用 `SystemBars.setStyle()` 按 App 主题切（黑底 `DARK` = 浅色图标，白底 `LIGHT` = 深色图标）。
+   App 默认白底，原生壳启动时就是透明系统栏配深色图标（`MainActivity` 的 `SystemBarStyle.light`、
+   `capacitor.config.json` 的 `SystemBars.style: "LIGHT"`）；`<head>` 的首屏脚本再按存的主题切一次，免得选了黑底的人
+   第一屏是看不见的深色图标。安卓 8 以下导航栏图标只能是白的，那里垫一层半透明黑，不然白底上看不见。
 
 页面是打进 APK 的（不是瘦壳指向线上），代价和取舍见 [android-app.md](android-app.md) 第五节。
 

@@ -1,5 +1,5 @@
 // 离线功能全流程（联网：网易云搜索、播放、下载）：播放到整首缓存完 → 元数据和封面落库 → 已缓存标记和
-// 「已缓存」列表 → 断网后只播缓存、离线搜索本地曲库、「缓存与离线」面板 → 恢复联网后「只播已缓存」开关、
+// 「已缓存」列表 → 断网后只播缓存、离线搜索本地曲库、设置页里的「缓存与离线」→ 恢复联网后「只播已缓存」开关、
 // 一键缓存歌单、删除缓存、刷新后重建索引
 import { BASE, OUT, launchBrowser, logicDriver, createChecker } from './lib.mjs';
 
@@ -65,7 +65,7 @@ check('cover blob stored (netease covers are CORS-readable)', coverRec[0] && cov
 const coverLocal = await L(`const r = logic.renderVals().v.tracksRender.find(r => r.id === arg); return r && r.coverStyle;`, first.id);
 check('cached row renders its cover from a local blob: URL', /url\('blob:/.test(coverLocal || ''), (coverLocal || '').slice(0, 60));
 
-// 搜索列表里的已缓存标记 + 侧栏的「已缓存」入口
+// 搜索列表里的已缓存标记 + 歌单列表里的「已缓存」入口
 const badgeRows = await page.$$eval('.dc-result-row', rows => rows.map(r => r.textContent.includes('download_done')));
 check('search row of cached track shows the cached badge', badgeRows[0] === true && badgeRows.slice(1).every(x => !x), badgeRows.slice(0, 4));
 const sidebarFirst = await L(`return logic.renderVals().v.playlistsRender[0];`);
@@ -121,15 +121,15 @@ const ls = await L(`const v = logic.renderVals().v; return { local: logic.state.
 check('offline search uses local library, cached first', ls.local && ls.n >= 1 && ls.firstCached && /本地曲库/.test(ls.status), ls);
 await page.screenshot({ path: `${OUT}/e2e-offline-search.png` });
 
-// 「缓存与离线」面板
-await L(`logic.openStoragePanel();`);
+// 设置页里的「缓存与离线」
+await L(`logic.openSettings();`);
 await page.waitForTimeout(600);
-const panel = await L(`const v = logic.renderVals().v; return { open: v.storagePanelOpen, count: v.cachedCount, usage: v.cacheUsageText, net: v.netStatusText, caps: v.capChoicesRender.map(c => c.label) };`);
-check('storage panel shows usage and cap choices', panel.open && panel.count === 1 && /\/ 300MB/.test(panel.usage) && panel.caps.join(',') === '300MB,1GB,2GB,5GB,不限', panel);
-await page.screenshot({ path: `${OUT}/e2e-storage-panel.png` });
+const panel = await L(`const v = logic.renderVals().v; return { open: v.isSettingsPage, count: v.cachedCount, usage: v.cacheUsageText, net: v.netStatusText, caps: v.capChoicesRender.map(c => c.label) };`);
+check('settings page shows cache usage and cap choices', panel.open && panel.count === 1 && /\/ 300MB/.test(panel.usage) && panel.caps.join(',') === '300MB,1GB,2GB,5GB,不限', panel);
+await page.screenshot({ path: `${OUT}/e2e-settings-cache.png` });
 await L(`logic.setCacheCap(1024);`);
 check('cap setting persists', (await page.evaluate(() => localStorage.getItem('listening-cache-cap-mb-v1'))) === '1024');
-await L(`logic.closeStoragePanel();`);
+await L(`logic.setPage('search');`);
 
 // 恢复联网：开着「只播已缓存」时照样只播缓存
 await ctx.setOffline(false);

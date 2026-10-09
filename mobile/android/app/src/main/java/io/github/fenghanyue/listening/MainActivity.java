@@ -34,10 +34,12 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AppShellPlugin.class);
         super.onCreate(savedInstanceState);
 
-        // Android 15 起系统强制 edge-to-edge，更早的版本要自己打开。状态栏和导航栏都设成透明、配浅色图标——
-        // App 默认是夜间主题、启动时 WebView 底色也是深色（capacitor.config.json 的 backgroundColor），
-        // 页面加载后会按真正的主题再调一次
-        EdgeToEdge.enable(this, SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT));
+        // Android 15 起系统强制 edge-to-edge，更早的版本要自己打开。状态栏和导航栏都设成透明、配深色图标——
+        // App 默认是白底主题、启动时 WebView 底色也是白底（capacitor.config.json 的 backgroundColor），
+        // 页面加载后会按真正的主题再调一次。第二个参数是系统画不了深色图标时的底色：Android 8 以下导航栏
+        // 图标只能是白的，透明底配白底页面会看不见，所以给它垫一层半透明黑（和 androidx 默认的深色遮罩同一个值）
+        int darkScrim = Color.argb(0x80, 0x1b, 0x1b, 0x1b);
+        EdgeToEdge.enable(this, SystemBarStyle.light(Color.TRANSPARENT, darkScrim), SystemBarStyle.light(Color.TRANSPARENT, darkScrim));
 
         View decor = getWindow().getDecorView();
         ViewCompat.setOnApplyWindowInsetsListener(decor, (v, insets) -> {

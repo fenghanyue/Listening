@@ -37,7 +37,10 @@ const icons = await page.evaluate(() => {
   }
   return out;
 });
-const fontOk = await page.evaluate(() => document.fonts.check("24px 'Material Symbols Outlined'") && document.fonts.check("14px 'Plus Jakarta Sans'"));
+// Inter 要确认是从 vendor/ 真加载成功的那份：fonts.check 对加载失败的字体也会返回 true，
+// 而测试机上可能本来就装着系统 Inter，失败了也看不出来
+const fontOk = await page.evaluate(() => document.fonts.check("24px 'Material Symbols Outlined'")
+  && [...document.fonts].some(f => f.family.replace(/["']/g, '') === 'Inter' && f.status === 'loaded'));
 await page.screenshot({ path: `${OUT}/smoke-home.png` });
 
 check('page requested nothing from a CDN', blocked.length === 0, blocked);
