@@ -100,7 +100,8 @@ if ('serviceWorker' in navigator) {
        dc-app-shell（测试靠它找组件）、dc-topbar（测试量它的高度）、dc-result-row、dc-media-viewport
        （量歌词区高度）、dc-search-input（聚焦）、dc-nowplaying / dc-open、dc-modal-overlay / dc-modal、
        dc-queue-drag-handle / dc-queue-move-btns。
-       断点：宽 ≤ 860 或高 < 560（包括横过来的手机）是手机布局；更宽更高是分栏，≥ 1200 再加左边歌单栏 */
+       断点：宽 ≤ 860 或高 < 560（包括横过来的手机）是手机布局；更宽更高是两栏（当前页 | 播放栏），≥ 1200 播放栏再宽一点。
+       歌单只从顶栏进：电脑上原来还有一条左边歌单栏，跟顶栏的「歌单」重复，去掉了（#27） */
 
     /* ---------- 基础 ---------- */
     body { margin: 0; font-family: 'Inter', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
@@ -187,7 +188,6 @@ if ('serviceWorker' in navigator) {
     .sw-nav-btn.is-active::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--ink); }
     .sw-status-btn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--red); }
     .sw-body { flex: 1; min-height: 0; display: flex; position: relative; padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px)); padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px)); }
-    .sw-lib-col { display: none; }
     .sw-main { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
     .dc-app-shell.has-mini .sw-main { padding-bottom: calc(64px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
     .sw-page { padding: 20px 16px 32px; }
@@ -467,16 +467,6 @@ if ('serviceWorker' in navigator) {
       .dc-queue-move-btns { display: none; }
     }
     @media (min-width: 1200px) and (min-height: 560px) {
-      .sw-lib-col { display: block; width: 248px; flex-shrink: 0; border-right: 1px solid var(--rule); overflow-y: auto; padding: 24px; }
-      .sw-lib-col .sw-head-acts { gap: 14px; }
-      .sw-lib-col .sw-lib-list { border-top: 0; }
-      .sw-lib-col .sw-lib-row { grid-template-columns: 26px minmax(0, 1fr) auto; min-height: 46px; }
-      .sw-lib-col .sw-lib-name { font-size: 14px; }
-      .sw-lib-col .sw-lib-count { font-size: 13px; }
-      /* 当前打开的歌单：反白（和分段切换的选中态同一个规则） */
-      .sw-lib-col .sw-lib-row.is-selected { background: var(--ink); color: var(--bg); margin: 0 -8px; padding: 0 8px; width: calc(100% + 16px); border-bottom-color: var(--ink); }
-      .sw-lib-col .sw-lib-row.is-selected .sw-idx, .sw-lib-col .sw-lib-row.is-selected .sw-lib-count { color: var(--bg); }
-      .sw-lib-col .sw-lib-row.is-selected .sw-lib-name { font-weight: 700; }
       .dc-nowplaying { width: 400px; }
     }
     /* 跟随系统的「减少动态效果」 */
@@ -500,18 +490,6 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <div class="sw-body">
-
-    <aside class="sw-lib-col dc-scrollbar">
-      <div class="sw-head-rule">
-        <span class="sw-label">歌单</span>
-        <span class="sw-head-acts"><button class="sw-btn-text" onclick="{{ H.openImportModal }}">导入</button><button class="sw-btn-text" onclick="{{ H.openCreateModal }}">新建</button></span>
-      </div>
-      <div class="sw-lib-list">
-        <sc-for list="{{ v.playlistsRender }}" as="pl" hint-placeholder-count="3">
-          <button class="{{ pl.sideRowClass }}" onclick="{{ pl.onClick }}"><span class="sw-idx">{{ pl.indexLabel }}</span><span class="sw-lib-name"><span>{{ pl.name }}</span></span><span class="sw-lib-count">{{ pl.countLabel }}</span></button>
-        </sc-for>
-      </div>
-    </aside>
 
     <main class="sw-main dc-scroll-area dc-scrollbar">
       <section class="sw-page">
@@ -2426,7 +2404,7 @@ class Component extends DCLogic {
     if (next) this.startAdaptiveLoop(); else this.stopAdaptiveLoop();
   }
 
-  // 打开歌单详情（歌单页里的一行 / 电脑左栏）。不碰 rightPanel：队列在播放栏里，看歌单时不该把它关掉
+  // 打开歌单详情（歌单页里的一行）。不碰 rightPanel：队列在播放栏里，看歌单时不该把它关掉
   selectPlaylist(id) { this.patch({ page: 'library', viewingPlaylistId: id, openMenu: null }); }
   backFromPlaylist() { this.patch({ viewingPlaylistId: null, openMenu: null }); }
   removeFromPlaylist(trackId) {
@@ -4010,15 +3988,11 @@ class Component extends DCLogic {
     // 「已缓存」排在最上面：它不是真歌单（不进持久化的 playlists），不能删，数量就是能列出来的已缓存首数。
     // 编号 01、02…；内置的两个（已缓存、喜欢的音乐）名字后面带个小图标。歌单里存的 tileBg 不再画出来，但数据原样留着
     const cachedEntry = { id: CACHED_VIEW_ID, name: '已缓存', builtin: true, glyph: 'download_done', countLabel: s.cachedCount };
-    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => ({ ...pl, countLabel: playlistCount(pl) }))].map((pl, i) => {
-      const selected = isPlaylistView && pl.id === s.viewingPlaylistId;
-      return {
-        ...pl, indexLabel: pad2(i + 1),
-        hasGlyph: !!pl.builtin, glyph: pl.builtin ? (pl.glyph || '') : '',
-        sideRowClass: 'sw-lib-row sw-press' + (selected ? ' is-selected' : ''),
-        onClick: () => this.selectPlaylist(pl.id),
-      };
-    });
+    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => ({ ...pl, countLabel: playlistCount(pl) }))].map((pl, i) => ({
+      ...pl, indexLabel: pad2(i + 1),
+      hasGlyph: !!pl.builtin, glyph: pl.builtin ? (pl.glyph || '') : '',
+      onClick: () => this.selectPlaylist(pl.id),
+    }));
     const playlistOptions = s.playlists.map((pl, i) => ({
       id: pl.id, name: pl.name, indexLabel: pad2(i + 1), countLabel: playlistCount(pl),
       onClick: () => this.confirmAdd(pl.id, pl.name),

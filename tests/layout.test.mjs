@@ -87,12 +87,13 @@ const SCREENS = {
   'create': `logic.openCreateModal();`,
 };
 
-// mobile：手机布局（迷你播放条 + 全屏播放页）；two：当前页 | 播放栏；three：歌单栏 | 当前页 | 播放栏
+// mobile：手机布局（迷你播放条 + 全屏播放页）；two：当前页 | 播放栏（npW 是播放栏的宽度）。
+// 电脑上原来是三栏（左边多一条歌单栏），跟顶栏的「歌单」重复，去掉了（#27）
 const VIEWPORTS = [
   { name: 'phone', size: { width: 412, height: 915 }, touch: true, layout: 'mobile' },
   { name: 'landscape', size: { width: 915, height: 412 }, touch: true, layout: 'mobile' },
-  { name: 'tablet', size: { width: 1024, height: 768 }, touch: false, layout: 'two' },
-  { name: 'desktop', size: { width: 1440, height: 900 }, touch: false, layout: 'three' },
+  { name: 'tablet', size: { width: 1024, height: 768 }, touch: false, layout: 'two', npW: 340 },
+  { name: 'desktop', size: { width: 1440, height: 900 }, touch: false, layout: 'two', npW: 400 },
 ];
 
 // 在页面里量一屏：可见的元素有没有伸出屏幕左右两边、纯图标按钮有没有 aria-label、几个关键部件的位置
@@ -146,7 +147,8 @@ const measure = () => {
     outside: outside.slice(0, 8), outsideCount: outside.length, unlabeled,
     topbar: box($('.dc-topbar')),
     nav: [...document.querySelectorAll('.sw-nav-btn')].map(b => ({ label: b.getAttribute('aria-label'), title: b.getAttribute('title'), active: b.classList.contains('is-active'), w: b.offsetWidth, h: b.offsetHeight })),
-    libCol: box($('.sw-lib-col')), main: box($('.sw-main')), np: box($('.dc-nowplaying')), mini: box($('.sw-mini')),
+    main: box($('.sw-main')), np: box($('.dc-nowplaying')), mini: box($('.sw-mini')),
+    libRows: [...document.querySelectorAll('.sw-lib-row')].filter(vis).length,
     modal: box($('.dc-modal')), menu: box($('.sw-menu')), cover: box($('.sw-big-cover')), viewport: box($('.dc-media-viewport')),
     title: box($('.sw-np-title')), titleLine: parseFloat(getComputedStyle($('.sw-np-title')).lineHeight),
     ctrls, playIdx: [...document.querySelectorAll('.sw-controls > button')].findIndex(b => b.classList.contains('sw-play-big')),
@@ -222,19 +224,22 @@ for (const vp of VIEWPORTS) {
       && shots.playlist.nav.map(n => n.active).join() === 'false,true,false';
     check(`${tag}: topbar is 48px with the three labelled nav icons`, Math.round(home.topbar.h) === 48 && navOk, { h: home.topbar.h, nav: home.nav });
 
+    // 歌单只从顶栏的「歌单」进：只有歌单页上列着歌单（已缓存、喜欢的音乐和 3 个歌单），别的页上一行都没有
+    check(`${tag}: playlists are listed only on the playlists page`, shots.library.libRows === 5 && home.libRows === 0,
+      { library: shots.library.libRows, search: home.libRows });
+
     // 分栏
     if (vp.layout === 'mobile') {
-      check(`${tag}: phone layout (mini player at the bottom, player page and playlist column hidden)`,
-        !home.libCol && !home.np && home.mini && Math.round(home.mini.b) === home.H && Math.round(home.mini.h) === 64,
-        { libCol: home.libCol, np: home.np, mini: home.mini });
+      check(`${tag}: phone layout (mini player at the bottom, player page hidden)`,
+        !home.np && home.mini && Math.round(home.mini.b) === home.H && Math.round(home.mini.h) === 64,
+        { np: home.np, mini: home.mini });
       const pc = shots['player-cover'];
       check(`${tag}: player page covers the whole screen when opened`, pc.np && Math.round(pc.np.w) === pc.W && Math.round(pc.np.h) === pc.H, pc.np);
     } else {
-      const npW = vp.layout === 'three' ? 400 : 340;
-      const libOk = vp.layout === 'three' ? (home.libCol && Math.round(home.libCol.w) === 248) : !home.libCol;
-      check(`${tag}: ${vp.layout === 'three' ? 'three' : 'two'} columns (player ${npW}px${vp.layout === 'three' ? ', playlists 248px' : ''}), no mini player`,
-        libOk && home.np && Math.round(home.np.w) === npW && !home.mini && home.main && Math.round(home.main.r) === Math.round(home.np.x),
-        { libCol: home.libCol, main: home.main, np: home.np, mini: home.mini });
+      // 当前页从屏幕最左边开始（左边没有别的栏），右边紧挨着播放栏
+      check(`${tag}: two columns (page | player ${vp.npW}px), nothing left of the page, no mini player`,
+        home.main && Math.round(home.main.x) === 0 && home.np && Math.round(home.np.w) === vp.npW && !home.mini && Math.round(home.main.r) === Math.round(home.np.x),
+        { main: home.main, np: home.np, mini: home.mini });
     }
 
     // 播放页：5 个键五等分（中心等距、播放键在正中间）、封面是正方形且在媒体区里、长歌名最多两行
