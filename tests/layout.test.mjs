@@ -66,6 +66,7 @@ const SEARCHED = `logic.patch({ hasSearched: true, appliedQuery: '后来', searc
 const PLAYER = `logic.patch({ mobileNowPlayingExpanded: true });`;
 const SCREENS = {
   'search-home': ``,
+  'search-focus': `logic.patch({ searchFocused: true });`,
   'suggest': `logic.patch({ searchQuery: '后', searchFocused: true, suggestActiveIdx: 1, suggestions: [
       { title: '后来', artist: '刘若英' }, { title: '后来的我们', artist: '五月天' }, { title: '后会无期', artist: 'G.E.M.邓紫棋' }, { title: '后继者', artist: '任然' } ] });`,
   'search': SEARCHED,
@@ -156,6 +157,7 @@ const measure = () => {
     head: box($('.sw-np-head')), tabs: box($('.sw-np-head .sw-tabs')), more: box($('.sw-np-more > .sw-icon-btn')), collapse: box($('.sw-np-head .sw-collapse')),
     npLabel: [...document.querySelectorAll('.dc-nowplaying *')].some(el => vis(el) && !el.children.length && el.textContent.trim() === '正在播放'),
     filtersText: ($('.sw-filters') || {}).textContent || '',
+    recents: document.querySelectorAll('.sw-recent-row').length, hint: /一起搜/.test(document.body.textContent),
     scrollbar: (({ scrollbarWidth, scrollbarColor }) => ({ scrollbarWidth, scrollbarColor }))(getComputedStyle($('.sw-main'))),
   };
 };
@@ -267,6 +269,11 @@ for (const vp of VIEWPORTS) {
     // 搜索页没有分组选项了（搜到结果之后也没有）
     check(`${tag}: search filters have no grouping options`, /网易云/.test(shots.search.filtersText) && !/分组|歌手|来源/.test(shots.search.filtersText), shots.search.filtersText);
 
+    // 「最近搜索」平时不显示，点进输入框（框里没字、还没搜过）才出现；原来那句「网易云音乐、QQ音乐一起搜」的提示删掉了
+    check(`${tag}: recent searches only show while the search box is focused, no hint line`,
+      shots['search-home'].recents === 0 && !shots['search-home'].hint && shots['search-focus'].recents === 6,
+      { home: shots['search-home'].recents, focused: shots['search-focus'].recents, hint: shots['search-home'].hint });
+
     // 滚动条：触屏不自定义（用系统那种滑动才出现的），用鼠标的电脑上是细方条
     const sb = home.scrollbar;
     check(`${tag}: ${vp.touch ? 'system scrollbar on touch screens' : 'thin custom scrollbar with a mouse'}`,
@@ -303,6 +310,60 @@ for (const vp of VIEWPORTS) {
     const after = await L(`return { menu: logic.state.openMenu, cur: logic.state.currentId, open: logic.state.mobileNowPlayingExpanded };`);
     check(`${tag}: tapping outside closes the ⋮ menu without hitting what is underneath`,
       after.menu === null && after.cur === 101 && (vp.layout !== 'mobile' || after.open === true), after);
+
+    // 真点一下：点进输入框出现最近搜索，点其中一条就用这个词去搜（doSearch 临时换成只记下关键词，免得联网）
+    const tapAt = async (sel, i = 0) => {
+      const b = await page.evaluate(([q, n]) => { const r = document.querySelectorAll(q)[n].getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, [sel, i]);
+      if (vp.touch) await page.touchscreen.tap(b.x, b.y); else await page.mouse.click(b.x, b.y);
+    };
+    const searchState = () => page.evaluate(() => ({
+      focused: document.activeElement === document.querySelector('.dc-search-input'),
+      recents: document.querySelectorAll('.sw-recent-row').length,
+    }));
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+    await L(`logic.__picked = null; logic.doSearch = function () { logic.__picked = logic.state.searchQuery; };`);
+    await page.waitForTimeout(250);
+    const before = await searchState();
+    await tapAt('.dc-search-input');
+    await page.waitForTimeout(150);
+    const focused = await searchState();
+    await tapAt('.sw-recent-row', 1);
+    await page.waitForTimeout(250);
+    const picked = await L(`const kw = logic.__picked; delete logic.doSearch; return kw;`);
+    check(`${tag}: tapping the search box shows recent searches; tapping one searches it`,
+      before.recents === 0 && focused.focused && focused.recents === 6 && picked === '周杰伦', { before, focused, picked });
+
+    // 可视区域怎么变都不许让搜索框失焦：v1.0.10 曾按「可视区域突然变高」去猜键盘收起，真机上键盘弹出时可视区域
+    // 会先缩过头再弹回来，被当成收起，结果一点搜索框键盘就被收回去。这里照那个过程改一遍视口（弹出、缩过头、弹回、
+    // 收起、转屏），搜索框得一直聚焦、最近搜索一直在。APK 里收起键盘由 MainActivity 发事件，见 native 测试
+    if (vp.touch) {
+      const size = vp.size;
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+      await page.waitForTimeout(250);
+      await tapAt('.dc-search-input');
+      // 按屏幕高度的比例缩：横屏时高度只有 400 出头，减固定像素会减成负数
+      const kb = Math.round(size.height * 0.45), over = Math.round(size.height * 0.75);
+      const steps = [
+        { width: size.width, height: size.height - kb },     // 键盘弹出
+        { width: size.width, height: size.height - over },   // 缩过头
+        { width: size.width, height: size.height - kb },     // 弹回来（就是这一下被误当成收键盘）
+        { width: size.width, height: size.height },          // 高度恢复
+        { width: size.height, height: size.width },         // 转屏
+        size,                                               // 转回来
+      ];
+      const seen = [];
+      for (const st of steps) {
+        await page.setViewportSize(st);
+        await page.waitForTimeout(250);
+        seen.push(await searchState());
+      }
+      check(`${tag}: viewport changes (keyboard opening, bouncing, rotating) never unfocus the search box`,
+        seen.every(x => x.focused && x.recents === 6), seen);
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.waitForTimeout(250);
+    }
 
     // 手机上再看一次刘海 / 手势条的避让：顶栏让出状态栏，迷你播放条让出手势条
     if (vp.name === 'phone') {
