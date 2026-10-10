@@ -29,6 +29,12 @@ public class MainActivity extends BridgeActivity {
     private Insets lastBars = Insets.NONE;
     private boolean lastImeVisible = false;
 
+    // 键盘收起后再等这么久，确认它还没重新弹出来，才告诉页面：防止弹出过程中系统偶尔先报一次「收起」
+    private static final long IME_HIDDEN_CONFIRM_MS = 250;
+    private final Runnable imeHiddenConfirm = () -> {
+        if (!lastImeVisible) dispatchToPage("listening:ime-hidden");
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(AppShellPlugin.class);
@@ -48,9 +54,16 @@ public class MainActivity extends BridgeActivity {
             // 键盘弹出时整个页面往上收出键盘的高度，否则底部弹层里的输入框（新建歌单、导入歌单）会被键盘盖住；
             // 平时不加任何内边距，页面自己按安全区变量避让
             v.setPadding(0, 0, 0, imeVisible ? insets.getInsets(WindowInsetsCompat.Type.ime()).bottom : 0);
+            boolean wasImeVisible = lastImeVisible;
             lastBars = bars;
             lastImeVisible = imeVisible;
             injectSafeArea();
+            // 键盘收起了（比如用返回手势收起）：网页里的输入框其实还聚焦着，告诉页面一声，让它把搜索框的焦点放掉。
+            // 只在「显示 → 不显示」时发，键盘弹出时什么都不发
+            if (wasImeVisible && !imeVisible) {
+                v.removeCallbacks(imeHiddenConfirm);
+                v.postDelayed(imeHiddenConfirm, IME_HIDDEN_CONFIRM_MS);
+            }
             // 原样往下传：WebView ≥ 140 还会用它们填 env(safe-area-inset-*)，和注入的变量是同一组数
             return insets;
         });
@@ -64,6 +77,14 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         );
+    }
+
+    // 往页面里派发一个不带数据的事件（window 上），页面自己 addEventListener 接
+    private void dispatchToPage(String eventName) {
+        if (bridge == null || bridge.getWebView() == null) return;
+        WebView webView = bridge.getWebView();
+        String js = "window.dispatchEvent(new Event('" + eventName + "'));";
+        webView.post(() -> webView.evaluateJavascript(js, null));
     }
 
     private void injectSafeArea() {

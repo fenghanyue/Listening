@@ -334,28 +334,33 @@ for (const vp of VIEWPORTS) {
     check(`${tag}: tapping the search box shows recent searches; tapping one searches it`,
       before.recents === 0 && focused.focused && focused.recents === 6 && picked === '周杰伦', { before, focused, picked });
 
-    // 收起键盘（可视区宽度不变、高度一下子变高）时搜索框失焦，最近搜索跟着收起；横竖屏切换（宽度变了）不算
+    // 可视区域怎么变都不许让搜索框失焦：v1.0.10 曾按「可视区域突然变高」去猜键盘收起，真机上键盘弹出时可视区域
+    // 会先缩过头再弹回来，被当成收起，结果一点搜索框键盘就被收回去。这里照那个过程改一遍视口（弹出、缩过头、弹回、
+    // 收起、转屏），搜索框得一直聚焦、最近搜索一直在。APK 里收起键盘由 MainActivity 发事件，见 native 测试
     if (vp.touch) {
       const size = vp.size;
       await page.evaluate(() => document.activeElement && document.activeElement.blur());
       await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
       await page.waitForTimeout(250);
       await tapAt('.dc-search-input');
-      await page.setViewportSize({ width: size.width, height: size.height - 300 });   // 键盘弹出
-      await page.waitForTimeout(150);
-      const kbOpen = await searchState();
-      await page.setViewportSize(size);                                                // 键盘收起
-      await page.waitForTimeout(300);
-      const kbClosed = await searchState();
-      check(`${tag}: closing the keyboard unfocuses the search box and hides recent searches`,
-        kbOpen.focused && kbOpen.recents === 6 && !kbClosed.focused && kbClosed.recents === 0, { kbOpen, kbClosed });
-      await tapAt('.dc-search-input');
-      await page.setViewportSize({ width: size.height, height: size.width });         // 转屏
-      await page.waitForTimeout(150);
-      await page.setViewportSize(size);                                                // 转回来
-      await page.waitForTimeout(300);
-      const rotated = await searchState();
-      check(`${tag}: rotating the screen keeps the search box focused`, rotated.focused && rotated.recents === 6, rotated);
+      // 按屏幕高度的比例缩：横屏时高度只有 400 出头，减固定像素会减成负数
+      const kb = Math.round(size.height * 0.45), over = Math.round(size.height * 0.75);
+      const steps = [
+        { width: size.width, height: size.height - kb },     // 键盘弹出
+        { width: size.width, height: size.height - over },   // 缩过头
+        { width: size.width, height: size.height - kb },     // 弹回来（就是这一下被误当成收键盘）
+        { width: size.width, height: size.height },          // 高度恢复
+        { width: size.height, height: size.width },         // 转屏
+        size,                                               // 转回来
+      ];
+      const seen = [];
+      for (const st of steps) {
+        await page.setViewportSize(st);
+        await page.waitForTimeout(250);
+        seen.push(await searchState());
+      }
+      check(`${tag}: viewport changes (keyboard opening, bouncing, rotating) never unfocus the search box`,
+        seen.every(x => x.focused && x.recents === 6), seen);
       await page.evaluate(() => document.activeElement && document.activeElement.blur());
       await page.waitForTimeout(250);
     }

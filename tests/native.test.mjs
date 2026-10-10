@@ -138,6 +138,20 @@ check('back on the playlist list returns to search', (await L(`return logic.stat
 await back(); await page.waitForTimeout(100);
 check('back on the search page minimizes the app (does not exit)', (await calls('App', 'minimizeApp')).length === 1);
 
+// --- 收起键盘 ---
+// MainActivity 确认键盘收起后派发 listening:ime-hidden：页面让搜索框失焦，「最近搜索」跟着收起
+await L(`logic.setPage('search'); logic.patch({ hasSearched: false, searchQuery: '', appliedQuery: '' });`);
+await page.waitForTimeout(150);
+await page.tap('.dc-search-input');
+await page.waitForTimeout(250);
+const searchUi = () => page.evaluate(() => ({ focused: document.activeElement === document.querySelector('.dc-search-input'), recents: document.querySelectorAll('.sw-recent-row').length }));
+const imeOpen = await searchUi();
+await page.evaluate(() => window.dispatchEvent(new Event('listening:ime-hidden')));
+await page.waitForTimeout(300);
+const imeHidden = await searchUi();
+check('keyboard hidden (event from MainActivity) unfocuses the search box and hides recent searches',
+  imeOpen.focused && imeOpen.recents > 0 && !imeHidden.focused && imeHidden.recents === 0, { imeOpen, imeHidden });
+
 // --- 导出 / 分享 ---
 await waitFor(`return logic.state.exportReady === true;`, 90000);
 await L(`logic.exportCurrentTrack();`);

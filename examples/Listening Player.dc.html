@@ -1954,7 +1954,7 @@ class Component extends DCLogic {
     clearTimeout(this._loadWatchdogTimer);
     clearTimeout(this._toastTimer);
     window.removeEventListener('resize', this._onResizeMeasureLyrics);
-    if (window.visualViewport && this._onViewportResize) window.visualViewport.removeEventListener('resize', this._onViewportResize);
+    if (this._onImeHidden) window.removeEventListener('listening:ime-hidden', this._onImeHidden);
     if (this._lyricsResizeObserver) this._lyricsResizeObserver.disconnect();
     document.removeEventListener('visibilitychange', this._onDiagVisibility);
     document.removeEventListener('freeze', this._onDiagFreeze);
@@ -2003,20 +2003,6 @@ class Component extends DCLogic {
     // 挂载后量一次，横竖屏切换/软键盘收起等触发的 resize 再量一次；量不到就让 renderVals 用兜底值
     this._onResizeMeasureLyrics = () => this.measureLyricsViewport();
     window.addEventListener('resize', this._onResizeMeasureLyrics);
-    // 安卓上用返回手势收起键盘后，输入框其实还处于聚焦状态，「最近搜索」会一直留在页面上。可视区宽度没变、
-    // 高度一下子变高很多，就当键盘收起了，让搜索框失焦；宽度变了是横竖屏切换，不算
-    const vv = window.visualViewport;
-    if (vv) {
-      this._vvSize = { w: vv.width, h: vv.height };
-      this._onViewportResize = () => {
-        const prev = this._vvSize;
-        this._vvSize = { w: vv.width, h: vv.height };
-        if (Math.abs(vv.width - prev.w) > 1 || vv.height - prev.h < 120) return;
-        const el = document.activeElement;
-        if (el && el.classList && el.classList.contains('dc-search-input')) el.blur();
-      };
-      vv.addEventListener('resize', this._onViewportResize);
-    }
     setTimeout(() => {
       this.measureLyricsViewport();
       // 歌名折成两行、切换横竖屏等都会让歌词区变高变矮，不一定触发窗口 resize：有 ResizeObserver 就直接盯着它
@@ -2080,6 +2066,14 @@ class Component extends DCLogic {
     });
     // 从系统设置页回来时重新问一次后台运行放没放行，放行了就把提示条收起来
     nativeListen('App', 'resume', () => this.refreshBatteryHint());
+    // 用返回手势收起键盘后，输入框其实还聚焦着，「最近搜索」会一直留在页面上。键盘是否显示以系统说的为准：
+    // MainActivity 确认键盘收起了才发这个事件（键盘弹出时什么都不发）。别改回按可视区域尺寸去猜——
+    // 键盘弹出时可视区域会先缩再弹，上一次这么猜，结果一点搜索框键盘就被收回去
+    this._onImeHidden = () => {
+      const el = document.activeElement;
+      if (el && el.classList && el.classList.contains('dc-search-input')) el.blur();
+    };
+    window.addEventListener('listening:ime-hidden', this._onImeHidden);
     this.refreshBatteryHint();
     this.checkForUpdate(false);
   }
