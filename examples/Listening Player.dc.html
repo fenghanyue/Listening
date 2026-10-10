@@ -100,7 +100,8 @@ if ('serviceWorker' in navigator) {
        dc-app-shell（测试靠它找组件）、dc-topbar（测试量它的高度）、dc-result-row、dc-media-viewport
        （量歌词区高度）、dc-search-input（聚焦）、dc-nowplaying / dc-open、dc-modal-overlay / dc-modal、
        dc-queue-drag-handle / dc-queue-move-btns。
-       断点：宽 ≤ 860 或高 < 560（包括横过来的手机）是手机布局；更宽更高是分栏，≥ 1200 再加左边歌单栏 */
+       断点：宽 ≤ 860 或高 < 560（包括横过来的手机）是手机布局；更宽更高是两栏（当前页 | 播放栏），≥ 1200 播放栏再宽一点。
+       歌单只从顶栏进：电脑上原来还有一条左边歌单栏，跟顶栏的「歌单」重复，去掉了（#27） */
 
     /* ---------- 基础 ---------- */
     body { margin: 0; font-family: 'Inter', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
@@ -187,7 +188,6 @@ if ('serviceWorker' in navigator) {
     .sw-nav-btn.is-active::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 2px; background: var(--ink); }
     .sw-status-btn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: var(--red); }
     .sw-body { flex: 1; min-height: 0; display: flex; position: relative; padding-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px)); padding-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px)); }
-    .sw-lib-col { display: none; }
     .sw-main { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
     .dc-app-shell.has-mini .sw-main { padding-bottom: calc(64px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
     .sw-page { padding: 20px 16px 32px; }
@@ -467,16 +467,6 @@ if ('serviceWorker' in navigator) {
       .dc-queue-move-btns { display: none; }
     }
     @media (min-width: 1200px) and (min-height: 560px) {
-      .sw-lib-col { display: block; width: 248px; flex-shrink: 0; border-right: 1px solid var(--rule); overflow-y: auto; padding: 24px; }
-      .sw-lib-col .sw-head-acts { gap: 14px; }
-      .sw-lib-col .sw-lib-list { border-top: 0; }
-      .sw-lib-col .sw-lib-row { grid-template-columns: 26px minmax(0, 1fr) auto; min-height: 46px; }
-      .sw-lib-col .sw-lib-name { font-size: 14px; }
-      .sw-lib-col .sw-lib-count { font-size: 13px; }
-      /* 当前打开的歌单：反白（和分段切换的选中态同一个规则） */
-      .sw-lib-col .sw-lib-row.is-selected { background: var(--ink); color: var(--bg); margin: 0 -8px; padding: 0 8px; width: calc(100% + 16px); border-bottom-color: var(--ink); }
-      .sw-lib-col .sw-lib-row.is-selected .sw-idx, .sw-lib-col .sw-lib-row.is-selected .sw-lib-count { color: var(--bg); }
-      .sw-lib-col .sw-lib-row.is-selected .sw-lib-name { font-weight: 700; }
       .dc-nowplaying { width: 400px; }
     }
     /* 跟随系统的「减少动态效果」 */
@@ -500,18 +490,6 @@ if ('serviceWorker' in navigator) {
   </div>
 
   <div class="sw-body">
-
-    <aside class="sw-lib-col dc-scrollbar">
-      <div class="sw-head-rule">
-        <span class="sw-label">歌单</span>
-        <span class="sw-head-acts"><button class="sw-btn-text" onclick="{{ H.openImportModal }}">导入</button><button class="sw-btn-text" onclick="{{ H.openCreateModal }}">新建</button></span>
-      </div>
-      <div class="sw-lib-list">
-        <sc-for list="{{ v.playlistsRender }}" as="pl" hint-placeholder-count="3">
-          <button class="{{ pl.sideRowClass }}" onclick="{{ pl.onClick }}"><span class="sw-idx">{{ pl.indexLabel }}</span><span class="sw-lib-name"><span>{{ pl.name }}</span></span><span class="sw-lib-count">{{ pl.countLabel }}</span></button>
-        </sc-for>
-      </div>
-    </aside>
 
     <main class="sw-main dc-scroll-area dc-scrollbar">
       <section class="sw-page">
@@ -734,7 +712,7 @@ if ('serviceWorker' in navigator) {
                     <button class="sw-icon-btn" onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" aria-label="上移" title="上移"><span class="ms">keyboard_arrow_up</span></button>
                     <button class="sw-icon-btn" onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" aria-label="下移" title="下移"><span class="ms">keyboard_arrow_down</span></button>
                   </span>
-                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="删除这首歌" title="删除这首歌：播放队列、歌单和「喜欢的音乐」里都会去掉"><span class="ms">close</span></button>
+                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="移出队列" title="移出队列"><span class="ms">close</span></button>
                 </div>
               </div>
             </sc-for>
@@ -2426,7 +2404,7 @@ class Component extends DCLogic {
     if (next) this.startAdaptiveLoop(); else this.stopAdaptiveLoop();
   }
 
-  // 打开歌单详情（歌单页里的一行 / 电脑左栏）。不碰 rightPanel：队列在播放栏里，看歌单时不该把它关掉
+  // 打开歌单详情（歌单页里的一行）。不碰 rightPanel：队列在播放栏里，看歌单时不该把它关掉
   selectPlaylist(id) { this.patch({ page: 'library', viewingPlaylistId: id, openMenu: null }); }
   backFromPlaylist() { this.patch({ viewingPlaylistId: null, openMenu: null }); }
   removeFromPlaylist(trackId) {
@@ -3683,8 +3661,9 @@ class Component extends DCLogic {
           resumeAt = 0;
           if (!track) { this.showToast('离线中，播放队列里没有已缓存的歌'); return; }
         }
+        // 一首都没有（播放队列被移空了）就什么都不做：对着空的 audio 调 play() 也会触发 play 事件，
+        // 界面会显示"正在播放"，其实没有声音（耳机 / 通知栏上的播放键会走到这里）
         if (track) this.startTrack(track, resumeAt);
-        else a.play().catch(() => {});
       } else {
         a.play().catch(e => { console.error('play error:', e); });
       }
@@ -3759,22 +3738,52 @@ class Component extends DCLogic {
     else this.showToast('播放队列里没有已缓存的歌，联网后才能切');
   }
 
-  removeTrack(id) {
-    this.patch(s => {
-      const queue = s.queue.filter(t => t.id !== id);
-      const oldOrderIdx = s.playOrder.indexOf(id);
-      const playOrder = s.playOrder.filter(pid => pid !== id);
-      let currentId = s.currentId;
-      // 删的正好是当前在播的曲目：接下来该播的是播放队列里的下一首，不是曲库里随便挨着的邻居
-      if (id === currentId) currentId = playOrder[oldOrderIdx] ?? playOrder[oldOrderIdx - 1] ?? playOrder[0] ?? null;
-      // 曲目从曲库里彻底删除后，同步清掉歌单/喜欢里对它的引用，避免留下悬空 id（外面数量对不上点进去看到的数量）
-      const liked = { ...s.liked };
-      delete liked[id];
-      const likedOrder = s.likedOrder.filter(lid => lid !== id);
-      const playlists = s.playlists.map(p => p.trackIds ? { ...p, trackIds: p.trackIds.filter(tid => tid !== id) } : p);
-      return { queue, playOrder, currentId, liked, likedOrder, playlists };
-    });
+  // 播放页队列里的 ×：只把这首移出播放队列（playOrder），曲库、歌单、「喜欢的音乐」都不动。
+  // 以前这里把它从曲库、所有歌单和喜欢里一起删掉了（#29）
+  // 移出的是正在放的这首：换到它后面那首（到队尾绕回队首；离线挑歌模式下找已缓存的），跟点「下一首」一样。
+  // 本来在放就接着放；暂停着、或者队列里已经没有能放的，就停在那首上不出声，点播放从头放。队列删空了就什么都不放
+  removeFromQueue(id) {
+    const s = this.state;
+    const idx = s.playOrder.indexOf(id);
+    if (idx < 0) return;
+    const playOrder = s.playOrder.filter(pid => pid !== id);
+    if (id !== s.currentId) {
+      this.patch({ playOrder });
+      this.persist();
+      return;
+    }
+    // 在移出之前的队列上找：不算自己，绕一圈也找不回被移出的这首
+    const playable = this.findPlayableInOrder(idx, 1);
+    this.patch({ playOrder });
+    if (s.playing && playable) {
+      this.startTrack(playable);
+      return;
+    }
+    if (s.playing && playOrder.length) this.showToast('播放队列里没有已缓存的歌，联网后才能切');
+    const nextId = playable ? playable.id : (playOrder.length ? playOrder[idx % playOrder.length] : null);
+    this.unloadAudio();
+    this.patch({ currentId: nextId, currentTime: 0, playing: false, loadingTrackId: null, lyrics: [], lyricsTrackId: null, lyricsLoading: false, exportReady: false });
     this.persist();
+    const next = s.queue.find(t => t.id === nextId);
+    if (next) {
+      mediaSessionBridge.setMetadata(next);
+      mediaSessionBridge.setPosition(next.duration, 0);
+    }
+  }
+
+  // 清空 audio 元素，作废还在路上的加载：之后点播放（或耳机 / 通知栏上的播放键）都走 togglePlay，
+  // 按 currentId 从头放——跟刚打开 App、还没放过歌的时候一样
+  unloadAudio() {
+    this._loadToken = (this._loadToken || 0) + 1;
+    clearTimeout(this._loadWatchdogTimer);
+    this._loadWatchdogTimer = null;
+    this._loadWatchdogTrackId = null;
+    this._prefetchedForId = null;
+    this._shufflePrefetchedNextId = null;
+    this.stopHLS();
+    const a = this._audio;
+    if (a) { a.pause(); a.removeAttribute('src'); a.load(); }
+    if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
   }
 
   dragStart(id) { this.patch({ dragId: id }); }
@@ -3848,7 +3857,7 @@ class Component extends DCLogic {
         rowClass: 'sw-qrow sw-press' + (isCurrent ? ' is-current' : ''),
         rowOpacity: offlineMode && !cached ? '0.45' : '1',
         onClick: () => this.playTrackAt(t.id),
-        onRemove: (e) => { e.stopPropagation(); this.removeTrack(t.id); },
+        onRemove: (e) => { e.stopPropagation(); this.removeFromQueue(t.id); },
         onDragStart: () => this.dragStart(t.id),
         onDragOver: (e) => this.dragOverRow(t.id, e),
         onDrop: (e) => e.preventDefault(),
@@ -3979,15 +3988,11 @@ class Component extends DCLogic {
     // 「已缓存」排在最上面：它不是真歌单（不进持久化的 playlists），不能删，数量就是能列出来的已缓存首数。
     // 编号 01、02…；内置的两个（已缓存、喜欢的音乐）名字后面带个小图标。歌单里存的 tileBg 不再画出来，但数据原样留着
     const cachedEntry = { id: CACHED_VIEW_ID, name: '已缓存', builtin: true, glyph: 'download_done', countLabel: s.cachedCount };
-    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => ({ ...pl, countLabel: playlistCount(pl) }))].map((pl, i) => {
-      const selected = isPlaylistView && pl.id === s.viewingPlaylistId;
-      return {
-        ...pl, indexLabel: pad2(i + 1),
-        hasGlyph: !!pl.builtin, glyph: pl.builtin ? (pl.glyph || '') : '',
-        sideRowClass: 'sw-lib-row sw-press' + (selected ? ' is-selected' : ''),
-        onClick: () => this.selectPlaylist(pl.id),
-      };
-    });
+    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => ({ ...pl, countLabel: playlistCount(pl) }))].map((pl, i) => ({
+      ...pl, indexLabel: pad2(i + 1),
+      hasGlyph: !!pl.builtin, glyph: pl.builtin ? (pl.glyph || '') : '',
+      onClick: () => this.selectPlaylist(pl.id),
+    }));
     const playlistOptions = s.playlists.map((pl, i) => ({
       id: pl.id, name: pl.name, indexLabel: pad2(i + 1), countLabel: playlistCount(pl),
       onClick: () => this.confirmAdd(pl.id, pl.name),
