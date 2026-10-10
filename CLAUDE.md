@@ -40,6 +40,8 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
 
 - 改界面先跑 `node tests/layout.test.mjs`：不联网，用手机、横屏、平板、电脑四种尺寸各走一遍，截图存在系统临时目录的 `listening-tests/`。
 - Playwright 模拟不了真手机上的键盘、WebView 和状态栏。这类改动先推分支出预览版，让用户在手机上试。
+- 迷你播放器（电脑 Chrome / Edge 的小窗）：测它不能用 Playwright 拦请求，一拦小窗的样式就加载不出来；拖动、记位置
+  这些要在有窗口管理器的真窗口里试。浏览器的限制和试法见 [docs/mini-player.md](docs/mini-player.md)。
 - 联网的几组时好时坏：native 的两项导出检查要在 90 秒内下完一整首歌；第三方搜索接口有时对所有关键词都返回空数组。
   失败了先用 curl 直接调一下接口，再判断是不是代码的问题。
 

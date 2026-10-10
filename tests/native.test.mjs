@@ -55,6 +55,10 @@ await page.waitForTimeout(1000);
 
 // --- 环境 / 状态栏 ---
 check('proxy base points at the Render instance', (await page.evaluate(() => window.LISTENING_PROXY_BASE)) === 'https://listening-5bnv.onrender.com');
+// 迷你播放器只给电脑上的浏览器：这里的 Chromium 有小窗接口，APK 里靠 IS_NATIVE 挡住，按钮根本不出
+check('no mini player button in the APK',
+  (await L(`return logic.renderVals().v.canMiniPlayer;`)) === false && (await page.$('button[aria-label="迷你播放器"]')) === null
+  && (await page.evaluate(() => 'documentPictureInPicture' in window)));
 const barCalls0 = await calls('SystemBars', 'setStyle');
 // 默认白底：状态栏图标是深色（LIGHT），切到黑底再换成浅色图标（DARK）
 check('status bar style set early (head script) and on mount: LIGHT', barCalls0.length >= 2 && barCalls0.every(c => c.options.style === 'LIGHT'), barCalls0.map(c => c.options.style));
