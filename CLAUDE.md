@@ -32,14 +32,24 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
   `MainActivity` 会派发 `listening:ime-hidden`，见 [docs/mobile-status-bar.md](docs/mobile-status-bar.md)。
 - **安卓原生代码**：容器里没有安卓 SDK，`MainActivity` 等 Java 改动只能靠 Actions 打包来验证能不能编译；
   资源 XML 的注释里不能出现 `--`（比如写了个 CSS 变量名），否则打包直接失败。
+- **电脑上的两样**（手机上看不到）：
+  - 宽屏歌词栏（屏幕宽 1600 以上才出，三栏：当前页 | 播放栏 | 歌词）：断点只在 JS 的 `LYRICS_COL_QUERY` 写一处，
+    CSS 跟着 shell 上的 `has-lyrics-col` 走。
+  - 迷你播放器小窗（Document Picture-in-Picture，只有电脑上的 Chrome / Edge 有，APK 里不出）：里面的节点不归模板管，在 `toggleMiniPlayer` 里搭好，`syncMiniPlayer`
+    每次渲染完按状态改；样式也写在 helmet 里（`.sw-mp-*`），打开时整份搬过去；外面接口来的文字只用 `textContent` 填；
+    尺寸常量 `MINI_PLAYER_*` 和 CSS 是同一组数。浏览器的限制见 [docs/mini-player.md](docs/mini-player.md)。
 
 ## 测试
 
 改完先跑 `npm test`（会自己起本地服务器），说明见 [tests/README.md](tests/README.md)。大部分测试会调
 网易云 / QQ 的真实接口，接口本身挂了也会报错，先看失败信息再判断是不是代码的问题。
 
-- 改界面先跑 `node tests/layout.test.mjs`：不联网，用手机、横屏、平板、电脑四种尺寸各走一遍，截图存在系统临时目录的 `listening-tests/`。
+- 改界面先跑 `node tests/layout.test.mjs`：不联网，用手机、横屏、平板、电脑、宽屏电脑五种尺寸各走一遍，截图存在系统临时目录的 `listening-tests/`。
 - Playwright 模拟不了真手机上的键盘、WebView 和状态栏。这类改动先推分支出预览版，让用户在手机上试。
+- 迷你播放器（电脑 Chrome / Edge 的小窗）：测它不能用 Playwright 拦请求，一拦小窗的样式就加载不出来；拖动、记位置
+  这些要在有窗口管理器的真窗口里试。浏览器的限制和试法见 [docs/mini-player.md](docs/mini-player.md)。
+- 不联网的测试会被页面自己的两处联网绊倒：宽屏歌词栏或小窗开着时，暂停换了当前曲目会去补歌词；真放音频时会预取下一首。
+  测试里把 `ensureLyricsForCurrent` / `prefetchTrack` 换成空函数（layout、miniplayer 就是这么做的）。
 - 联网的几组时好时坏：native 的两项导出检查要在 90 秒内下完一整首歌；第三方搜索接口有时对所有关键词都返回空数组。
   失败了先用 curl 直接调一下接口，再判断是不是代码的问题。
 
@@ -50,6 +60,8 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
   会提示。只有改了 `examples/`、`src/`、`mobile/` 或工作流本身才会打包。
 - 惯例：推分支出预览版，用户在手机上试过、说可以了，再开 PR 用合并提交合进 main。合并提交的标题写成
   `Merge pull request #N: 一句用户看得懂的话`，正式版发布说明的第一行就是这个标题。
+- 只改电脑网页版的东西（宽屏、迷你播放器这类手机上看不到的）没法先在手机上试：效果图、截图和真窗口实测结果给用户看，
+  用户说可以再开 PR 合进 main，Render 部署完才能在电脑上用。
 - 签名钥匙只在仓库的 Actions Secrets 里，不在仓库里，也不要放进仓库。容器里没有这把钥匙：不要在本地
   用别的钥匙打包给用户安装——签名不同就没法覆盖安装，只能卸载、丢数据。要给手机装包就走 CI。
 - 版本号就是构建号，自动递增，不用手动改。

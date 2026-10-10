@@ -1,4 +1,4 @@
-// 版面检查（不联网）：手机竖屏、横过来的手机、平板、电脑四种尺寸，把每个页面、播放页的封面 / 歌词 / 队列、
+// 版面检查（不联网）：手机竖屏、横过来的手机、平板、电脑、宽屏电脑五种尺寸，把每个页面、播放页的封面 / 歌词 / 队列、
 // ⋮ 菜单和各个弹窗都走一遍：没有报错、没有东西伸出屏幕，该出现的栏出现、不该出现的藏好，顶栏高度、
 // 播放页底下 5 个键等距、歌词当前行居中、纯图标按钮都有读屏名字、点菜单外面能收起菜单。
 // 每一屏存一张截图（OUT/layout-<尺寸>-<屏>.png）。示例数据直接塞进页面状态；外网请求一律拦掉，
@@ -41,8 +41,10 @@ const LRC = ['后来 我总算学会了如何去爱', '可惜你 早已远去 �
   '你吻我的那个夜晚，让我往后的时光每当有感叹总想起当天的星光，那时候的爱情为什么就能那样简单（一句特别长的歌词）',
   '每当有感叹', '总想起当天的星光', '那时候的爱情', '为什么就能那样简单'].map((text, i) => ({ time: 10 + i * 6, text }));
 
-// 每一屏从同一份数据开始：曲库、播放队列、当前曲目、歌单、喜欢、搜索历史、已缓存，界面状态全部复位
+// 每一屏从同一份数据开始：曲库、播放队列、当前曲目、歌单、喜欢、搜索历史、已缓存，界面状态全部复位。
+// 宽屏的歌词栏一直摆着歌词，暂停时换了当前曲目会自己去联网补歌词：这里换成什么都不做，不联网
 const SEED = `
+  logic.ensureLyricsForCurrent = function () {};
   logic._cachedKeys = new Set(['netease:9101', 'netease:9201', 'netease:9205', 'netease:9109']);
   logic.patch({
     page: 'search', viewingPlaylistId: null, openMenu: null, mobileNowPlayingExpanded: false, rightPanel: 'browse', mediaView: 'cover',
@@ -87,13 +89,15 @@ const SCREENS = {
   'create': `logic.openCreateModal();`,
 };
 
-// mobile：手机布局（迷你播放条 + 全屏播放页）；two：当前页 | 播放栏（npW 是播放栏的宽度）。
-// 电脑上原来是三栏（左边多一条歌单栏），跟顶栏的「歌单」重复，去掉了（#27）
+// mobile：手机布局（迷你播放条 + 全屏播放页）；two：当前页 | 播放栏（npW 是播放栏的宽度）；
+// three：1600 以上的宽屏，当前页 | 播放栏 | 歌词栏，歌词常驻在最右边一栏，播放栏里不再有「歌词」标签。
+// 电脑上原来左边多一条歌单栏，跟顶栏的「歌单」重复，去掉了（#27）
 const VIEWPORTS = [
   { name: 'phone', size: { width: 412, height: 915 }, touch: true, layout: 'mobile' },
   { name: 'landscape', size: { width: 915, height: 412 }, touch: true, layout: 'mobile' },
   { name: 'tablet', size: { width: 1024, height: 768 }, touch: false, layout: 'two', npW: 340 },
   { name: 'desktop', size: { width: 1440, height: 900 }, touch: false, layout: 'two', npW: 400 },
+  { name: 'wide', size: { width: 1920, height: 1080 }, touch: false, layout: 'three', npW: 400 },
 ];
 
 // 在页面里量一屏：可见的元素有没有伸出屏幕左右两边、纯图标按钮有没有 aria-label、几个关键部件的位置
@@ -148,6 +152,8 @@ const measure = () => {
     topbar: box($('.dc-topbar')),
     nav: [...document.querySelectorAll('.sw-nav-btn')].map(b => ({ label: b.getAttribute('aria-label'), title: b.getAttribute('title'), active: b.classList.contains('is-active'), w: b.offsetWidth, h: b.offsetHeight })),
     main: box($('.sw-main')), np: box($('.dc-nowplaying')), mini: box($('.sw-mini')),
+    lyCol: box($('.sw-lyrics-col')), lyColBody: box($('.sw-lyrics-col-body')),
+    tabNames: [...document.querySelectorAll('.sw-np-head .sw-tabs > button')].map(b => b.firstChild.textContent.trim()),
     libRows: [...document.querySelectorAll('.sw-lib-row')].filter(vis).length,
     modal: box($('.dc-modal')), menu: box($('.sw-menu')), cover: box($('.sw-big-cover')), viewport: box($('.dc-media-viewport')),
     title: box($('.sw-np-title')), titleLine: parseFloat(getComputedStyle($('.sw-np-title')).lineHeight),
@@ -235,11 +241,19 @@ for (const vp of VIEWPORTS) {
         { np: home.np, mini: home.mini });
       const pc = shots['player-cover'];
       check(`${tag}: player page covers the whole screen when opened`, pc.np && Math.round(pc.np.w) === pc.W && Math.round(pc.np.h) === pc.H, pc.np);
-    } else {
-      // 当前页从屏幕最左边开始（左边没有别的栏），右边紧挨着播放栏
+    } else if (vp.layout === 'two') {
+      // 当前页从屏幕最左边开始（左边没有别的栏），右边紧挨着播放栏；没有歌词栏，播放栏里有「歌词」标签
       check(`${tag}: two columns (page | player ${vp.npW}px), nothing left of the page, no mini player`,
-        home.main && Math.round(home.main.x) === 0 && home.np && Math.round(home.np.w) === vp.npW && !home.mini && Math.round(home.main.r) === Math.round(home.np.x),
-        { main: home.main, np: home.np, mini: home.mini });
+        home.main && Math.round(home.main.x) === 0 && home.np && Math.round(home.np.w) === vp.npW && !home.mini && Math.round(home.main.r) === Math.round(home.np.x)
+        && !home.lyCol && home.tabNames.join() === '封面,歌词,队列',
+        { main: home.main, np: home.np, mini: home.mini, lyCol: home.lyCol, tabs: home.tabNames });
+    } else {
+      // 宽屏：当前页 | 播放栏 | 歌词栏，一栏挨一栏铺满整个宽度；歌词栏至少 360；播放栏里没有「歌词」标签了
+      check(`${tag}: three columns (page | player ${vp.npW}px | lyrics), lyrics on the far right, no 歌词 tab`,
+        home.main && Math.round(home.main.x) === 0 && home.np && Math.round(home.np.w) === vp.npW && !home.mini
+        && Math.round(home.main.r) === Math.round(home.np.x) && home.lyCol && Math.round(home.lyCol.x) === Math.round(home.np.r)
+        && Math.round(home.lyCol.r) === home.W && home.lyCol.w >= 360 && home.tabNames.join() === '封面,队列',
+        { main: home.main, np: home.np, lyCol: home.lyCol, tabs: home.tabNames });
     }
 
     // 播放页：5 个键五等分（中心等距、播放键在正中间）、封面是正方形且在媒体区里、长歌名最多两行
@@ -284,12 +298,16 @@ for (const vp of VIEWPORTS) {
     check(`${tag}: ${vp.touch ? 'system scrollbar on touch screens' : 'thin custom scrollbar with a mouse'}`,
       vp.touch ? sb.scrollbarWidth === 'auto' && sb.scrollbarColor === 'auto' : sb.scrollbarWidth === 'thin', sb);
 
-    // 歌词：每行 48px（滚动定位按这个数算），当前行停在歌词区正中间
+    // 歌词：每行 48px（滚动定位按这个数算），当前行停在歌词区正中间。宽屏的歌词在右边那一栏：每行 60px，
+    // 当前行停在那一栏正中间；播放栏里点「歌词」（比如从窄屏拉宽过来时停在歌词上）也照样显示封面
     const ly = shots['player-lyrics'];
-    const mid = ly.viewport && (ly.viewport.y + ly.viewport.h / 2);
-    check(`${tag}: lyric lines are 48px and the current line sits in the middle`,
-      ly.lines.length === LRC.length && ly.lines.every(l => Math.round(l.h) === 48) && ly.curLine && Math.abs(ly.curLine.y + ly.curLine.h / 2 - mid) <= 2,
-      { heights: [...new Set(ly.lines.map(l => Math.round(l.h)))], cur: ly.curLine, mid });
+    const lyH = vp.layout === 'three' ? 60 : 48;
+    const lyArea = vp.layout === 'three' ? ly.lyColBody : ly.viewport;
+    const mid = lyArea && (lyArea.y + lyArea.h / 2);
+    check(`${tag}: lyric lines are ${lyH}px and the current line sits in the middle${vp.layout === 'three' ? ' of the lyrics column' : ''}`,
+      ly.lines.length === LRC.length && ly.lines.every(l => Math.round(l.h) === lyH) && ly.curLine && Math.abs(ly.curLine.y + ly.curLine.h / 2 - mid) <= 2
+      && (vp.layout !== 'three' || (ly.cover && ly.curLine.x >= ly.lyCol.x)),
+      { heights: [...new Set(ly.lines.map(l => Math.round(l.h)))], cur: ly.curLine, mid, cover: ly.cover });
 
     // 菜单在屏幕里；弹窗：手机是贴底的弹层，电脑是屏幕中间的方框
     const menuOk = ['player-menu', 'playlist-menu'].every(n => shots[n].menu && shots[n].menu.x >= 0 && shots[n].menu.r <= shots[n].W);
