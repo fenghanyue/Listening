@@ -734,7 +734,7 @@ if ('serviceWorker' in navigator) {
                     <button class="sw-icon-btn" onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" aria-label="上移" title="上移"><span class="ms">keyboard_arrow_up</span></button>
                     <button class="sw-icon-btn" onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" aria-label="下移" title="下移"><span class="ms">keyboard_arrow_down</span></button>
                   </span>
-                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="删除这首歌" title="删除这首歌：播放队列、歌单和「喜欢的音乐」里都会去掉"><span class="ms">close</span></button>
+                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="移出队列" title="移出队列"><span class="ms">close</span></button>
                 </div>
               </div>
             </sc-for>
@@ -3683,8 +3683,9 @@ class Component extends DCLogic {
           resumeAt = 0;
           if (!track) { this.showToast('离线中，播放队列里没有已缓存的歌'); return; }
         }
+        // 一首都没有（播放队列被移空了）就什么都不做：对着空的 audio 调 play() 也会触发 play 事件，
+        // 界面会显示"正在播放"，其实没有声音（耳机 / 通知栏上的播放键会走到这里）
         if (track) this.startTrack(track, resumeAt);
-        else a.play().catch(() => {});
       } else {
         a.play().catch(e => { console.error('play error:', e); });
       }
@@ -3759,22 +3760,52 @@ class Component extends DCLogic {
     else this.showToast('播放队列里没有已缓存的歌，联网后才能切');
   }
 
-  removeTrack(id) {
-    this.patch(s => {
-      const queue = s.queue.filter(t => t.id !== id);
-      const oldOrderIdx = s.playOrder.indexOf(id);
-      const playOrder = s.playOrder.filter(pid => pid !== id);
-      let currentId = s.currentId;
-      // 删的正好是当前在播的曲目：接下来该播的是播放队列里的下一首，不是曲库里随便挨着的邻居
-      if (id === currentId) currentId = playOrder[oldOrderIdx] ?? playOrder[oldOrderIdx - 1] ?? playOrder[0] ?? null;
-      // 曲目从曲库里彻底删除后，同步清掉歌单/喜欢里对它的引用，避免留下悬空 id（外面数量对不上点进去看到的数量）
-      const liked = { ...s.liked };
-      delete liked[id];
-      const likedOrder = s.likedOrder.filter(lid => lid !== id);
-      const playlists = s.playlists.map(p => p.trackIds ? { ...p, trackIds: p.trackIds.filter(tid => tid !== id) } : p);
-      return { queue, playOrder, currentId, liked, likedOrder, playlists };
-    });
+  // 播放页队列里的 ×：只把这首移出播放队列（playOrder），曲库、歌单、「喜欢的音乐」都不动。
+  // 以前这里把它从曲库、所有歌单和喜欢里一起删掉了（#29）
+  // 移出的是正在放的这首：换到它后面那首（到队尾绕回队首；离线挑歌模式下找已缓存的），跟点「下一首」一样。
+  // 本来在放就接着放；暂停着、或者队列里已经没有能放的，就停在那首上不出声，点播放从头放。队列删空了就什么都不放
+  removeFromQueue(id) {
+    const s = this.state;
+    const idx = s.playOrder.indexOf(id);
+    if (idx < 0) return;
+    const playOrder = s.playOrder.filter(pid => pid !== id);
+    if (id !== s.currentId) {
+      this.patch({ playOrder });
+      this.persist();
+      return;
+    }
+    // 在移出之前的队列上找：不算自己，绕一圈也找不回被移出的这首
+    const playable = this.findPlayableInOrder(idx, 1);
+    this.patch({ playOrder });
+    if (s.playing && playable) {
+      this.startTrack(playable);
+      return;
+    }
+    if (s.playing && playOrder.length) this.showToast('播放队列里没有已缓存的歌，联网后才能切');
+    const nextId = playable ? playable.id : (playOrder.length ? playOrder[idx % playOrder.length] : null);
+    this.unloadAudio();
+    this.patch({ currentId: nextId, currentTime: 0, playing: false, loadingTrackId: null, lyrics: [], lyricsTrackId: null, lyricsLoading: false, exportReady: false });
     this.persist();
+    const next = s.queue.find(t => t.id === nextId);
+    if (next) {
+      mediaSessionBridge.setMetadata(next);
+      mediaSessionBridge.setPosition(next.duration, 0);
+    }
+  }
+
+  // 清空 audio 元素，作废还在路上的加载：之后点播放（或耳机 / 通知栏上的播放键）都走 togglePlay，
+  // 按 currentId 从头放——跟刚打开 App、还没放过歌的时候一样
+  unloadAudio() {
+    this._loadToken = (this._loadToken || 0) + 1;
+    clearTimeout(this._loadWatchdogTimer);
+    this._loadWatchdogTimer = null;
+    this._loadWatchdogTrackId = null;
+    this._prefetchedForId = null;
+    this._shufflePrefetchedNextId = null;
+    this.stopHLS();
+    const a = this._audio;
+    if (a) { a.pause(); a.removeAttribute('src'); a.load(); }
+    if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
   }
 
   dragStart(id) { this.patch({ dragId: id }); }
@@ -3848,7 +3879,7 @@ class Component extends DCLogic {
         rowClass: 'sw-qrow sw-press' + (isCurrent ? ' is-current' : ''),
         rowOpacity: offlineMode && !cached ? '0.45' : '1',
         onClick: () => this.playTrackAt(t.id),
-        onRemove: (e) => { e.stopPropagation(); this.removeTrack(t.id); },
+        onRemove: (e) => { e.stopPropagation(); this.removeFromQueue(t.id); },
         onDragStart: () => this.dragStart(t.id),
         onDragOver: (e) => this.dragOverRow(t.id, e),
         onDrop: (e) => e.preventDefault(),
