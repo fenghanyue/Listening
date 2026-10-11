@@ -14,7 +14,7 @@ import android.widget.RemoteViews;
  * 最下面一排播放模式、上一首、下一首、播放。
  *
  * 挂件自己不放歌，歌是在 App 的页面里放的，所以按键分两种情况：
- * - App 开着（AppShellPlugin 在）：按键发广播到这里，转给页面执行（AppShellPlugin.deliverWidgetCommand），不打开 App；
+ * - App 开着（AppShellPlugin 在）：按键发广播给 PlayerWidgetCommands，转给页面执行（AppShellPlugin.deliverWidgetCommand），不打开 App；
  * - App 没开（没打开过、被划掉了）：按键直接打开 App，页面起来以后再执行这个键（AppShellPlugin.handleOnNewIntent）。
  *   打开 / 关掉 App 时 AppShellPlugin 会重画挂件，把按键在两种之间换过来。
  * 显示的内容由页面通过 AppShell.updateWidget 报过来，存在 SharedPreferences 里：桌面要重画（开机、换桌面、
@@ -40,23 +40,6 @@ public class PlayerWidget extends AppWidgetProvider {
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] appWidgetIds) {
         render(context, manager, appWidgetIds);
-    }
-
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        super.onReceive(context, intent);
-        if (!ACTION_COMMAND.equals(intent.getAction())) return;
-        String command = intent.getStringExtra(EXTRA_COMMAND);
-        if (command == null) return;
-        if (AppShellPlugin.deliverWidgetCommand(command)) return;
-        // 挂件上还是 App 开着时的按键，App 却已经不在了（被系统杀掉，没来得及重画）：先把按键改成"打开 App"，
-        // 再试着打开。有的系统不让从后台直接打开界面，那就是这一下没反应，再按一次就能打开
-        renderAll(context);
-        try {
-            context.startActivity(openAppIntent(context, command).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        } catch (RuntimeException ignored) {
-            // 打不开就算了，按键已经改好了
-        }
     }
 
     /** 页面报来的最新状态：存下来，重画所有挂件 */
@@ -106,7 +89,7 @@ public class PlayerWidget extends AppWidgetProvider {
         for (int i = 0; i < COMMANDS.length; i++) {
             PendingIntent pending;
             if (alive) {
-                Intent intent = new Intent(context, PlayerWidget.class).setAction(ACTION_COMMAND).putExtra(EXTRA_COMMAND, COMMANDS[i]);
+                Intent intent = new Intent(context, PlayerWidgetCommands.class).setAction(ACTION_COMMAND).putExtra(EXTRA_COMMAND, COMMANDS[i]);
                 pending = PendingIntent.getBroadcast(context, i + 1, intent, FLAGS);
             } else {
                 pending = PendingIntent.getActivity(context, i + 1, openAppIntent(context, COMMANDS[i]), FLAGS);

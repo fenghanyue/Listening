@@ -159,11 +159,13 @@ App 里提示更新，把这个代价降到最低。
 页面里放的。页面把歌名、歌手、专辑、在不在放、播放模式报给原生（`AppShell.updateWidget`），原生存进
 SharedPreferences、重画挂件。挂件上的键分两种：
 
-- App 开着：按键发广播，`AppShellPlugin` 转成 `widgetCommand` 事件交给页面，不打开 App；
+- App 开着：按键发广播给 `PlayerWidgetCommands`，`AppShellPlugin` 转成 `widgetCommand` 事件交给页面，不打开 App；
 - App 没开：按键直接打开 App，Intent 里带着这个键，页面起来以后再执行（`AppShellPlugin.handleOnNewIntent`；
   页面还没开始听就先存着，用的是 Capacitor `notifyListeners` 的"留到有人听"）。
 
-App 打开、关掉时 `AppShellPlugin` 重画挂件，把按键在两种之间换过来。挂件只能用桌面认得的几种控件
+App 打开、关掉时 `AppShellPlugin` 重画挂件，把按键在两种之间换过来。清单里 `PlayerWidget` 对外公开（`exported="true"`）：
+v1.0.17 照安卓模板写成不公开，ColorOS 长按桌面的「卡片」列表里就找不到它；收按键的 `PlayerWidgetCommands` 不公开，
+别的 App 没法冒充挂件替用户按播放。挂件只能用桌面认得的几种控件
 （LinearLayout、FrameLayout、TextView、ImageView 这些），所以是照效果图用原生重新搭的：颜色在 `colors.xml`
 的 `widget_*`（等于页面白底主题那几个颜色），图标是 Material Symbols 的矢量图，长歌名靠 TextView 自己缩字号
 （安卓 8 起）。安卓 12 以下的挂件列表用 `drawable-nodpi/widget_preview.png` 当预览图，改了布局记得重画一张。
