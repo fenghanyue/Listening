@@ -1,6 +1,6 @@
 // 迷你播放器（不联网）：电脑上的 Chrome / Edge 点音量那一排的按钮，播放器单独弹成一个浮在所有窗口最上面的小窗
 // （Document Picture-in-Picture）。小窗里的键都管用、跟着主页面的状态走；播放队列弹在播放器上面，每行能上移 / 下移 /
-// 移出；长歌词放不下时按播放进度往左滑；跟着主题换黑白；「回到网页」关掉小窗。startTrack 换成只记一笔的假函数。
+// 移出；长歌词放不下时按播放进度往左滑；跟着主题换黑白、跟着界面语言换中英文；「回到网页」关掉小窗。startTrack 换成只记一笔的假函数。
 // 注意两点：
 // - 不能用 page.route / ctx.route 拦请求：Playwright 一拦，搬到小窗里的样式表就加载不出来（图标变成一串英文）。
 //   这里只监听、不拦，最后检查没有请求出本机。
@@ -150,6 +150,32 @@ await L(`logic.patch({ theme: 'light' });`);
 await wait(150);
 const light = await view(mp);
 check('follows the light / dark theme', dark.theme === 'dark' && light.theme === 'light' && dark.bg !== light.bg, [dark.bg, light.bg]);
+
+// 主页面切到英文：小窗里的字（标签页标题、按钮的读屏名字、播放队列的标题和首数、没歌词时那一行）都跟着换，切回来再换回中文。
+// 弹出播放队列直接调 toggleMiniPlayerList：点按钮会顺带改窗口大小
+const mpText = (mp) => mp.evaluate(() => {
+  const $ = (s) => document.querySelector(s);
+  const label = (el) => el.getAttribute('aria-label');
+  const row = $('.sw-mp-row');
+  return {
+    lang: document.documentElement.lang, title: document.title,
+    buttons: ['back', 'mode', 'prev', 'play', 'next', 'list'].map(a => label($(`[data-act="${a}"]`))),
+    row: row ? [...row.querySelectorAll('button')].map(label) : [],
+    head: $('.sw-mp-list-t').textContent, count: $('.sw-mp-count').textContent, ly: $('.sw-mp-ly-txt').textContent,
+  };
+});
+await L(`logic.setLang('en'); logic.patch({ lyricsTrackId: null, lyricsLoading: false }); logic.toggleMiniPlayerList();`);
+await wait(150);
+const enText = await mpText(mp);
+await shot(mp, 'english');
+await L(`logic.toggleMiniPlayerList(); logic.setLang('zh');`);
+await wait(150);
+const zhText = await mpText(mp);
+check('switching the page to English switches the small window too (title, button labels, queue, lyric line)',
+  JSON.stringify(enText) === JSON.stringify({ lang: 'en', title: 'Listening', buttons: ['Back to page', 'Repeat all', 'Previous', 'Play', 'Next', 'Queue'],
+    row: ['Move up', 'Move down', 'Remove from queue'], head: 'Queue', count: '4 songs', ly: 'No lyrics' }), enText);
+check('…and back to Chinese', zhText.lang === 'zh-CN' && zhText.title === '听音乐'
+  && zhText.buttons.join() === '回到网页,列表循环,上一首,播放,下一首,播放队列' && zhText.ly === '暂无歌词', zhText);
 await L(`logic.patch({ lyricsTrackId: null, lyricsLoading: true });`);
 await wait(100);
 const lyLoading = (await view(mp)).ly;

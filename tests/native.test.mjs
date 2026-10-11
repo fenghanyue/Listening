@@ -117,6 +117,30 @@ await fire('MediaSession:setActionHandler:play', { action: 'play' });
 await page.waitForTimeout(800);
 check('notification play resumes audio', !(await page.evaluate(() => document.getElementById('player-audio').paused)));
 
+// --- 桌面挂件：页面把在放的歌报给原生（AppShell.updateWidget），挂件上的键由原生发 widgetCommand 过来 ---
+const lastWidget = async () => ((await calls('AppShell', 'updateWidget')).slice(-1)[0] || {}).options;
+let widget = await lastWidget();
+check('widget is told the playing track (title, playing, mode, language)', widget && widget.hasTrack && widget.title === t0.title && widget.playing === true && widget.mode === 0 && widget.lang === 'zh', widget);
+// 挂件上的字跟着 App 里选的语言（原生按 lang 取 values-en 的英文）：切语言就再报一次
+await L(`logic.setLang('en');`);
+await page.waitForTimeout(200);
+const widgetEn = await lastWidget();
+await L(`logic.setLang('zh');`);
+await page.waitForTimeout(200);
+check('switching the language re-reports the widget with lang en, then zh', widgetEn.lang === 'en' && (await lastWidget()).lang === 'zh', [widgetEn.lang]);
+const widgetKeyOk = await fire('AppShell:widgetCommand', { command: 'toggle' });
+await page.waitForTimeout(500);
+widget = await lastWidget();
+check('widget play key pauses, and the widget shows it', widgetKeyOk && (await page.evaluate(() => document.getElementById('player-audio').paused)) && widget.playing === false, widget);
+await fire('AppShell:widgetCommand', { command: 'mode' });
+await page.waitForTimeout(300);
+widget = await lastWidget();
+check('widget mode key switches to shuffle (随机播放)', (await L(`return logic.state.playMode;`)) === 1 && widget.mode === 1, widget);
+await L(`logic.patch({ playMode: 0 }); logic.persist();`);
+await fire('AppShell:widgetCommand', { command: 'toggle' });
+await page.waitForTimeout(800);
+check('widget play key resumes', !(await page.evaluate(() => document.getElementById('player-audio').paused)));
+
 // --- 拔耳机 ---
 const noisyOk = await fire('AppShell:audioBecomingNoisy', {});
 await page.waitForTimeout(300);
@@ -173,6 +197,13 @@ check('share button available in APK', await L(`return logic.renderVals().v.shar
 await L(`logic.systemShare();`);
 const shareText = (await calls('Share', 'share')).slice(-1)[0];
 check('share text goes through native share (text only, no url)', shareText && typeof shareText.options.text === 'string' && !shareText.options.url && shareText.options.text.includes('music.163.com'), shareText && shareText.options);
+// 英文界面分享：分享面板的标题和那段文字里固定的字（引号、Album:）是英文，歌名歌手原样
+await L(`logic.setLang('en'); logic.systemShare();`);
+await page.waitForTimeout(300);
+const shareEn = (await calls('Share', 'share')).slice(-1)[0];
+await L(`logic.setLang('zh');`);
+check('in English the share sheet title and the shared text are English', shareEn && shareEn.options.dialogTitle === 'Share this song'
+  && shareEn.options.text.startsWith(`“${t0.title.trim()}”`) && !/[《》]|专辑/.test(shareEn.options.text) && shareEn.options.text.includes('music.163.com'), shareEn && shareEn.options);
 
 // --- 设置页里的版本号 ---
 await L(`logic.closeShareModal(); logic.openSettings();`);

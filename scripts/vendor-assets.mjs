@@ -6,7 +6,9 @@
  * APK 要做离线可用，这些东西必须打进包里；网页版顺带也不再依赖这几个在国内时好时坏的 CDN。
  *
  * 用法：node scripts/vendor-assets.mjs（零依赖，Node 18+ 自带 fetch）
+ *       node scripts/vendor-assets.mjs heros   只跑其中几步（scripts / fonts / heros），别的文件不动
  * 产物直接提交进仓库，平时不用跑；只有升级版本、或者 Google Fonts 那边字体更新了想跟进时才需要重跑。
+ * 注意 Google 那边的 Material Symbols 隔一阵就出新版，全跑会顺带把图标字体也换成新的。
  */
 
 import fs from 'node:fs/promises';
@@ -56,6 +58,28 @@ const FONTS = [
     css: 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,100..700,0..1&display=block',
   },
 ];
+
+// 西文和数字的主字体 TeX Gyre Heros：Helvetica 的开源复刻（GUST 字体许可），瑞士风格最经典的那款字。
+// Google Fonts 上没有，直接从 CTAN 下原版 OTF：不转格式、不裁字（许可要求改过的版本得改名，原样带上最省事），
+// 哈希钉死（所以从哪个 CTAN 镜像下都一样；mirrors.ctan.org 每次随机跳到一个镜像，偶尔碰上拒绝访问的，就挨个换）。
+// 只有常规和粗体：页面里写 500 的会用常规，600 / 800 的用粗体。
+// 它自带的行距（ascent + descent）比 Inter 高大约 18%，@font-face 里按 Inter 的数覆盖，换字体不挪版面
+// （两者的大写字母高度几乎一样，覆盖后字在行里的位置也差不多）。Heros 没有的字（比如俄文）由排在后面的 Inter 画
+const HEROS = [
+  {
+    file: 'texgyreheros-regular.otf',
+    weight: 400,
+    path: 'fonts/tex-gyre/opentype/texgyreheros-regular.otf',
+    sri: 'sha384-neDWtFBXs7JXSUkPhWL+gRn+ciMvL8tfL3yaXvaMLiqw6LKGAjgPu6YCaQ+oE5V7',
+  },
+  {
+    file: 'texgyreheros-bold.otf',
+    weight: 700,
+    path: 'fonts/tex-gyre/opentype/texgyreheros-bold.otf',
+    sri: 'sha384-nHmGYln09/kv0qrvR8iAzI/1RMH68LIhdtZpBJQIQ13J0vemKLVRQqOraep+fYg/',
+  },
+];
+const CTAN_MIRRORS = ['https://mirrors.ctan.org/', 'https://ctan.math.illinois.edu/', 'https://mirrors.rit.edu/CTAN/'];
 
 const UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36';
 
@@ -110,7 +134,45 @@ async function vendorFonts() {
   console.log('  fonts.css');
 }
 
+// Heros 单独写一份 fonts-heros.css（页面里和 fonts.css 并排引用），只跑这一步时 fonts.css 不用重新生成
+async function vendorHeros() {
+  await fs.mkdir(path.join(OUT, 'fonts'), { recursive: true });
+  const faces = [];
+  for (const f of HEROS) {
+    let buf = null;
+    for (const mirror of CTAN_MIRRORS) {
+      try { buf = await download(mirror + f.path); break; } catch (e) { console.log(`  ${e.message}，换下一个镜像`); }
+    }
+    if (!buf) throw new Error(`${f.file} 所有镜像都下不下来`);
+    const got = sri(buf);
+    if (got !== f.sri) throw new Error(`${f.file} 哈希不对：期望 ${f.sri}，实际 ${got}`);
+    await fs.writeFile(path.join(OUT, 'fonts', f.file), buf);
+    console.log(`  fonts/${f.file}  ${(buf.length / 1024).toFixed(0)} KB`);
+    faces.push([
+      '@font-face {',
+      "  font-family: 'TeX Gyre Heros';",
+      '  font-style: normal;',
+      `  font-weight: ${f.weight};`,
+      '  font-display: swap;',
+      `  src: url(./fonts/${f.file}) format('opentype');`,
+      '  ascent-override: 96.88%;',
+      '  descent-override: 24.12%;',
+      '  line-gap-override: 0%;',
+      '}',
+    ].join('\n'));
+  }
+  const header = [
+    '/* 由 scripts/vendor-assets.mjs 生成，别手改；来源见脚本里的 HEROS */',
+    '/* TeX Gyre Heros：Helvetica 的开源复刻（GUST 字体许可），CTAN 原版 OTF，没改过。行距按 Inter 覆盖，换字体不挪版面 */',
+  ].join('\n');
+  await fs.writeFile(path.join(OUT, 'fonts-heros.css'), [header, ...faces].join('\n\n') + '\n');
+  console.log('  fonts-heros.css');
+}
+
+const only = new Set(process.argv.slice(2));
+const want = (step) => only.size === 0 || only.has(step);
 await fs.mkdir(OUT, { recursive: true });
 console.log(`写入 ${path.relative(ROOT, OUT)}/`);
-await vendorScripts();
-await vendorFonts();
+if (want('scripts')) await vendorScripts();
+if (want('fonts')) await vendorFonts();
+if (want('heros')) await vendorHeros();

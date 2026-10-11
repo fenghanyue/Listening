@@ -37,10 +37,10 @@ const icons = await page.evaluate(() => {
   }
   return out;
 });
-// Inter 要确认是从 vendor/ 真加载成功的那份：fonts.check 对加载失败的字体也会返回 true，
-// 而测试机上可能本来就装着系统 Inter，失败了也看不出来
+// 西文字体 TeX Gyre Heros 要确认是从 vendor/ 真加载成功的那份（常规和粗体都有）：fonts.check 对加载失败的字体
+// 也会返回 true，而测试机上可能本来就装着同名的系统字体，失败了也看不出来
 const fontOk = await page.evaluate(() => document.fonts.check("24px 'Material Symbols Outlined'")
-  && [...document.fonts].some(f => f.family.replace(/["']/g, '') === 'Inter' && f.status === 'loaded'));
+  && ['400', '700'].every(w => [...document.fonts].some(f => f.family.replace(/["']/g, '') === 'TeX Gyre Heros' && f.weight === w && f.status === 'loaded')));
 await page.screenshot({ path: `${OUT}/smoke-home.png` });
 
 check('page requested nothing from a CDN', blocked.length === 0, blocked);

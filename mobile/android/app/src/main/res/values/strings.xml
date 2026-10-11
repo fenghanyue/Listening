@@ -2,6 +2,18 @@
 <resources>
     <string name="app_name">听音乐</string>
     <string name="title_activity_main">听音乐</string>
-    <string name="package_name">io.github.fenghanyue.listening</string>
-    <string name="custom_url_scheme">io.github.fenghanyue.listening</string>
+    <string name="package_name" translatable="false">io.github.fenghanyue.listening</string>
+    <string name="custom_url_scheme" translatable="false">io.github.fenghanyue.listening</string>
+
+    <!-- 桌面挂件。英文的在 values-en/strings.xml，挂件跟着 App 里选的语言挑（PlayerWidget.localized） -->
+    <string name="widget_description">播放控制：播放模式、上一首、下一首、播放 / 暂停</string>
+    <string name="widget_idle_title">听音乐</string>
+    <string name="widget_idle_artist">还没有在放的歌</string>
+    <string name="widget_play">播放</string>
+    <string name="widget_pause">暂停</string>
+    <string name="widget_prev">上一首</string>
+    <string name="widget_next">下一首</string>
+    <string name="widget_mode_list">列表循环</string>
+    <string name="widget_mode_shuffle">随机播放</string>
+    <string name="widget_mode_one">单曲循环</string>
 </resources>

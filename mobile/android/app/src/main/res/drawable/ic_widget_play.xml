@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面挂件的图标：播放（红底上的白色图标）。图形是 Material Symbols 的 play_arrow（填充版，Apache 2.0），和页面上用的是同一套 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="30dp"
+    android:height="30dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <path
+        android:fillColor="@color/widget_on_red"
+        android:pathData="M320,760L320,200L760,480L320,760Z" />
+</vector>

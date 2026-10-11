@@ -501,16 +501,18 @@ var ListeningAPI = (() => {
         return null;
     }
   }
-  function shareText(track) {
+  function shareText(track, lang = "zh") {
     if (!track) return "";
+    const en = lang === "en";
     const lines = [];
     const title = (track.title || "").trim();
     const artist = (track.artist || "").trim();
-    if (title && artist) lines.push(`\u300A${title}\u300B\u2014 ${artist}`);
-    else if (title) lines.push(`\u300A${title}\u300B`);
+    const quoted = en ? `\u201C${title}\u201D` : `\u300A${title}\u300B`;
+    if (title && artist) lines.push(en ? `${quoted} \u2014 ${artist}` : `${quoted}\u2014 ${artist}`);
+    else if (title) lines.push(quoted);
     else if (artist) lines.push(artist);
     const album = (track.album || "").trim();
-    if (album) lines.push(`\u4E13\u8F91\uFF1A${album}`);
+    if (album) lines.push(en ? `Album: ${album}` : `\u4E13\u8F91\uFF1A${album}`);
     const url = officialSongUrl(track);
     if (url) {
       if (lines.length) lines.push("");

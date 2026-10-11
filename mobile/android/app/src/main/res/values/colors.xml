@@ -4,4 +4,12 @@
          窗口底色、WebView 底色都用它，页面第一帧画出来之前不会闪一下别的颜色。启动画面只能有一个颜色，
          选了黑底的人启动时会先看到一下白底 -->
     <color name="app_background">#F7F7F4</color>
+
+    <!-- 桌面挂件（PlayerWidget）只有白底一套，颜色和页面白底主题的 bg、ink、ink-2、red、on-red 同一组值，
+         页面那组变量改了这里要跟着改 -->
+    <color name="widget_bg">#F7F7F4</color>
+    <color name="widget_ink">#111111</color>
+    <color name="widget_ink2">#5C5C58</color>
+    <color name="widget_red">#E30613</color>
+    <color name="widget_on_red">#FFFFFF</color>
 </resources>

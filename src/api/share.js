@@ -58,21 +58,25 @@ export function officialSongUrl(track) {
 /**
  * 组装分享用的纯文本
  * @param {object} track
- * @returns {string} 形如 "《晴天》— 周杰伦\n专辑：叶惠美\n\nhttps://music.163.com/m/song?id=186016"
+ * @param {string} [lang] 界面语言 'zh' / 'en'：只管固定的那几个字（书名号、「专辑：」），歌名、歌手、专辑原样
+ * @returns {string} 形如 "《晴天》— 周杰伦\n专辑：叶惠美\n\nhttps://music.163.com/m/song?id=186016"，
+ *   英文是 "“晴天” — 周杰伦\nAlbum: 叶惠美\n\nhttps://…"
  */
-export function shareText(track) {
+export function shareText(track, lang = 'zh') {
   if (!track) return '';
 
+  const en = lang === 'en';
   const lines = [];
   const title = (track.title || '').trim();
   const artist = (track.artist || '').trim();
-  if (title && artist) lines.push(`《${title}》— ${artist}`);
-  else if (title) lines.push(`《${title}》`);
+  const quoted = en ? `“${title}”` : `《${title}》`;
+  if (title && artist) lines.push(en ? `${quoted} — ${artist}` : `${quoted}— ${artist}`);
+  else if (title) lines.push(quoted);
   else if (artist) lines.push(artist);
 
   // 搜索结果里 QQ 和 SoundCloud 的 album 是空字符串，只有拉过详情的才有值
   const album = (track.album || '').trim();
-  if (album) lines.push(`专辑：${album}`);
+  if (album) lines.push(en ? `Album: ${album}` : `专辑：${album}`);
 
   const url = officialSongUrl(track);
   if (url) {

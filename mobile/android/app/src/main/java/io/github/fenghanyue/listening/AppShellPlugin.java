@@ -22,9 +22,13 @@ import com.getcapacitor.annotation.CapacitorPlugin;
  * - 拔耳机 / 蓝牙耳机断开时通知页面暂停（系统广播 ACTION_AUDIO_BECOMING_NOISY）
  * - 查询、打开"允许在后台运行"（电池优化）设置：国产系统锁屏后最爱杀后台
  * - 用系统浏览器打开链接（下载新版 APK）
+ * - 桌面挂件（PlayerWidget）：页面报来要显示的东西，挂件上的键转给页面（事件 widgetCommand）
  */
 @CapacitorPlugin(name = "AppShell")
 public class AppShellPlugin extends Plugin {
+
+    // 当前这个 App 界面里的插件实例：挂件靠它判断 App 开没开、把按键转给页面。每次打开 App 新建一个，关掉时清空
+    private static volatile AppShellPlugin active;
 
     private BroadcastReceiver noisyReceiver;
 
@@ -45,6 +49,9 @@ public class AppShellPlugin extends Plugin {
             new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY),
             ContextCompat.RECEIVER_NOT_EXPORTED
         );
+        active = this;
+        // 挂件上的键从"打开 App"换成直接控制
+        PlayerWidget.renderAll(getContext());
     }
 
     @Override
@@ -57,6 +64,59 @@ public class AppShellPlugin extends Plugin {
             }
             noisyReceiver = null;
         }
+        if (active == this) {
+            active = null;
+            // App 关了：挂件改回"按了打开 App"，播放键显示成播放
+            PlayerWidget.renderAll(getContext());
+        }
+    }
+
+    static boolean isActive() {
+        return active != null;
+    }
+
+    /** 挂件上的键：App 开着就交给页面，返回 true；App 没开返回 false */
+    static boolean deliverWidgetCommand(String command) {
+        AppShellPlugin plugin = active;
+        if (plugin == null) return false;
+        plugin.sendWidgetCommand(command);
+        return true;
+    }
+
+    // 页面还没开始听（刚打开 App、页面还在加载）也不丢：先存着，页面一开始听就给它
+    private void sendWidgetCommand(String command) {
+        JSObject data = new JSObject();
+        data.put("command", command);
+        notifyListeners("widgetCommand", data, true);
+    }
+
+    /**
+     * App 没开时按挂件上的键，打开 App 用的 Intent 里带着这个键，页面起来以后执行。Capacitor 在 App 启动
+     * （和开着时又被打开）时会把 Intent 交到这里。从最近任务里重新打开时系统会重放当初那个 Intent，不能再执行一遍
+     */
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        if (intent == null || !PlayerWidget.ACTION_COMMAND.equals(intent.getAction())) return;
+        if ((intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return;
+        String command = intent.getStringExtra(PlayerWidget.EXTRA_COMMAND);
+        intent.removeExtra(PlayerWidget.EXTRA_COMMAND);
+        if (command != null) sendWidgetCommand(command);
+    }
+
+    /** 页面报来挂件要显示的东西：{ hasTrack, title, artist, album, playing, mode, lang }（lang 是 App 里选的语言 "zh" / "en"） */
+    @PluginMethod
+    public void updateWidget(PluginCall call) {
+        PlayerWidget.saveState(
+            getContext(),
+            Boolean.TRUE.equals(call.getBoolean("hasTrack", false)),
+            call.getString("title", ""),
+            call.getString("artist", ""),
+            call.getString("album", ""),
+            Boolean.TRUE.equals(call.getBoolean("playing", false)),
+            call.getInt("mode", 0),
+            call.getString("lang", "")
+        );
+        call.resolve();
     }
 
     /** { ignoring: boolean }：是否已经放行"不受电池优化限制"（Android 6 以下没有这个限制，按已放行算） */

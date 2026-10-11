@@ -17,7 +17,7 @@
 由此带来几件事：
 
 - **改页面，两边都变。** 只在 APK 里生效的功能都藏在 `IS_NATIVE` 判断后面：沉浸状态栏、通知栏 / 锁屏 /
-  耳机按键控制、锁屏后连续播放、返回手势不停歌、拔耳机暂停、检查更新、系统分享。
+  耳机按键控制、锁屏后连续播放、返回手势不停歌、拔耳机暂停、检查更新、系统分享、桌面挂件。
 - **离线那几样网页版也有**：「已缓存」小勾和歌单、「缓存全部」、设置页里的「缓存与离线」；React 和字体也改成从
   自己的服务器加载。网页版要等合并到 main 才有这些。
 - **改了 `server.mjs`，APK 也要等合并到 main 才生效**，因为 APK 用的是线上那台服务器。比如短链导入要靠它放行
@@ -155,6 +155,28 @@ App 里提示更新，把这个代价降到最低。
   页面只给它传 `data:` 图片：本地缓存的封面优先，没有就用 Capacitor 自带的原生 HTTP（8 秒超时）现拉，
   再没有就用 App 图标（它取不到新封面时会沿用上一首的，所以必须总给一张）。
 
+**桌面挂件只是个遥控器。** 2×2 的挂件（`PlayerWidget`，布局 `res/layout/widget_player.xml`）自己不放歌，歌还是在
+页面里放的。页面把歌名、歌手、专辑、在不在放、播放模式报给原生（`AppShell.updateWidget`），原生存进
+SharedPreferences、重画挂件。挂件上的键分两种：
+
+- App 开着：按键发广播给 `PlayerWidgetCommands`，`AppShellPlugin` 转成 `widgetCommand` 事件交给页面，不打开 App；
+- App 没开：按键直接打开 App，Intent 里带着这个键，页面起来以后再执行（`AppShellPlugin.handleOnNewIntent`；
+  页面还没开始听就先存着，用的是 Capacitor `notifyListeners` 的"留到有人听"）。
+
+App 打开、关掉时 `AppShellPlugin` 重画挂件，把按键在两种之间换过来。清单里 `PlayerWidget` 对外公开（`exported="true"`）：
+v1.0.17 照安卓模板写成不公开，ColorOS 长按桌面的「卡片」列表里就找不到它；收按键的 `PlayerWidgetCommands` 不公开，
+别的 App 没法冒充挂件替用户按播放。挂件只能用桌面认得的几种控件
+（LinearLayout、FrameLayout、TextView、ImageView 这些），所以是照效果图用原生重新搭的：颜色在 `colors.xml`
+的 `widget_*`（等于页面白底主题那几个颜色），图标是 Material Symbols 的矢量图，长歌名靠 TextView 自己缩字号
+（安卓 8 起）。安卓 12 以下的挂件列表用 `widget_preview.png` 当预览图（中文的在 `drawable-nodpi/`，英文系统用
+`drawable-en-nodpi/` 那张），改了布局记得两张都重画。
+
+**中文 / English。** 语言开关在页面里（设置 → 语言），存在 localStorage，界面上的字都是页面自己换的。原生那边只有两处跟语言
+有关：App 图标下面的名字由系统按手机的语言挑（`res/values-en/strings.xml`，英文系统叫 Listening），App 里的开关管不到；
+桌面挂件上的字（没在放歌时那两行、按键的读屏名字）跟着 App 里选的语言——页面在 `updateWidget` 里带上 `lang`，
+`PlayerWidget` 换成那种语言的 `Configuration` 去取字。布局里写的 `@string` 是桌面按系统语言解析的，所以挂件上的字
+都在 `render` 里重设一遍；App 装好以后还没打开过时，挂件按系统语言显示。
+
 **页面不打包 `@capacitor/core`。** 原生壳注入的 `Capacitor.nativePromise` / `nativeCallback` 就是 core 的
 `registerPlugin` 底下调的东西，页面里封装了三个小函数（`nativeHas` / `nativeCall` / `nativeListen`）直接用，
 网页版和 APK 共用同一个页面文件，不需要构建步骤。
@@ -172,3 +194,5 @@ App 里提示更新，把这个代价降到最低。
 - **网页版存不了 QQ 音乐的封面。** QQ 封面的服务器不发 CORS 头，网页读不到图片字节，离线时列表照样显示
   sw.js 缓存过的图；APK 走原生 HTTP，没有这个限制。
 - PWA 本身断网还是打不开（`sw.js` 只缓存图片，没缓存页面），这次没改；要离线用，用 APK。
+- **桌面挂件只有白底，没有进度条、封面和歌词**；只在换歌、播放 / 暂停、换播放模式时刷新。App 被系统杀掉以后，
+  挂件上的键第一次按可能没反应（有的系统不让从后台直接打开界面），再按一次就会打开 App 接着执行。

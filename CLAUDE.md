@@ -20,6 +20,12 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
 - **`server.mjs` 两边都依赖**：网页版的页面和代理都在它上面，APK 的代理也指向 Render 上的它
   （`LISTENING_PROXY_BASE`）。改了要等合并到 main、Render 部署后才生效。
 - **根目录 `package.json` 保持零依赖**（Render 部署用），安卓相关依赖只放 `mobile/package.json`。
+- **界面上的字（中文 / English）**：都在页面的 `STRINGS` 表里，每条是 `[中文, English]` 一对，新加的字两种语言都要写；
+  模板里写 `{{ L.键名 }}`，代码里写 `tr('键名', 参数…)`（不叫 `t`：页面里到处拿 `t` 当曲目变量）。歌名、歌手、专辑、歌词、
+  用户起的歌单名不翻；内置「喜欢的音乐」存的还是中文名，显示走 `playlistLabel`；切歌诊断记录（`diagLog`）一直是中文。
+  断行用 `overflow-wrap: anywhere`，别用 `word-break: break-all`（英文单词会从中间断开）。
+- **字体**：西文和数字用 TeX Gyre Heros（Helvetica 的开源复刻，`examples/vendor/fonts-heros.css`；`node scripts/vendor-assets.mjs heros`
+  只更新这一项），只有常规和粗体；中文用手机自带的字体。
 - **界面（瑞士风格）**：颜色只在 `<head>` 里 `html[data-app-theme="light|dark"]` 的 CSS 变量定义一处（`--bg`、`--ink`、`--red`…），
   别处不写死色值；部件样式写在 `<helmet>` 里，类名用 `sw-` 前缀；`dc-` 开头的类是逻辑和测试找元素的钩子，别改名。
   默认白底：改了白底的 `--bg`，`mobile/` 里的 `colors.xml`、`capacitor.config.json` 和 `examples/manifest.json` 要一起改。
@@ -32,6 +38,15 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
   `MainActivity` 会派发 `listening:ime-hidden`，见 [docs/mobile-status-bar.md](docs/mobile-status-bar.md)。
 - **安卓原生代码**：容器里没有安卓 SDK，`MainActivity` 等 Java 改动只能靠 Actions 打包来验证能不能编译；
   资源 XML 的注释里不能出现 `--`（比如写了个 CSS 变量名），否则打包直接失败。
+- **安卓的字**：`res/values/strings.xml` 是中文（默认），`values-en/strings.xml` 是英文系统用的，新加一条两边都要写。
+  App 图标下面的名字跟手机系统的语言走（英文系统叫 Listening），App 里的语言开关管不到。
+- **桌面挂件**（`PlayerWidget`，只在 APK）：页面通过 `AppShell.updateWidget` 报显示的内容，挂件的键以 `widgetCommand`
+  事件回到页面（`handleWidgetCommand`），来龙去脉见 [docs/android-app.md](docs/android-app.md) 第五节。清单里 `PlayerWidget` 要
+  `exported="true"`（不公开时 ColorOS 的「卡片」列表里找不到），按键走不公开的 `PlayerWidgetCommands`。布局只能用桌面认得的
+  控件（LinearLayout、FrameLayout、TextView、ImageView 等，普通 `View` 也不行）；颜色在 `colors.xml` 的 `widget_*`，
+  跟页面白底主题那几个颜色同步改；改了布局要重画两张预览图（安卓 12 以下挂件列表里用）：`drawable-nodpi/` 和 `drawable-en-nodpi/`
+  的 `widget_preview.png`。挂件上的字跟着 App 里选的语言（`updateWidget` 带着 `lang`），布局里写的 `@string` 只跟系统语言走，
+  所以字要在 `PlayerWidget.render` 里按语言重设一遍。
 - **电脑上的两样**（手机上看不到）：
   - 宽屏歌词栏（屏幕宽 1600 以上才出，三栏：当前页 | 播放栏 | 歌词）：断点只在 JS 的 `LYRICS_COL_QUERY` 写一处，
     CSS 跟着 shell 上的 `has-lyrics-col` 走。
@@ -44,7 +59,9 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
 改完先跑 `npm test`（会自己起本地服务器），说明见 [tests/README.md](tests/README.md)。大部分测试会调
 网易云 / QQ 的真实接口，接口本身挂了也会报错，先看失败信息再判断是不是代码的问题。
 
-- 改界面先跑 `node tests/layout.test.mjs`：不联网，用手机、横屏、平板、电脑、宽屏电脑五种尺寸各走一遍，截图存在系统临时目录的 `listening-tests/`。
+- 改界面先跑 `node tests/layout.test.mjs`：不联网，用手机、横屏、平板、电脑、宽屏电脑五种尺寸各走一遍（中文、英文各一遍，
+  英文那遍界面上还有中文就算漏翻），截图存在系统临时目录的 `listening-tests/`。
+- 改了界面上的字先跑 `node tests/i18n.test.mjs`：不开浏览器，几秒钟，查 `STRINGS` 有没有漏写英文、键名写错、哪条没用上。
 - Playwright 模拟不了真手机上的键盘、WebView 和状态栏。这类改动先推分支出预览版，让用户在手机上试。
 - 迷你播放器（电脑 Chrome / Edge 的小窗）：测它不能用 Playwright 拦请求，一拦小窗的样式就加载不出来；拖动、记位置
   这些要在有窗口管理器的真窗口里试。浏览器的限制和试法见 [docs/mini-player.md](docs/mini-player.md)。
