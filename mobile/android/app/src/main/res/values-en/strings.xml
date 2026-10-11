@@ -1,0 +1,19 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- 英文系统里的 App 名字，和桌面挂件的英文（默认的中文在 values/strings.xml）。
+     App 图标下面的名字由系统按手机的语言挑，App 里的语言开关管不到；挂件上的字跟着 App 里选的语言（PlayerWidget.localized） -->
+<resources>
+    <string name="app_name">Listening</string>
+    <string name="title_activity_main">Listening</string>
+
+    <!-- 桌面挂件 -->
+    <string name="widget_description">Playback controls: play mode, previous, next, play / pause</string>
+    <string name="widget_idle_title">Listening</string>
+    <string name="widget_idle_artist">Nothing playing yet</string>
+    <string name="widget_play">Play</string>
+    <string name="widget_pause">Pause</string>
+    <string name="widget_prev">Previous</string>
+    <string name="widget_next">Next</string>
+    <string name="widget_mode_list">Repeat all</string>
+    <string name="widget_mode_shuffle">Shuffle</string>
+    <string name="widget_mode_one">Repeat one</string>
+</resources>

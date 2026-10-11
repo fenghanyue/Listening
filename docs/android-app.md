@@ -168,7 +168,14 @@ v1.0.17 照安卓模板写成不公开，ColorOS 长按桌面的「卡片」列�
 别的 App 没法冒充挂件替用户按播放。挂件只能用桌面认得的几种控件
 （LinearLayout、FrameLayout、TextView、ImageView 这些），所以是照效果图用原生重新搭的：颜色在 `colors.xml`
 的 `widget_*`（等于页面白底主题那几个颜色），图标是 Material Symbols 的矢量图，长歌名靠 TextView 自己缩字号
-（安卓 8 起）。安卓 12 以下的挂件列表用 `drawable-nodpi/widget_preview.png` 当预览图，改了布局记得重画一张。
+（安卓 8 起）。安卓 12 以下的挂件列表用 `widget_preview.png` 当预览图（中文的在 `drawable-nodpi/`，英文系统用
+`drawable-en-nodpi/` 那张），改了布局记得两张都重画。
+
+**中文 / English。** 语言开关在页面里（设置 → 语言），存在 localStorage，界面上的字都是页面自己换的。原生那边只有两处跟语言
+有关：App 图标下面的名字由系统按手机的语言挑（`res/values-en/strings.xml`，英文系统叫 Listening），App 里的开关管不到；
+桌面挂件上的字（没在放歌时那两行、按键的读屏名字）跟着 App 里选的语言——页面在 `updateWidget` 里带上 `lang`，
+`PlayerWidget` 换成那种语言的 `Configuration` 去取字。布局里写的 `@string` 是桌面按系统语言解析的，所以挂件上的字
+都在 `render` 里重设一遍；App 装好以后还没打开过时，挂件按系统语言显示。
 
 **页面不打包 `@capacitor/core`。** 原生壳注入的 `Capacitor.nativePromise` / `nativeCallback` 就是 core 的
 `registerPlugin` 底下调的东西，页面里封装了三个小函数（`nativeHas` / `nativeCall` / `nativeListen`）直接用，

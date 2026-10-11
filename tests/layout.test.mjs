@@ -2,7 +2,9 @@
 // ⋮ 菜单和各个弹窗都走一遍：没有报错、没有东西伸出屏幕，该出现的栏出现、不该出现的藏好，顶栏高度、
 // 播放页底下 5 个键等距、歌词当前行居中、纯图标按钮都有读屏名字、点菜单外面能收起菜单。
 // 每一屏存一张截图（OUT/layout-<尺寸>-<屏>.png）。示例数据直接塞进页面状态；外网请求一律拦掉，
-// 封面图回一张本地小图，本地服务器上会再去联网的接口（/proxy、/stream）也拦掉
+// 封面图回一张本地小图，本地服务器上会再去联网的接口（/proxy、/stream）也拦掉。
+// 英文界面（设置页的「语言」选 English）五种尺寸再各走一遍（-en）：英文一般比中文长，看有没有字伸出去；
+// 这一遍的歌名、歌手、歌词、歌单名也都换成英文的，界面上再出现一个中文字就是漏翻了
 import { BASE, OUT, launchBrowser, logicDriver, createChecker } from './lib.mjs';
 
 const { check, finish } = createChecker();
@@ -41,6 +43,51 @@ const LRC = ['后来 我总算学会了如何去爱', '可惜你 早已远去 �
   '你吻我的那个夜晚，让我往后的时光每当有感叹总想起当天的星光，那时候的爱情为什么就能那样简单（一句特别长的歌词）',
   '每当有感叹', '总想起当天的星光', '那时候的爱情', '为什么就能那样简单'].map((text, i) => ({ time: 10 + i * 6, text }));
 
+// 两种语言各一套示例数据。英文那套的歌名、歌手、歌词、歌单名、搜索记录全是英文：界面上的中文只可能是漏翻的。
+// 内置「喜欢的音乐」存的名字两套都是中文（本地数据里就是这么存的），英文界面上得显示成 Liked Songs
+const ZH = {
+  results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC,
+  names: ['通勤路上', '一个名字特别特别长、长到一行放不下的歌单（周末午后慢慢听）', '空歌单'],
+  history: ['后来', '周杰伦', '平凡之路', '陈奕迅 十年', '七里香 钢琴', 'Taylor Swift'],
+  query: '后来', suggestQuery: '后',
+  suggestions: [{ title: '后来', artist: '刘若英' }, { title: '后来的我们', artist: '五月天' }, { title: '后会无期', artist: 'G.E.M.邓紫棋' }, { title: '后继者', artist: '任然' }],
+  nav: '搜索,歌单,设置', tabs: ['封面', '歌词', '队列'], source: /网易云/, grouping: /分组|歌手|来源/,
+};
+const EN = {
+  commute: COMMUTE,
+  results: [
+    T(101, 'Afterwards', 'Rene Liu', 'Waiting for You', 'netease', true, 341),
+    T(102, 'Afterwards (Y Remix)', 'Tina', '', 'qq', true, 212),
+    T(103, 'Afterwards (Gentle Female Vocal)', 'Xi Han', '', 'netease', true, 290),
+    T(104, 'Afterwards (Live)', 'Sha Dan', '', 'qq', true, 301),
+    T(105, 'Afterwards (Smoky Voice Version)', 'Zheng Daqian', '', 'netease', true, 276),
+    T(106, 'Afterwards (Cover)', 'Echo', '', 'qq', true, 288),
+    T(107, 'Afterwards (Reggae)', 'Spacetime Sound Lab', '', 'netease', true, 233),
+    T(108, 'Afterwards (Instrumental)', 'Rene Liu', '', 'qq', false, 341),
+    T(109, 'Afterwards', 'Hins Cheung', '', 'netease', true, 265),
+    T(110, 'Afterwards (Live at Taipei Arena 2026 · 25th Anniversary World Tour · Extended Edition · Uncut)', 'Rene Liu & A Band With An Extraordinarily Long Name & Another Very Special Guest', 'A Live Album With A Rather Long Name As Well', 'qq', true, 280),
+  ],
+  more: [
+    T(201, 'The Ordinary Road', 'Pu Shu', 'Orion', 'netease', true, 301),
+    T(202, 'Sunny Day (Piano Version) [Originally by Jay Chou]', 'Bryan Chi', '', 'netease', true, 269),
+    T(203, 'Common Jasmine Orange (Female Vocal)', 'Gilado', '', 'qq', true, 245),
+    T(204, 'Common Jasmine Orange (MV Version)', 'Karry Wang', '', 'qq', true, 299),
+    T(205, 'Sunny Day', 'Jay', '', 'netease', true, 269),
+    T(206, 'Afterwards (Live)', 'Rene Liu', '', 'netease', true, 362),
+    T(207, 'The Ordinary Road', 'Mo Chen', '', 'qq', true, 298),
+  ],
+  lrc: ['Afterwards, I finally learned how to love', 'But you were long gone, lost in the crowd', 'Afterwards, through my tears I understood',
+    'Some people, once missed, are gone for good', 'Gardenia, white petals', 'Falling on my blue pleated skirt', 'I love you, you said softly',
+    'I lowered my head and caught the scent', 'That endless night', 'The summer I was seventeen',
+    'The night you kissed me, so that ever since, whenever I sigh, I think of the starlight of that day and wonder why love could be that simple back then (a very long lyric line)',
+    'Whenever I sigh', 'I think of the starlight that day', 'The love back then', 'Why could it be so simple'].map((text, i) => ({ time: 10 + i * 6, text })),
+  names: ['Commute', 'A playlist with a name so long it will never fit on one line (slow Sunday afternoons)', 'Empty playlist'],
+  history: ['afterwards', 'jay chou', 'the ordinary road', 'eason chan ten years', 'jasmine piano', 'Taylor Swift'],
+  query: 'afterwards', suggestQuery: 'a',
+  suggestions: [{ title: 'Afterwards', artist: 'Rene Liu' }, { title: 'After Us', artist: 'Mayday' }, { title: 'After Goodbye', artist: 'G.E.M.' }, { title: 'Aftermath', artist: 'Ren Ran' }],
+  nav: 'Search,Playlists,Settings', tabs: ['Cover', 'Lyrics', 'Queue'], source: /NetEase/, grouping: /group|artist|source/i,
+};
+
 // 每一屏从同一份数据开始：曲库、播放队列、当前曲目、歌单、喜欢、搜索历史、已缓存，界面状态全部复位。
 // 宽屏的歌词栏一直摆着歌词，暂停时换了当前曲目会自己去联网补歌词：这里换成什么都不做，不联网
 const SEED = `
@@ -48,45 +95,51 @@ const SEED = `
   logic._cachedKeys = new Set(['netease:9101', 'netease:9201', 'netease:9205', 'netease:9109']);
   logic.patch({
     page: 'search', viewingPlaylistId: null, openMenu: null, mobileNowPlayingExpanded: false, rightPanel: 'browse', mediaView: 'cover',
-    addModalId: null, importModalOpen: false, createModalOpen: false, shareModalOpen: false, toast: '',
+    addModalId: null, importModalOpen: false, createModalOpen: false, shareModalOpen: false, toast: '', updateInfo: null, showBatteryHint: false,
     queue: [...arg.results, ...arg.more], searchResults: arg.results, hasSearched: false, appliedQuery: '', searchQuery: '',
     searchFocused: false, suggestions: [], suggestActiveIdx: -1, suggestDismissed: false, localSearch: false,
     playOrder: arg.commute, currentId: 101, currentTime: 66, playing: false, online: true,
     liked: { 101: true, 201: true, 203: true, 105: true }, likedOrder: [101, 201, 203, 105],
     playlists: [
       { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: '' },
-      { id: 'pl_1', name: '通勤路上', builtin: false, trackIds: arg.commute, glyph: 'queue_music', iconFill: 0, tileBg: '' },
-      { id: 'pl_2', name: '一个名字特别特别长、长到一行放不下的歌单（周末午后慢慢听）', builtin: false, trackIds: [202, 205, 206], glyph: 'queue_music', iconFill: 0, tileBg: '' },
-      { id: 'pl_3', name: '空歌单', builtin: false, trackIds: [], glyph: 'queue_music', iconFill: 0, tileBg: '' },
+      { id: 'pl_1', name: arg.names[0], builtin: false, trackIds: arg.commute, glyph: 'queue_music', iconFill: 0, tileBg: '' },
+      { id: 'pl_2', name: arg.names[1], builtin: false, trackIds: [202, 205, 206], glyph: 'queue_music', iconFill: 0, tileBg: '' },
+      { id: 'pl_3', name: arg.names[2], builtin: false, trackIds: [], glyph: 'queue_music', iconFill: 0, tileBg: '' },
     ],
-    searchHistory: ['后来', '周杰伦', '平凡之路', '陈奕迅 十年', '七里香 钢琴', 'Taylor Swift'],
+    searchHistory: arg.history,
     lyrics: arg.lrc, lyricsTrackId: 101, cachedCount: 4, cachedBytes: 386 * 1024 * 1024, cacheCapMB: 2048,
     exportReady: false, cacheRev: (logic.state.cacheRev || 0) + 1,
   });
 `;
-const SEARCHED = `logic.patch({ hasSearched: true, appliedQuery: '后来', searchQuery: '后来' });`;
 const PLAYER = `logic.patch({ mobileNowPlayingExpanded: true });`;
-const SCREENS = {
-  'search-home': ``,
-  'search-focus': `logic.patch({ searchFocused: true });`,
-  'suggest': `logic.patch({ searchQuery: '后', searchFocused: true, suggestActiveIdx: 1, suggestions: [
-      { title: '后来', artist: '刘若英' }, { title: '后来的我们', artist: '五月天' }, { title: '后会无期', artist: 'G.E.M.邓紫棋' }, { title: '后继者', artist: '任然' } ] });`,
-  'search': SEARCHED,
-  'add-sheet': `${SEARCHED} logic.openAddModal(110);`,
-  'library': `logic.setPage('library');`,
-  'playlist': `logic.selectPlaylist('pl_1');`,
-  'playlist-menu': `logic.selectPlaylist('pl_2'); logic.toggleMenu('playlist');`,
-  'playlist-empty': `logic.selectPlaylist('pl_3');`,
-  'cached': `logic.selectPlaylist('__cached');`,
-  'settings': `logic.setPage('settings'); logic.patch({ online: false });`,
-  'player-cover': `${PLAYER} logic.setMediaView('cover');`,
-  'player-lyrics': `${PLAYER} logic.setMediaView('lyrics');`,
-  'player-queue': `${PLAYER} logic.setMediaView('queue');`,
-  'player-menu': `${PLAYER} logic.toggleMenu('player');`,
-  'player-long-title': `${PLAYER} logic.patch({ currentId: 110 });`,
-  'share': `logic.openShareModal();`,
-  'import': `logic.openImportModal();`,
-  'create': `logic.openCreateModal();`,
+// 每一屏在 SEED 之后执行的代码。搜索词、联想跟着这一遍的示例数据（D：ZH 或 EN）走
+const screensFor = (D) => {
+  const SEARCHED = `logic.patch({ hasSearched: true, appliedQuery: ${JSON.stringify(D.query)}, searchQuery: ${JSON.stringify(D.query)} });`;
+  const SCREENS = {
+    'search-home': ``,
+    'search-focus': `logic.patch({ searchFocused: true });`,
+    'suggest': `logic.patch({ searchQuery: ${JSON.stringify(D.suggestQuery)}, searchFocused: true, suggestActiveIdx: 1, suggestions: ${JSON.stringify(D.suggestions)} });`,
+    'search': SEARCHED,
+    'add-sheet': `${SEARCHED} logic.openAddModal(110);`,
+    'library': `logic.setPage('library');`,
+    'playlist': `logic.selectPlaylist('pl_1');`,
+    'playlist-menu': `logic.selectPlaylist('pl_2'); logic.toggleMenu('playlist');`,
+    'playlist-empty': `logic.selectPlaylist('pl_3');`,
+    'cached': `logic.selectPlaylist('__cached');`,
+    'settings': `logic.setPage('settings'); logic.patch({ online: false });`,
+    'player-cover': `${PLAYER} logic.setMediaView('cover');`,
+    'player-lyrics': `${PLAYER} logic.setMediaView('lyrics');`,
+    'player-queue': `${PLAYER} logic.setMediaView('queue');`,
+    'player-menu': `${PLAYER} logic.toggleMenu('player');`,
+    'player-long-title': `${PLAYER} logic.patch({ currentId: 110 });`,
+    'share': `logic.openShareModal();`,
+    'import': `logic.openImportModal();`,
+    'create': `logic.openCreateModal();`,
+    // 底部的两种提示条：有新版本（电脑、手机都有）、锁屏后台放行（只在手机上出）
+    'update-banner': `logic.patch({ updateInfo: { tag: 'v1.0.99' }, appVersion: '1.0.20' });`,
+    'battery-hint': `logic.patch({ showBatteryHint: true });`,
+  };
+  return { SEARCHED, SCREENS };
 };
 
 // mobile：手机布局（迷你播放条 + 全屏播放页）；two：当前页 | 播放栏（npW 是播放栏的宽度）；
@@ -143,12 +196,28 @@ const measure = () => {
     clone.querySelectorAll('.ms').forEach(n => n.remove());
     if (!clone.textContent.trim() && !(b.getAttribute('aria-label') || '').trim()) unlabeled.push(b.outerHTML.slice(0, 120));
   }
+  // 漏翻：界面上（字、读屏名字、悬停提示、输入框占位字）还有中文。带 lang="zh-CN" 的不算（「中文」按钮、作者名）；
+  // 藏着的也查（比如只在手机上出的提示条），省得换个尺寸才露馅
+  const CJK = /[\u3000-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]/;
+  const zhOk = (el) => !!(el && el.closest('[lang="zh-CN"]'));
+  const cjk = [];
+  const walker = document.createTreeWalker($('.dc-app-shell'), NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (CJK.test(n.textContent) && !zhOk(n.parentElement)) cjk.push(`${name(n.parentElement).slice(0, 40)}: ${n.textContent.trim().slice(0, 40)}`);
+  }
+  for (const el of document.querySelectorAll('.dc-app-shell [aria-label], .dc-app-shell [title], .dc-app-shell [placeholder]')) {
+    for (const a of ['aria-label', 'title', 'placeholder']) {
+      const val = el.getAttribute(a);
+      if (val && CJK.test(val) && !zhOk(el)) cjk.push(`${name(el).slice(0, 40)} @${a}: ${val.slice(0, 40)}`);
+    }
+  }
+  if (CJK.test(document.title)) cjk.push(`document.title: ${document.title}`);
   const ctrls = [...document.querySelectorAll('.sw-controls > button')].map(box);
   const lines = [...document.querySelectorAll('.sw-ly')].map(box).filter(Boolean);
   return {
     W, H: window.innerHeight,
     docOverflow: document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth,
-    outside: outside.slice(0, 8), outsideCount: outside.length, unlabeled,
+    outside: outside.slice(0, 8), outsideCount: outside.length, unlabeled, cjk,
     topbar: box($('.dc-topbar')),
     nav: [...document.querySelectorAll('.sw-nav-btn')].map(b => ({ label: b.getAttribute('aria-label'), title: b.getAttribute('title'), active: b.classList.contains('is-active'), w: b.offsetWidth, h: b.offsetHeight })),
     main: box($('.sw-main')), np: box($('.dc-nowplaying')), mini: box($('.sw-mini')),
@@ -171,13 +240,27 @@ const measure = () => {
 };
 
 for (const vp of VIEWPORTS) {
-  for (const theme of vp.name === 'phone' ? ['light', 'dark'] : ['light']) {
-    const tag = theme === 'light' ? vp.name : `${vp.name}-dark`;
+  // 每个尺寸走一遍白底中文、一遍英文；手机再加一遍黑底
+  for (const variant of vp.name === 'phone' ? ['light', 'dark', 'en'] : ['light', 'en']) {
+    const theme = variant === 'dark' ? 'dark' : 'light';
+    const D = variant === 'en' ? EN : ZH;
+    const { SEARCHED, SCREENS } = screensFor(D);
+    const DATA = { results: D.results, more: D.more, commute: D.commute, lrc: D.lrc, names: D.names, history: D.history };
+    const tag = variant === 'light' ? vp.name : `${vp.name}-${variant}`;
     const ctx = await browser.newContext({
       viewport: vp.size, deviceScaleFactor: 2, isMobile: vp.touch, hasTouch: vp.touch,
       serviceWorkers: 'block', reducedMotion: 'reduce',
     });
     if (theme === 'dark') await ctx.addInitScript(() => { try { localStorage.setItem('listening-player-theme-v1', 'dark'); } catch (e) { /* 读不到就是白底 */ } });
+    if (variant === 'en') {
+      // 存的是英文：<head> 里的脚本在页面渲染之前就把 <html lang> 和标签页标题换好（记下 DOMContentLoaded 那一刻的样子）
+      await ctx.addInitScript(() => {
+        try { localStorage.setItem('listening-player-lang-v1', 'en'); } catch (e) { /* 读不到就是中文 */ }
+        document.addEventListener('DOMContentLoaded', () => {
+          window.__langAtLoad = { lang: document.documentElement.lang, title: document.title, rendered: !!document.querySelector('.dc-app-shell') };
+        });
+      });
+    }
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', e => errors.push(String(e)));
@@ -203,11 +286,20 @@ for (const vp of VIEWPORTS) {
     if (tag === 'phone-dark') {
       check('saved dark theme is applied before first paint', (await page.evaluate(() => document.documentElement.getAttribute('data-app-theme'))) === 'dark');
     }
+    if (tag === 'phone') {
+      const zh = await page.evaluate(() => ({ lang: document.documentElement.lang, title: document.title }));
+      check('default language is Chinese (no saved choice): <html lang="zh-CN">, tab title 听音乐', zh.lang === 'zh-CN' && zh.title === '听音乐', zh);
+    }
+    if (tag === 'phone-en') {
+      const atLoad = await page.evaluate(() => window.__langAtLoad);
+      check('saved English is applied before the page renders: <html lang="en">, tab title Listening',
+        !!atLoad && atLoad.lang === 'en' && atLoad.title === 'Listening' && !atLoad.rendered, atLoad);
+    }
 
-    const bad = { outside: [], unlabeled: [], overflow: [] };
+    const bad = { outside: [], unlabeled: [], overflow: [], cjk: [] };
     const shots = {};
     for (const [name, code] of Object.entries(SCREENS)) {
-      await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+      await L(SEED, DATA);
       await page.waitForTimeout(50);
       if (code) await L(code);
       await page.waitForTimeout(name === 'player-lyrics' ? 400 : 150);
@@ -216,14 +308,16 @@ for (const vp of VIEWPORTS) {
       if (m.outsideCount) bad.outside.push(`${name}: ${m.outsideCount} → ${m.outside.join(' | ')}`);
       if (m.unlabeled.length) bad.unlabeled.push(`${name}: ${m.unlabeled.join(' | ')}`);
       if (m.docOverflow > 0) bad.overflow.push(`${name}: ${m.docOverflow}px`);
+      if (m.cjk.length) bad.cjk.push(`${name}: ${m.cjk.slice(0, 3).join(' | ')}`);
       await page.screenshot({ path: `${OUT}/layout-${tag}-${name}.png` });
     }
     check(`${tag}: nothing sticks out past the screen edges`, bad.outside.length === 0 && bad.overflow.length === 0, [...bad.overflow, ...bad.outside]);
     check(`${tag}: every icon-only button has an aria-label`, bad.unlabeled.length === 0, bad.unlabeled);
+    if (variant === 'en') check(`${tag}: no Chinese left anywhere in the English interface`, bad.cjk.length === 0, bad.cjk.slice(0, 6));
 
     // 顶栏：48px 高，三个 48×48 图标按钮（搜索 / 歌单 / 设置），读屏名字和悬停提示都在，当前页那个是选中态
     const home = shots['search-home'];
-    const navOk = home.nav.length === 3 && home.nav.map(n => n.label).join() === '搜索,歌单,设置'
+    const navOk = home.nav.length === 3 && home.nav.map(n => n.label).join() === D.nav
       && home.nav.every(n => n.title === n.label && n.w === 48 && n.h === 48)
       && home.nav.map(n => n.active).join() === 'true,false,false'
       && shots.settings.nav.map(n => n.active).join() === 'false,false,true'
@@ -245,14 +339,14 @@ for (const vp of VIEWPORTS) {
       // 当前页从屏幕最左边开始（左边没有别的栏），右边紧挨着播放栏；没有歌词栏，播放栏里有「歌词」标签
       check(`${tag}: two columns (page | player ${vp.npW}px), nothing left of the page, no mini player`,
         home.main && Math.round(home.main.x) === 0 && home.np && Math.round(home.np.w) === vp.npW && !home.mini && Math.round(home.main.r) === Math.round(home.np.x)
-        && !home.lyCol && home.tabNames.join() === '封面,歌词,队列',
+        && !home.lyCol && home.tabNames.join() === D.tabs.join(),
         { main: home.main, np: home.np, mini: home.mini, lyCol: home.lyCol, tabs: home.tabNames });
     } else {
       // 宽屏：当前页 | 播放栏 | 歌词栏，一栏挨一栏铺满整个宽度；歌词栏至少 360；播放栏里没有「歌词」标签了
       check(`${tag}: three columns (page | player ${vp.npW}px | lyrics), lyrics on the far right, no 歌词 tab`,
         home.main && Math.round(home.main.x) === 0 && home.np && Math.round(home.np.w) === vp.npW && !home.mini
         && Math.round(home.main.r) === Math.round(home.np.x) && home.lyCol && Math.round(home.lyCol.x) === Math.round(home.np.r)
-        && Math.round(home.lyCol.r) === home.W && home.lyCol.w >= 360 && home.tabNames.join() === '封面,队列',
+        && Math.round(home.lyCol.r) === home.W && home.lyCol.w >= 360 && home.tabNames.join() === [D.tabs[0], D.tabs[2]].join(),
         { main: home.main, np: home.np, lyCol: home.lyCol, tabs: home.tabNames });
     }
 
@@ -286,7 +380,7 @@ for (const vp of VIEWPORTS) {
       { menu: pm.menu, more: pm.more, headBottom: pm.head && pm.head.b });
 
     // 搜索页没有分组选项了（搜到结果之后也没有）
-    check(`${tag}: search filters have no grouping options`, /网易云/.test(shots.search.filtersText) && !/分组|歌手|来源/.test(shots.search.filtersText), shots.search.filtersText);
+    check(`${tag}: search filters have no grouping options`, D.source.test(shots.search.filtersText) && !D.grouping.test(shots.search.filtersText), shots.search.filtersText);
 
     // 「最近搜索」平时不显示，点进输入框（框里没字、还没搜过）才出现；原来那句「网易云音乐、QQ音乐一起搜」的提示删掉了
     check(`${tag}: recent searches only show while the search box is focused, no hint line`,
@@ -305,7 +399,7 @@ for (const vp of VIEWPORTS) {
     const lyArea = vp.layout === 'three' ? ly.lyColBody : ly.viewport;
     const mid = lyArea && (lyArea.y + lyArea.h / 2);
     check(`${tag}: lyric lines are ${lyH}px and the current line sits in the middle${vp.layout === 'three' ? ' of the lyrics column' : ''}`,
-      ly.lines.length === LRC.length && ly.lines.every(l => Math.round(l.h) === lyH) && ly.curLine && Math.abs(ly.curLine.y + ly.curLine.h / 2 - mid) <= 2
+      ly.lines.length === D.lrc.length && ly.lines.every(l => Math.round(l.h) === lyH) && ly.curLine && Math.abs(ly.curLine.y + ly.curLine.h / 2 - mid) <= 2
       && (vp.layout !== 'three' || (ly.cover && ly.curLine.x >= ly.lyCol.x)),
       { heights: [...new Set(ly.lines.map(l => Math.round(l.h)))], cur: ly.curLine, mid, cover: ly.cover });
 
@@ -324,7 +418,7 @@ for (const vp of VIEWPORTS) {
     }
 
     // 点菜单外面收起菜单，而且这一下不会顺带点到下面的东西（比如放了别的歌）
-    await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+    await L(SEED, DATA);
     await L(`${SEARCHED} ${PLAYER} logic.toggleMenu('player');`);
     await page.waitForTimeout(150);
     const target = vp.layout === 'mobile' ? { x: 24, y: Math.round(vp.size.height * 0.6) } : { x: Math.round((home.main.x + home.main.r) / 2), y: Math.round(home.main.y + home.main.h * 0.6) };
@@ -344,7 +438,7 @@ for (const vp of VIEWPORTS) {
       recents: document.querySelectorAll('.sw-recent-row').length,
     }));
     await page.evaluate(() => document.activeElement && document.activeElement.blur());
-    await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+    await L(SEED, DATA);
     await L(`logic.__picked = null; logic.doSearch = function () { logic.__picked = logic.state.searchQuery; };`);
     await page.waitForTimeout(250);
     const before = await searchState();
@@ -355,7 +449,7 @@ for (const vp of VIEWPORTS) {
     await page.waitForTimeout(250);
     const picked = await L(`const kw = logic.__picked; delete logic.doSearch; return kw;`);
     check(`${tag}: tapping the search box shows recent searches; tapping one searches it`,
-      before.recents === 0 && focused.focused && focused.recents === 6 && picked === '周杰伦', { before, focused, picked });
+      before.recents === 0 && focused.focused && focused.recents === 6 && picked === D.history[1], { before, focused, picked });
 
     // 可视区域怎么变都不许让搜索框失焦：v1.0.10 曾按「可视区域突然变高」去猜键盘收起，真机上键盘弹出时可视区域
     // 会先缩过头再弹回来，被当成收起，结果一点搜索框键盘就被收回去。这里照那个过程改一遍视口（弹出、缩过头、弹回、
@@ -363,7 +457,7 @@ for (const vp of VIEWPORTS) {
     if (vp.touch) {
       const size = vp.size;
       await page.evaluate(() => document.activeElement && document.activeElement.blur());
-      await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+      await L(SEED, DATA);
       await page.waitForTimeout(250);
       await tapAt('.dc-search-input');
       // 按屏幕高度的比例缩：横屏时高度只有 400 出头，减固定像素会减成负数
@@ -390,7 +484,7 @@ for (const vp of VIEWPORTS) {
 
     // 手机上再看一次刘海 / 手势条的避让：顶栏让出状态栏，迷你播放条让出手势条
     if (vp.name === 'phone') {
-      await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+      await L(SEED, DATA);
       await page.evaluate(() => {
         document.documentElement.style.setProperty('--safe-area-inset-top', '32px');
         document.documentElement.style.setProperty('--safe-area-inset-bottom', '24px');
@@ -416,7 +510,7 @@ for (const vp of VIEWPORTS) {
       });
       const blocked = [];
       for (const name of ['search', 'player-cover', 'player-queue', 'player-menu', 'add-sheet']) {
-        await L(SEED, { results: RESULTS, more: MORE, commute: COMMUTE, lrc: LRC });
+        await L(SEED, DATA);
         await L(SCREENS[name]);
         await page.waitForTimeout(150);
         const m = await page.evaluate(measure);

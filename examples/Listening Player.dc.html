@@ -55,11 +55,16 @@
 </style>
 <script>
 // 首屏防闪：在任何渲染之前按上次存的主题定好 <html data-app-theme> 和 theme-color，
-// 否则打开时会先看到一帧默认底色，再跳回真正的主题色。默认白底，存的是 dark 才用黑底
+// 否则打开时会先看到一帧默认底色，再跳回真正的主题色。默认白底，存的是 dark 才用黑底。
+// 界面语言也在这里先定好 <html lang> 和标签页标题（默认中文，存的是 en 才用英文），挂载后 syncLangChrome 再校准
 (function () {
   var t = 'light';
   try { if (localStorage.getItem('listening-player-theme-v1') === 'dark') t = 'dark'; } catch (e) { /* 隐私模式下读不到就用默认白底 */ }
   document.documentElement.setAttribute('data-app-theme', t);
+  var en = false;
+  try { en = localStorage.getItem('listening-player-lang-v1') === 'en'; } catch (e) { /* 读不到就用中文 */ }
+  document.documentElement.lang = en ? 'en' : 'zh-CN';
+  if (en) document.title = 'Listening';
   var m = document.querySelector('meta[name="theme-color"]');
   var bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
   if (m && bg) m.setAttribute('content', bg);
@@ -150,8 +155,10 @@ if ('serviceWorker' in navigator) {
     }
 
     /* ---------- 通用部件 ---------- */
-    .sw-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--ink); }
-    .sw-title { font-size: 32px; line-height: 1.12; font-weight: 700; margin: 4px 0 20px; word-break: break-all; }
+    .sw-label { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
+    /* 断行一律用 overflow-wrap: anywhere：单词在空格处换行，一个词长到一行放不下才从中间断（长网址、没有空格的长歌单名）。
+       不用 word-break: break-all：它连英文单词也从中间断，英文界面里一句话会断成「WeChat or Q / Q」 */
+    .sw-title { font-size: 32px; line-height: 1.12; font-weight: 700; margin: 4px 0 20px; overflow-wrap: anywhere; }
     .sw-head-rule { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; padding-bottom: 6px; border-bottom: 2px solid var(--ink); font-size: 13px; color: var(--ink-2); }
     .sw-head-rule b { color: var(--ink); font-weight: 700; }
     .sw-btn { height: 40px; padding: 0 16px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
@@ -327,7 +334,7 @@ if ('serviceWorker' in navigator) {
       .sw-big-cover { width: min(100cqw, 100cqh); max-height: none; }
     }
     .sw-np-meta { flex-shrink: 0; margin-top: 20px; }
-    .sw-np-title { font-size: 28px; font-weight: 700; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-all; }
+    .sw-np-title { font-size: 28px; font-weight: 700; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
     .sw-np-artist { font-size: 15px; color: var(--ink-2); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sw-progress { margin-top: 18px; flex-shrink: 0; }
     /* 进度条本身 2px 高，上下各垫 11px 透明区当点按 / 拖动的热区 */
@@ -409,7 +416,7 @@ if ('serviceWorker' in navigator) {
       animation: swSheetUp .22s cubic-bezier(.2, .9, .3, 1);
     }
     .sw-sheet-title { font-size: 20px; font-weight: 700; }
-    .sw-sheet-sub { font-size: 13px; color: var(--ink-2); margin: 4px 0 16px; line-height: 1.5; word-break: break-all; }
+    .sw-sheet-sub { font-size: 13px; color: var(--ink-2); margin: 4px 0 16px; line-height: 1.5; overflow-wrap: anywhere; }
     .sw-sheet-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding-top: 16px; }
     .dc-modal .sw-lib-row { min-height: 56px; }
     .sw-input {
@@ -419,7 +426,7 @@ if ('serviceWorker' in navigator) {
     .sw-input::placeholder { color: var(--ink-3); opacity: 1; }
     .sw-input:focus { border-bottom-color: var(--red); }
     .sw-input:focus-visible { outline: none; }
-    .sw-share-box { white-space: pre-line; word-break: break-all; padding: 14px 16px; box-shadow: inset 0 0 0 1px var(--rule); font-size: 13px; line-height: 1.7; -webkit-user-select: text; user-select: text; }
+    .sw-share-box { white-space: pre-line; overflow-wrap: anywhere; padding: 14px 16px; box-shadow: inset 0 0 0 1px var(--rule); font-size: 13px; line-height: 1.7; -webkit-user-select: text; user-select: text; }
 
     /* ---------- 横过来的手机（宽但矮）：播放页分左右两栏——顶部那一行横跨两栏，下面左边封面 / 歌词 / 队列，
        右边歌名、进度、按键，上下居中。竖着排的话封面只剩一百来像素高 ---------- */
@@ -553,10 +560,10 @@ if ('serviceWorker' in navigator) {
 <div class="{{ v.shellClass }}">
 
   <div class="dc-topbar">
-    <nav class="sw-nav" aria-label="页面">
-      <button class="{{ v.navSearchClass }}" onclick="{{ H.goSearch }}" aria-label="搜索" title="搜索"><span class="ms">search</span></button>
-      <button class="{{ v.navLibraryClass }}" onclick="{{ H.goLibrary }}" aria-label="歌单" title="歌单"><span class="ms">queue_music</span></button>
-      <button class="{{ v.navSettingsClass }}" onclick="{{ H.goSettings }}" aria-label="设置" title="设置"><span class="ms">settings</span></button>
+    <nav class="sw-nav" aria-label="{{ L.navPages }}">
+      <button class="{{ v.navSearchClass }}" onclick="{{ H.goSearch }}" aria-label="{{ L.search }}" title="{{ L.search }}"><span class="ms">search</span></button>
+      <button class="{{ v.navLibraryClass }}" onclick="{{ H.goLibrary }}" aria-label="{{ L.playlists }}" title="{{ L.playlists }}"><span class="ms">queue_music</span></button>
+      <button class="{{ v.navSettingsClass }}" onclick="{{ H.goSettings }}" aria-label="{{ L.settings }}" title="{{ L.settings }}"><span class="ms">settings</span></button>
     </nav>
     <sc-if value="{{ v.showOfflineChip }}">
       <button class="sw-status-btn" onclick="{{ H.openSettings }}" aria-label="{{ v.offlineChipText }}" title="{{ v.offlineChipText }}"><span class="ms">{{ v.offlineChipIcon }}</span></button>
@@ -571,17 +578,17 @@ if ('serviceWorker' in navigator) {
         <sc-if value="{{ v.isSearchPage }}">
           <div class="sw-search">
             <div class="sw-search-field">
-              <input class="dc-search-input" type="search" enterKeyHint="search" autoComplete="off" value="{{ v.searchQuery }}" oninput="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" onfocus="{{ H.focusSearch }}" onblur="{{ H.blurSearch }}" placeholder="歌名、歌手" aria-label="搜索歌名、歌手">
+              <input class="dc-search-input" type="search" enterKeyHint="search" autoComplete="off" value="{{ v.searchQuery }}" oninput="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" onfocus="{{ H.focusSearch }}" onblur="{{ H.blurSearch }}" placeholder="{{ L.searchPlaceholder }}" aria-label="{{ L.searchAria }}">
               <sc-if value="{{ v.showClear }}">
-                <button class="sw-search-clear" onclick="{{ H.clearSearch }}" aria-label="清空搜索" title="清空"><span class="ms">close</span></button>
+                <button class="sw-search-clear" onclick="{{ H.clearSearch }}" aria-label="{{ L.clearSearch }}" title="{{ L.clear }}"><span class="ms">close</span></button>
               </sc-if>
               <sc-if value="{{ v.isSearching }}"><div class="sw-search-loading"></div></sc-if>
             </div>
-            <button class="sw-btn sw-btn-primary sw-search-btn" onclick="{{ H.doSearch }}">搜索</button>
+            <button class="sw-btn sw-btn-primary sw-search-btn" onclick="{{ H.doSearch }}">{{ L.search }}</button>
             <sc-if value="{{ v.showSuggest }}">
               <div class="sw-suggest dc-scrollbar">
                 <sc-if value="{{ v.suggestIsHistory }}">
-                  <div class="sw-head-rule"><span>最近搜索</span><span class="sw-btn-text" onmousedown="{{ H.clearHistory }}">清空</span></div>
+                  <div class="sw-head-rule"><span>{{ L.recentSearches }}</span><span class="sw-btn-text" onmousedown="{{ H.clearHistory }}">{{ L.clear }}</span></div>
                 </sc-if>
                 <sc-for list="{{ v.suggestRender }}" as="sg" hint-placeholder-count="6">
                   <div class="{{ sg.rowClass }}" onmousedown="{{ sg.onPick }}"><span class="ms">{{ sg.icon }}</span><span class="sw-sg-t">{{ sg.title }}</span><sc-if value="{{ sg.hasSub }}"><span class="sw-sg-a">{{ sg.subtitle }}</span></sc-if></div>
@@ -597,13 +604,13 @@ if ('serviceWorker' in navigator) {
             </span>
           </div>
           <sc-if value="{{ v.showRecents }}">
-            <div class="sw-head-rule"><span class="sw-label">最近搜索</span><button class="sw-btn-text" onmousedown="{{ H.clearHistory }}">清空</button></div>
+            <div class="sw-head-rule"><span class="sw-label">{{ L.recentSearches }}</span><button class="sw-btn-text" onmousedown="{{ H.clearHistory }}">{{ L.clear }}</button></div>
             <sc-for list="{{ v.recentRender }}" as="r" hint-placeholder-count="4">
               <button class="{{ r.rowClass }}" onmousedown="{{ r.onPick }}"><span class="ms">history</span><span>{{ r.text }}</span></button>
             </sc-for>
           </sc-if>
           <sc-if value="{{ v.isSearching }}">
-            <div class="sw-head-rule"><span>正在搜索…</span></div>
+            <div class="sw-head-rule"><span>{{ L.searching }}</span></div>
           </sc-if>
           <sc-if value="{{ v.showStatusText }}">
             <div class="sw-head-rule"><span><b>{{ v.statusLead }}</b>{{ v.statusTail }}</span></div>
@@ -612,10 +619,10 @@ if ('serviceWorker' in navigator) {
 
         <sc-if value="{{ v.isLibraryRoot }}">
           <div class="sw-page-head">
-            <h1 class="sw-title">歌单</h1>
+            <h1 class="sw-title">{{ L.playlists }}</h1>
             <div class="sw-head-acts">
-              <button class="sw-btn sw-btn-outline" onclick="{{ H.openImportModal }}"><span class="ms">upload</span>导入</button>
-              <button class="sw-btn sw-btn-primary" onclick="{{ H.openCreateModal }}"><span class="ms">add</span>新建</button>
+              <button class="sw-btn sw-btn-outline" onclick="{{ H.openImportModal }}"><span class="ms">upload</span>{{ L.importBtn }}</button>
+              <button class="sw-btn sw-btn-primary" onclick="{{ H.openCreateModal }}"><span class="ms">add</span>{{ L.newBtn }}</button>
             </div>
           </div>
           <div class="sw-lib-list">
@@ -631,14 +638,14 @@ if ('serviceWorker' in navigator) {
 
         <sc-if value="{{ v.isPlaylistView }}">
           <div class="{{ v.backRowClass }}">
-            <button class="sw-back" onclick="{{ H.backFromPlaylist }}"><span class="ms">arrow_back</span>歌单</button>
-            <button class="sw-icon-btn" onclick="{{ H.togglePlaylistMenu }}" aria-label="更多" title="更多"><span class="ms">more_vert</span></button>
+            <button class="sw-back" onclick="{{ H.backFromPlaylist }}"><span class="ms">arrow_back</span>{{ L.playlists }}</button>
+            <button class="sw-icon-btn" onclick="{{ H.togglePlaylistMenu }}" aria-label="{{ L.more }}" title="{{ L.more }}"><span class="ms">more_vert</span></button>
             <sc-if value="{{ v.playlistMenuOpen }}">
               <div class="sw-menu-scrim" onclick="{{ H.closeMenu }}"></div>
               <div class="sw-menu" role="menu">
-                <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuExportPlaylist }}"><span class="ms">ios_share</span><span>导出歌单</span></button>
+                <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuExportPlaylist }}"><span class="ms">ios_share</span><span>{{ L.exportPlaylist }}</span></button>
                 <sc-if value="{{ v.canDeletePlaylist }}">
-                  <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuDeletePlaylist }}"><span class="ms">delete</span><span>删除歌单</span></button>
+                  <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuDeletePlaylist }}"><span class="ms">delete</span><span>{{ L.deletePlaylist }}</span></button>
                 </sc-if>
               </div>
             </sc-if>
@@ -647,7 +654,7 @@ if ('serviceWorker' in navigator) {
           <p class="sw-pl-meta">{{ v.statusText }}</p>
           <sc-if value="{{ v.showPlayAll }}">
             <div class="sw-pl-btns">
-              <button class="sw-btn sw-btn-primary" onclick="{{ H.playAllInPlaylist }}"><span class="ms fill">play_arrow</span>播放全部</button>
+              <button class="sw-btn sw-btn-primary" onclick="{{ H.playAllInPlaylist }}"><span class="ms fill">play_arrow</span>{{ L.playAll }}</button>
               <sc-if value="{{ v.showCacheAll }}">
                 <button class="sw-btn sw-btn-outline" onclick="{{ H.cachePlaylist }}"><span class="{{ v.cacheAllIconClass }}">{{ v.cacheAllIcon }}</span>{{ v.cacheAllLabel }}</button>
               </sc-if>
@@ -656,45 +663,52 @@ if ('serviceWorker' in navigator) {
         </sc-if>
 
         <sc-if value="{{ v.isSettingsPage }}">
-          <h1 class="sw-title">设置</h1>
+          <h1 class="sw-title">{{ L.settings }}</h1>
           <div class="sw-sec">
-            <span class="sw-label">缓存与离线</span>
+            <span class="sw-label">{{ L.cacheSection }}</span>
             <p class="sw-note">{{ v.netStatusText }}</p>
-            <div class="sw-kv"><span>已缓存 {{ v.cachedCount }} 首</span><span class="num">{{ v.cacheUsageText }}</span></div>
+            <div class="sw-kv"><span>{{ v.cachedCountText }}</span><span class="num">{{ v.cacheUsageText }}</span></div>
             <sc-if value="{{ v.showCacheBar }}">
               <div class="sw-meter"><div style="width:{{ v.cacheUsagePct }}%;"></div></div>
             </sc-if>
-            <div class="sw-field-label">缓存上限</div>
+            <div class="sw-field-label">{{ L.cacheLimit }}</div>
             <div class="sw-seg">
               <sc-for list="{{ v.capChoicesRender }}" as="cap" hint-placeholder-count="5">
                 <button class="{{ cap.cls }}" onclick="{{ cap.onClick }}" aria-pressed="{{ cap.active }}">{{ cap.label }}</button>
               </sc-for>
             </div>
-            <span class="sw-hint">超过上限时自动删掉最久没听的歌。无损音质一首大约 30MB</span>
+            <span class="sw-hint">{{ L.cacheLimitHint }}</span>
             <div class="sw-set-list">
               <button class="sw-set-row" onclick="{{ H.toggleOfflineOnly }}" role="switch" aria-checked="{{ v.offlineOnly }}">
-                <span><span class="sw-row-t">只播已缓存的歌</span><span class="sw-hint">断网时自动按这个来；联网时打开可以省流量</span></span>
+                <span><span class="sw-row-t">{{ L.offlineOnly }}</span><span class="sw-hint">{{ L.offlineOnlyHint }}</span></span>
                 <span class="{{ v.offlineToggleClass }}"></span>
               </button>
-              <button class="sw-set-row" onclick="{{ H.clearAudioCache }}"><span class="sw-row-t">清空缓存</span><span class="ms">delete</span></button>
+              <button class="sw-set-row" onclick="{{ H.clearAudioCache }}"><span class="sw-row-t">{{ L.clearCache }}</span><span class="ms">delete</span></button>
             </div>
           </div>
           <div class="sw-sec">
-            <span class="sw-label">外观</span>
+            <span class="sw-label">{{ L.appearance }}</span>
             <div class="sw-seg">
-              <button class="{{ v.themeLightClass }}" onclick="{{ H.setThemeLight }}" aria-pressed="{{ v.isLightTheme }}">白</button>
-              <button class="{{ v.themeDarkClass }}" onclick="{{ H.setThemeDark }}" aria-pressed="{{ v.isDarkTheme }}">黑</button>
+              <button class="{{ v.themeLightClass }}" onclick="{{ H.setThemeLight }}" aria-pressed="{{ v.isLightTheme }}">{{ L.themeLight }}</button>
+              <button class="{{ v.themeDarkClass }}" onclick="{{ H.setThemeDark }}" aria-pressed="{{ v.isDarkTheme }}">{{ L.themeDark }}</button>
             </div>
           </div>
           <div class="sw-sec">
-            <span class="sw-label">关于</span>
+            <span class="sw-label">{{ L.language }}</span>
+            <div class="sw-seg">
+              <button class="{{ v.langZhClass }}" onclick="{{ H.setLangZh }}" aria-pressed="{{ v.isLangZh }}" lang="zh-CN">中文</button>
+              <button class="{{ v.langEnClass }}" onclick="{{ H.setLangEn }}" aria-pressed="{{ v.isLangEn }}" lang="en">English</button>
+            </div>
+          </div>
+          <div class="sw-sec">
+            <span class="sw-label">{{ L.about }}</span>
             <sc-if value="{{ v.isNative }}">
-              <div class="sw-set-row"><span class="sw-row-t">版本 <span class="num">{{ v.appVersionText }}</span></span><button class="sw-btn-text" onclick="{{ H.checkUpdateNow }}">检查更新</button></div>
-              <button class="sw-set-row" onclick="{{ H.openBatterySettings }}"><span class="sw-row-t">后台运行设置</span><span class="ms">arrow_forward</span></button>
+              <div class="sw-set-row"><span class="sw-row-t">{{ L.version }} <span class="num">{{ v.appVersionText }}</span></span><button class="sw-btn-text" onclick="{{ H.checkUpdateNow }}">{{ L.checkUpdate }}</button></div>
+              <button class="sw-set-row" onclick="{{ H.openBatterySettings }}"><span class="sw-row-t">{{ L.backgroundSettings }}</span><span class="ms">arrow_forward</span></button>
             </sc-if>
-            <button class="sw-set-row" onclick="{{ H.copyDiagLog }}"><span class="sw-row-t">复制切歌诊断记录</span><span class="ms">content_copy</span></button>
+            <button class="sw-set-row" onclick="{{ H.copyDiagLog }}"><span class="sw-row-t">{{ L.copyDiag }}</span><span class="ms">content_copy</span></button>
             <a class="sw-set-row" href="https://github.com/fenghanyue/Listening" target="_blank" rel="noopener noreferrer"><span class="sw-row-t">GitHub</span><span class="ms">arrow_outward</span></a>
-            <p class="sw-colophon"><b>听音乐</b> · 封寒月<br>本页面仅供学习交流使用，请勿用于任何商业用途</p>
+            <p class="sw-colophon"><b>{{ L.appName }}</b> · <span lang="zh-CN">封寒月</span><br>{{ L.disclaimer }}</p>
           </div>
         </sc-if>
 
@@ -713,11 +727,11 @@ if ('serviceWorker' in navigator) {
                 <div class="sw-cover" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
                 <div class="sw-row-main">
                   <div class="sw-t">{{ t.title }}</div>
-                  <div class="sw-m"><span class="sw-a">{{ t.artistDisplay }}</span><span>·</span><span class="sw-src">{{ t.sourceLabel }}</span><sc-if value="{{ t.isCached }}"><span class="ms" title="已缓存，断网也能播">download_done</span></sc-if></div>
+                  <div class="sw-m"><span class="sw-a">{{ t.artistDisplay }}</span><span>·</span><span class="sw-src">{{ t.sourceLabel }}</span><sc-if value="{{ t.isCached }}"><span class="ms" title="{{ L.cachedOffline }}">download_done</span></sc-if></div>
                 </div>
                 <div class="sw-acts">
                   <button class="sw-icon-btn" onclick="{{ t.onAdd }}" aria-label="{{ t.primaryActionLabel }}" title="{{ t.primaryActionLabel }}"><span class="ms">{{ t.primaryActionIcon }}</span></button>
-                  <button class="{{ t.likeBtnClass }}" onclick="{{ t.onLike }}" aria-label="喜欢" title="喜欢"><span class="ms">favorite</span></button>
+                  <button class="{{ t.likeBtnClass }}" onclick="{{ t.onLike }}" aria-label="{{ L.like }}" title="{{ L.like }}"><span class="ms">favorite</span></button>
                 </div>
               </div>
             </sc-for>
@@ -731,25 +745,25 @@ if ('serviceWorker' in navigator) {
       <!-- 顶部一行：左边「封面 / 歌词 / 队列」，右边 ⋮（分享 / 下载），最右边 ⌄ 收起（电脑上没有 ⌄） -->
       <div class="{{ v.npHeadClass }}">
         <div class="sw-tabs" role="tablist">
-          <button class="{{ v.tabCoverClass }}" role="tab" aria-selected="{{ v.mediaIsCover }}" onclick="{{ H.showCover }}">封面</button>
+          <button class="{{ v.tabCoverClass }}" role="tab" aria-selected="{{ v.mediaIsCover }}" onclick="{{ H.showCover }}">{{ L.tabCover }}</button>
           <sc-if value="{{ v.showLyricsTab }}">
-            <button class="{{ v.tabLyricsClass }}" role="tab" aria-selected="{{ v.mediaIsLyrics }}" onclick="{{ H.showLyrics }}">歌词</button>
+            <button class="{{ v.tabLyricsClass }}" role="tab" aria-selected="{{ v.mediaIsLyrics }}" onclick="{{ H.showLyrics }}">{{ L.tabLyrics }}</button>
           </sc-if>
-          <button class="{{ v.tabQueueClass }}" role="tab" aria-selected="{{ v.mediaIsQueue }}" onclick="{{ H.showQueue }}">队列 <span class="sw-badge">{{ v.queueCount }}</span></button>
+          <button class="{{ v.tabQueueClass }}" role="tab" aria-selected="{{ v.mediaIsQueue }}" onclick="{{ H.showQueue }}">{{ L.tabQueue }} <span class="sw-badge">{{ v.queueCount }}</span></button>
         </div>
         <sc-if value="{{ v.hasTrack }}">
           <span class="sw-np-more">
-            <button class="sw-icon-btn" onclick="{{ H.togglePlayerMenu }}" aria-label="更多" title="更多"><span class="ms">more_vert</span></button>
+            <button class="sw-icon-btn" onclick="{{ H.togglePlayerMenu }}" aria-label="{{ L.more }}" title="{{ L.more }}"><span class="ms">more_vert</span></button>
             <sc-if value="{{ v.playerMenuOpen }}">
               <div class="sw-menu-scrim" onclick="{{ H.closeMenu }}"></div>
               <div class="sw-menu" role="menu">
-                <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuShare }}"><span class="ms">share</span><span>分享</span></button>
-                <button class="{{ v.exportItemClass }}" role="menuitem" onclick="{{ H.menuExport }}"><span class="ms">download</span><span><span>下载</span><sc-if value="{{ v.exportDisabled }}"><span class="sw-menu-hint">听完一遍才能下载</span></sc-if></span></button>
+                <button class="sw-menu-item" role="menuitem" onclick="{{ H.menuShare }}"><span class="ms">share</span><span>{{ L.share }}</span></button>
+                <button class="{{ v.exportItemClass }}" role="menuitem" onclick="{{ H.menuExport }}"><span class="ms">download</span><span><span>{{ L.download }}</span><sc-if value="{{ v.exportDisabled }}"><span class="sw-menu-hint">{{ L.downloadHint }}</span></sc-if></span></button>
               </div>
             </sc-if>
           </span>
         </sc-if>
-        <button class="sw-icon-btn sw-collapse" onclick="{{ H.closeMobileNowPlaying }}" aria-label="收起" title="收起"><span class="ms">keyboard_arrow_down</span></button>
+        <button class="sw-icon-btn sw-collapse" onclick="{{ H.closeMobileNowPlaying }}" aria-label="{{ L.collapse }}" title="{{ L.collapse }}"><span class="ms">keyboard_arrow_down</span></button>
       </div>
       <div class="{{ v.mediaViewportClass }}">
         <sc-if value="{{ v.mediaIsCover }}" hint-placeholder-val="{{ true }}">
@@ -776,19 +790,19 @@ if ('serviceWorker' in navigator) {
             <sc-for list="{{ v.queueRender }}" as="item" hint-placeholder-count="6">
               <div class="{{ item.rowClass }}" draggable="true" onDragStart="{{ item.onDragStart }}" onDragOver="{{ item.onDragOver }}" onDrop="{{ item.onDrop }}" onDragEnd="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="opacity:{{ item.rowOpacity }};">
                 <span class="sw-idx"><sc-if value="{{ item.isCurrent }}"><span class="ms">graphic_eq</span></sc-if><sc-if value="{{ item.notCurrent }}">{{ item.indexLabel }}</sc-if></span>
-                <span class="ms dc-queue-drag-handle" title="拖动排序">drag_indicator</span>
+                <span class="ms dc-queue-drag-handle" title="{{ L.dragToReorder }}">drag_indicator</span>
                 <div class="sw-cover" style="{{ item.coverStyle }}">{{ item.coverInitial }}</div>
                 <div class="sw-row-main">
                   <div class="sw-t">{{ item.title }}</div>
-                  <div class="sw-m"><span class="sw-a">{{ item.artistDisplay }}</span><span>·</span><span class="sw-src">{{ item.sourceLabel }}</span><sc-if value="{{ item.isCached }}"><span class="ms" title="已缓存，断网也能播">download_done</span></sc-if></div>
+                  <div class="sw-m"><span class="sw-a">{{ item.artistDisplay }}</span><span>·</span><span class="sw-src">{{ item.sourceLabel }}</span><sc-if value="{{ item.isCached }}"><span class="ms" title="{{ L.cachedOffline }}">download_done</span></sc-if></div>
                 </div>
                 <span class="sw-qdur">{{ item.durationStr }}</span>
                 <div class="sw-qbtns">
                   <span class="dc-queue-move-btns">
-                    <button class="sw-icon-btn" onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" aria-label="上移" title="上移"><span class="ms">keyboard_arrow_up</span></button>
-                    <button class="sw-icon-btn" onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" aria-label="下移" title="下移"><span class="ms">keyboard_arrow_down</span></button>
+                    <button class="sw-icon-btn" onclick="{{ item.onMoveUp }}" disabled="{{ item.isFirst }}" aria-label="{{ L.moveUp }}" title="{{ L.moveUp }}"><span class="ms">keyboard_arrow_up</span></button>
+                    <button class="sw-icon-btn" onclick="{{ item.onMoveDown }}" disabled="{{ item.isLast }}" aria-label="{{ L.moveDown }}" title="{{ L.moveDown }}"><span class="ms">keyboard_arrow_down</span></button>
                   </span>
-                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="移出队列" title="移出队列"><span class="ms">close</span></button>
+                  <button class="sw-icon-btn" onclick="{{ item.onRemove }}" aria-label="{{ L.removeFromQueue }}" title="{{ L.removeFromQueue }}"><span class="ms">close</span></button>
                 </div>
               </div>
             </sc-for>
@@ -810,15 +824,15 @@ if ('serviceWorker' in navigator) {
       </div>
       <div class="sw-controls">
         <button class="{{ v.modeBtnClass }}" onclick="{{ H.cycleMode }}" aria-label="{{ v.modeLabel }}" title="{{ v.modeLabel }}"><span class="ms">{{ v.modeIcon }}</span></button>
-        <button class="sw-ctrl sw-skip" onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" aria-label="上一首" title="上一首"><span class="ms">skip_previous</span></button>
+        <button class="sw-ctrl sw-skip" onclick="{{ H.prev }}" disabled="{{ v.prevDisabled }}" aria-label="{{ L.prev }}" title="{{ L.prev }}"><span class="ms">skip_previous</span></button>
         <button class="sw-play-big" onclick="{{ H.togglePlay }}" disabled="{{ v.playDisabled }}" aria-label="{{ v.playLabel }}" title="{{ v.playLabel }}"><span class="{{ v.playIconClass }}">{{ v.playIcon }}</span></button>
-        <button class="sw-ctrl sw-skip" onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" aria-label="下一首" title="下一首"><span class="ms">skip_next</span></button>
-        <button class="{{ v.likeBtnClass }}" onclick="{{ H.toggleCurrentLike }}" disabled="{{ v.playDisabled }}" aria-label="喜欢" title="喜欢"><span class="ms">favorite</span></button>
+        <button class="sw-ctrl sw-skip" onclick="{{ H.next }}" disabled="{{ v.nextDisabled }}" aria-label="{{ L.next }}" title="{{ L.next }}"><span class="ms">skip_next</span></button>
+        <button class="{{ v.likeBtnClass }}" onclick="{{ H.toggleCurrentLike }}" disabled="{{ v.playDisabled }}" aria-label="{{ L.like }}" title="{{ L.like }}"><span class="ms">favorite</span></button>
       </div>
       <div class="sw-volume">
-        <button class="{{ v.adaptiveBtnClass }}" onclick="{{ H.toggleAdaptiveVolume }}" aria-label="自动音量" title="自动音量：响的歌调小、轻的歌调大"><span class="ms">graphic_eq</span></button>
+        <button class="{{ v.adaptiveBtnClass }}" onclick="{{ H.toggleAdaptiveVolume }}" aria-label="{{ L.autoVolume }}" title="{{ L.autoVolumeTitle }}"><span class="ms">graphic_eq</span></button>
         <sc-if value="{{ v.canMiniPlayer }}">
-          <button class="{{ v.miniPlayerBtnClass }}" onclick="{{ H.toggleMiniPlayer }}" aria-label="迷你播放器" title="迷你播放器：浮在所有窗口最上面"><span class="ms">picture_in_picture_alt</span></button>
+          <button class="{{ v.miniPlayerBtnClass }}" onclick="{{ H.toggleMiniPlayer }}" aria-label="{{ L.miniPlayer }}" title="{{ L.miniPlayerTitle }}"><span class="ms">picture_in_picture_alt</span></button>
         </sc-if>
         <span class="ms">volume_up</span>
         <div class="sw-bar-hit" onclick="{{ H.setVolume }}"><div class="sw-bar"><div class="sw-bar-fill" style="width:{{ v.volume }}%;"></div></div></div>
@@ -827,8 +841,8 @@ if ('serviceWorker' in navigator) {
 
     <!-- 宽屏歌词栏：屏幕够宽（LYRICS_COL_QUERY）时歌词单独一栏常驻，放在播放器右边，播放器里就不再有「歌词」标签 -->
     <sc-if value="{{ v.showLyricsCol }}">
-      <aside class="sw-lyrics-col" aria-label="歌词">
-        <div class="sw-lyrics-col-head"><span class="sw-tab is-on">歌词</span></div>
+      <aside class="sw-lyrics-col" aria-label="{{ L.tabLyrics }}">
+        <div class="sw-lyrics-col-head"><span class="sw-tab is-on">{{ L.tabLyrics }}</span></div>
         <div class="sw-lyrics-col-body">
           <sc-if value="{{ v.hasLyrics }}">
             <div class="sw-lyrics">
@@ -848,7 +862,7 @@ if ('serviceWorker' in navigator) {
 
   </div>
 
-  <div class="sw-footer">本页面仅供学习交流使用，请勿用于任何商业用途</div>
+  <div class="sw-footer">{{ L.disclaimer }}</div>
 
   <sc-if value="{{ v.hasTrack }}">
     <div class="sw-mini dc-mobile-miniplayer" onclick="{{ H.toggleMobileNowPlaying }}">
@@ -859,7 +873,7 @@ if ('serviceWorker' in navigator) {
         <div class="sw-mini-a">{{ v.track.artistDisplay }}</div>
       </div>
       <button class="sw-play-sq" onclick="{{ H.miniPlayToggle }}" disabled="{{ v.playDisabled }}" aria-label="{{ v.playLabel }}" title="{{ v.playLabel }}"><span class="{{ v.playIconClass }}">{{ v.playIcon }}</span></button>
-      <button class="sw-icon-btn" onclick="{{ H.miniNext }}" disabled="{{ v.nextDisabled }}" aria-label="下一首" title="下一首"><span class="ms">skip_next</span></button>
+      <button class="sw-icon-btn" onclick="{{ H.miniNext }}" disabled="{{ v.nextDisabled }}" aria-label="{{ L.next }}" title="{{ L.next }}"><span class="ms">skip_next</span></button>
     </div>
   </sc-if>
 
@@ -872,9 +886,9 @@ if ('serviceWorker' in navigator) {
       <p>{{ v.batteryHintText }}</p>
       <div class="sw-banner-acts">
         <sc-if value="{{ v.isNative }}">
-          <button class="sw-btn sw-btn-outline" onclick="{{ H.openBatterySettings }}">去设置</button>
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.openBatterySettings }}">{{ L.goToSettings }}</button>
         </sc-if>
-        <button class="sw-btn sw-btn-primary" onclick="{{ H.dismissBatteryHint }}">知道了</button>
+        <button class="sw-btn sw-btn-primary" onclick="{{ H.dismissBatteryHint }}">{{ L.gotIt }}</button>
       </div>
     </div>
   </sc-if>
@@ -883,38 +897,38 @@ if ('serviceWorker' in navigator) {
     <div class="sw-banner">
       <p>{{ v.updateBannerText }}</p>
       <div class="sw-banner-acts">
-        <button class="sw-btn sw-btn-outline" onclick="{{ H.dismissUpdate }}">以后再说</button>
-        <button class="sw-btn sw-btn-primary" onclick="{{ H.downloadUpdate }}">下载新版</button>
+        <button class="sw-btn sw-btn-outline" onclick="{{ H.dismissUpdate }}">{{ L.later }}</button>
+        <button class="sw-btn sw-btn-primary" onclick="{{ H.downloadUpdate }}">{{ L.downloadUpdate }}</button>
       </div>
     </div>
   </sc-if>
 
   <sc-if value="{{ v.hasAddModal }}">
     <div class="dc-modal-overlay" onclick="{{ H.closeAddModal }}">
-      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="加到歌单">
-        <div class="sw-sheet-title">加到歌单</div>
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="{{ L.addToPlaylist }}">
+        <div class="sw-sheet-title">{{ L.addToPlaylist }}</div>
         <div class="sw-sheet-sub">{{ v.addModalTrackText }}</div>
         <div class="sw-lib-list">
           <sc-for list="{{ v.playlistOptions }}" as="pl" hint-placeholder-count="3">
             <button class="sw-lib-row sw-press" onclick="{{ pl.onClick }}"><span class="sw-idx">{{ pl.indexLabel }}</span><span class="sw-lib-name"><span>{{ pl.name }}</span></span><span class="sw-lib-count">{{ pl.countLabel }}</span></button>
           </sc-for>
         </div>
-        <div class="sw-sheet-foot"><button class="sw-btn sw-btn-outline" onclick="{{ H.closeAddModal }}">取消</button></div>
+        <div class="sw-sheet-foot"><button class="sw-btn sw-btn-outline" onclick="{{ H.closeAddModal }}">{{ L.cancel }}</button></div>
       </div>
     </div>
   </sc-if>
 
   <sc-if value="{{ v.hasImportModal }}">
     <div class="dc-modal-overlay" onclick="{{ H.closeImportModal }}">
-      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="导入歌单">
-        <div class="sw-sheet-title">导入歌单</div>
-        <div class="sw-sheet-sub">网易云歌单链接，或者本站导出的歌单字符串</div>
-        <input class="sw-input dc-input" value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="粘贴歌单链接…" autofocus="{{ true }}" aria-label="歌单链接或导出字符串">
-        <input class="sw-input dc-input" value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="歌单名称（可选）" aria-label="歌单名称">
-        <span class="sw-hint">同名歌单会被直接覆盖；名称留空则整体替换「喜欢的音乐」（不是合并）</span>
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="{{ L.importPlaylist }}">
+        <div class="sw-sheet-title">{{ L.importPlaylist }}</div>
+        <div class="sw-sheet-sub">{{ L.importSub }}</div>
+        <input class="sw-input dc-input" value="{{ v.importUrl }}" onchange="{{ H.setImportUrl }}" onkeydown="{{ H.importKeyDown }}" placeholder="{{ L.importUrlPlaceholder }}" autofocus="{{ true }}" aria-label="{{ L.importUrlAria }}">
+        <input class="sw-input dc-input" value="{{ v.importPlaylistName }}" onchange="{{ H.setImportPlaylistName }}" onkeydown="{{ H.importKeyDown }}" placeholder="{{ L.importNamePlaceholder }}" aria-label="{{ L.playlistName }}">
+        <span class="sw-hint">{{ L.importHint }}</span>
         <div class="sw-sheet-foot">
-          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeImportModal }}">取消</button>
-          <button class="sw-btn sw-btn-primary" onclick="{{ H.confirmImport }}">导入</button>
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeImportModal }}">{{ L.cancel }}</button>
+          <button class="sw-btn sw-btn-primary" onclick="{{ H.confirmImport }}">{{ L.importBtn }}</button>
         </div>
       </div>
     </div>
@@ -922,13 +936,13 @@ if ('serviceWorker' in navigator) {
 
   <sc-if value="{{ v.hasCreateModal }}">
     <div class="dc-modal-overlay" onclick="{{ H.closeCreateModal }}">
-      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="新建歌单">
-        <div class="sw-sheet-title">新建歌单</div>
-        <div class="sw-sheet-sub">建好之后在搜索结果里点 ＋ 把歌加进来</div>
-        <input class="sw-input dc-input" value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="歌单名称…" maxLength="50" autofocus="{{ true }}" aria-label="歌单名称">
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="{{ L.newPlaylist }}">
+        <div class="sw-sheet-title">{{ L.newPlaylist }}</div>
+        <div class="sw-sheet-sub">{{ L.newPlaylistSub }}</div>
+        <input class="sw-input dc-input" value="{{ v.createName }}" onchange="{{ H.setCreateName }}" onkeydown="{{ H.createKeyDown }}" placeholder="{{ L.newPlaylistPlaceholder }}" maxLength="50" autofocus="{{ true }}" aria-label="{{ L.playlistName }}">
         <div class="sw-sheet-foot">
-          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeCreateModal }}">取消</button>
-          <button class="sw-btn sw-btn-primary" onclick="{{ H.confirmCreate }}">创建</button>
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeCreateModal }}">{{ L.cancel }}</button>
+          <button class="sw-btn sw-btn-primary" onclick="{{ H.confirmCreate }}">{{ L.create }}</button>
         </div>
       </div>
     </div>
@@ -936,19 +950,19 @@ if ('serviceWorker' in navigator) {
 
   <sc-if value="{{ v.shareModalOpen }}">
     <div class="dc-modal-overlay" onclick="{{ H.closeShareModal }}">
-      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="分享这首歌">
-        <div class="sw-sheet-title">分享这首歌</div>
-        <div class="sw-sheet-sub">把下面这段文字发给朋友，链接在微信 / QQ 里可以直接点开</div>
+      <div class="dc-modal dc-scrollbar" onclick="{{ H.stop }}" role="dialog" aria-label="{{ L.shareSong }}">
+        <div class="sw-sheet-title">{{ L.shareSong }}</div>
+        <div class="sw-sheet-sub">{{ L.shareSub }}</div>
         <div class="sw-share-box">{{ v.shareTextPreview }}</div>
         <sc-if value="{{ v.shareNoLink }}">
-          <span class="sw-hint">这首歌拿不到官方页面链接，只能分享歌曲信息，朋友需要自己搜一下</span>
+          <span class="sw-hint">{{ L.shareNoLink }}</span>
         </sc-if>
         <div class="sw-sheet-foot">
-          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeShareModal }}">取消</button>
+          <button class="sw-btn sw-btn-outline" onclick="{{ H.closeShareModal }}">{{ L.cancel }}</button>
           <sc-if value="{{ v.shareCanSystemShare }}">
-            <button class="sw-btn sw-btn-outline" onclick="{{ H.systemShare }}">分享到…</button>
+            <button class="sw-btn sw-btn-outline" onclick="{{ H.systemShare }}">{{ L.shareTo }}</button>
           </sc-if>
-          <button class="sw-btn sw-btn-primary" onclick="{{ H.copyShareText }}">复制</button>
+          <button class="sw-btn sw-btn-primary" onclick="{{ H.copyShareText }}">{{ L.copy }}</button>
         </div>
       </div>
     </div>
@@ -961,12 +975,283 @@ if ('serviceWorker' in navigator) {
 <script type="text/x-dc" data-dc-script>
 
 
-const SOURCE_LABELS = { netease: '网易云', qq: 'QQ音乐', soundcloud: 'SoundCloud' };
+// ====================== 界面文字：中文 / English ======================
+// 界面上的字都从这里取：模板里写 {{ L.键名 }}，代码里写 tr('键名', 参数…)（不叫 t：页面里到处用 t 当曲目变量）。
+// 每一条是 [中文, English] 一对，新加的字两种语言都要写；带数字、名字的句子写成函数，英文的单复数在函数里处理。
+// 不翻译的：歌名、歌手、专辑、歌词、用户自己起的歌单名；切歌诊断记录（diagLog）和控制台日志一直是中文，那是给开发者看的。
+// 存在本地的数据里不放翻译后的字：内置的「喜欢的音乐」存的还是中文名，显示时按语言换（playlistLabel）
+const LANG_STORAGE_KEY = 'listening-player-lang-v1';
+
+const enSongs = n => `${n} ${n === 1 ? 'song' : 'songs'}`;
+
+const STRINGS = {
+  // 名字、页脚、几处共用的
+  appName: ['听音乐', 'Listening'],
+  disclaimer: ['本页面仅供学习交流使用，请勿用于任何商业用途', 'For learning and personal use only. Not for commercial use.'],
+  likedName: ['喜欢的音乐', 'Liked Songs'],
+  cachedName: ['已缓存', 'Cached'],
+  sourceNames: [{ netease: '网易云', qq: 'QQ音乐', soundcloud: 'SoundCloud' }, { netease: 'NetEase', qq: 'QQ Music', soundcloud: 'SoundCloud' }],
+  playModes: [['列表循环', '随机播放', '单曲循环'], ['Repeat all', 'Shuffle', 'Repeat one']],
+  listSep: ['、', ', '],
+  songs: [n => `${n} 首`, enSongs],
+
+  // 顶栏、搜索页
+  navPages: ['页面', 'Pages'],
+  search: ['搜索', 'Search'],
+  playlists: ['歌单', 'Playlists'],
+  settings: ['设置', 'Settings'],
+  searchPlaceholder: ['歌名、歌手', 'Song or artist'],
+  searchAria: ['搜索歌名、歌手', 'Search songs or artists'],
+  clearSearch: ['清空搜索', 'Clear search'],
+  clear: ['清空', 'Clear'],
+  recentSearches: ['最近搜索', 'Recent searches'],
+  searching: ['正在搜索…', 'Searching…'],
+  statusFound: [(n, q) => `${q ? ' ' : ''}找到 ${n} 首`, (n, q) => `${q ? ' · ' : ''}${n} ${n === 1 ? 'result' : 'results'}`],
+  statusLocal: [n => ` 在本地曲库里找到 ${n} 首（不是联网搜索结果）`, n => ` · ${enSongs(n)} in your library (not an online search)`],
+  emptySearchTitle: [q => `没有找到“${q}”`, q => `Nothing found for “${q}”`],
+  emptySearchText: ['换个关键词试试，或者把另一个音源也勾上', 'Try other keywords, or turn on another source.'],
+  emptyLocalTitle: [q => `本地曲库里没有“${q}”`, q => `No “${q}” in your library`],
+  emptyLocalText: ['离线时只能搜听过、存过的歌，联网后再搜', 'Offline, you can only search songs you’ve played or saved. Try again when you’re online.'],
+
+  // 列表里的一行
+  cachedOffline: ['已缓存，断网也能播', 'Cached · plays offline'],
+  like: ['喜欢', 'Like'],
+  addToPlaylist: ['加到歌单', 'Add to playlist'],
+  removeFromPlaylist: ['移出歌单', 'Remove from playlist'],
+  removeCached: ['删除缓存', 'Remove from cache'],
+
+  // 歌单页
+  importBtn: ['导入', 'Import'],
+  newBtn: ['新建', 'New'],
+  more: ['更多', 'More'],
+  exportPlaylist: ['导出歌单', 'Export playlist'],
+  deletePlaylist: ['删除歌单', 'Delete playlist'],
+  playAll: ['播放全部', 'Play all'],
+  cacheAll: ['缓存全部', 'Cache all'],
+  cachingProgress: [(done, total) => `缓存中 ${done}/${total} · 点此停止`, (done, total) => `Caching ${done}/${total} · Tap to stop`],
+  statusCachedView: [(n, size) => `${n} 首 · 占用 ${size} · 断网也能播`, (n, size) => `${enSongs(n)} · ${size} · Available offline`],
+  statusPlaylist: [(n, cachedN) => `${n} 首` + (cachedN ? ` · 已缓存 ${cachedN} 首` : ''), (n, cachedN) => enSongs(n) + (cachedN ? ` · ${cachedN} cached` : '')],
+  offlineNoteCachedOnly: [' · 只播已缓存：灰色的歌先跳过', ' · Cached only: grey songs are skipped'],
+  offlineNoteOffline: [' · 离线中：灰色的歌没缓存，暂时放不了', ' · Offline: grey songs aren’t cached and can’t play'],
+  emptyCachedTitle: ['还没有缓存好的歌', 'No cached songs yet'],
+  emptyCachedText: ['听过一遍的歌会自动缓存；也可以打开一个歌单，点「缓存全部」', 'Songs are cached after you play them once. You can also open a playlist and tap “Cache all”.'],
+  emptyPlaylistTitle: ['这个歌单还没有歌', 'This playlist is empty'],
+  emptyPlaylistText: ['去搜索页找歌，点 ＋ 加进来', 'Find songs in Search and tap + to add them.'],
+
+  // 设置页
+  cacheSection: ['缓存与离线', 'Cache & offline'],
+  cachedSongs: [n => `已缓存 ${n} 首`, n => `${enSongs(n)} cached`],
+  netOnline: ['已联网 · 听过的歌会自动缓存', 'Online · Songs you play are cached automatically'],
+  netOnlineCachedOnly: ['已联网 · 只播已缓存的歌（省流量）', 'Online · Playing cached songs only (saves data)'],
+  netOffline: ['没有网络 · 现在只能放已缓存的歌', 'Offline · Only cached songs can play'],
+  cacheLimit: ['缓存上限', 'Cache limit'],
+  capNoLimit: ['不限', 'No limit'],
+  cacheLimitHint: ['超过上限时自动删掉最久没听的歌。无损音质一首大约 30MB', 'When the cache is full, the songs you haven’t played for the longest are removed. A lossless song is about 30 MB.'],
+  offlineOnly: ['只播已缓存的歌', 'Play cached songs only'],
+  offlineOnlyHint: ['断网时自动按这个来；联网时打开可以省流量', 'Always on when offline. Turn it on when online to save data.'],
+  clearCache: ['清空缓存', 'Clear cache'],
+  appearance: ['外观', 'Appearance'],
+  themeLight: ['白', 'Light'],
+  themeDark: ['黑', 'Dark'],
+  language: ['语言', 'Language'],
+  about: ['关于', 'About'],
+  version: ['版本', 'Version'],
+  checkUpdate: ['检查更新', 'Check for updates'],
+  backgroundSettings: ['后台运行设置', 'Background playback settings'],
+  copyDiag: ['复制切歌诊断记录', 'Copy playback diagnostics'],
+  chipCachedOnly: ['只播缓存', 'Cached only'],
+  chipOffline: ['离线', 'Offline'],
+
+  // 播放器（主页面和迷你播放器共用）
+  nothingPlaying: ['暂无播放', 'Nothing playing'],
+  tabCover: ['封面', 'Cover'],
+  tabLyrics: ['歌词', 'Lyrics'],
+  tabQueue: ['队列', 'Queue'],
+  queue: ['播放队列', 'Queue'],
+  share: ['分享', 'Share'],
+  download: ['下载', 'Download'],
+  downloadHint: ['听完一遍才能下载', 'Play it through once to download'],
+  collapse: ['收起', 'Collapse'],
+  lyricsLoading: ['歌词加载中…', 'Loading lyrics…'],
+  noLyrics: ['暂无歌词', 'No lyrics'],
+  dragToReorder: ['拖动排序', 'Drag to reorder'],
+  moveUp: ['上移', 'Move up'],
+  moveDown: ['下移', 'Move down'],
+  removeFromQueue: ['移出队列', 'Remove from queue'],
+  prev: ['上一首', 'Previous'],
+  next: ['下一首', 'Next'],
+  play: ['播放', 'Play'],
+  pause: ['暂停', 'Pause'],
+  loading: ['加载中', 'Loading'],
+  autoVolume: ['自动音量', 'Auto volume'],
+  autoVolumeTitle: ['自动音量：响的歌调小、轻的歌调大', 'Auto volume: turns loud songs down and quiet songs up'],
+  miniPlayer: ['迷你播放器', 'Mini player'],
+  miniPlayerTitle: ['迷你播放器：浮在所有窗口最上面', 'Mini player: stays on top of all windows'],
+  backToPage: ['回到网页', 'Back to page'],
+
+  // 提示条
+  batteryHintNative: [
+    '锁屏后要连续自动播放，需要允许「听音乐」在后台运行：点「去设置」在弹窗里选允许。小米、华为等手机还要在应用信息里把省电策略设成「无限制」、打开「自启动」。',
+    'To keep playing with the screen locked, let this app run in the background: tap “Open settings” and choose Allow. On Xiaomi, Huawei and similar phones, also set battery saver to “No restrictions” and turn on “Auto-launch” in App info.',
+  ],
+  batteryHintWeb: [
+    '安卓锁屏后台要连续自动播放下一首，需要手动放行一次：设置 → 电池 → 找到浏览器（或本应用）→ 允许后台耗电/关闭省电限制。',
+    'To keep playing the next song with the screen locked on Android, allow it once: Settings → Battery → your browser (or this app) → allow background activity / turn off battery restrictions.',
+  ],
+  goToSettings: ['去设置', 'Open settings'],
+  gotIt: ['知道了', 'Got it'],
+  updateBanner: [
+    (tag, cur) => `有新版本 ${tag}${cur ? `（当前 ${cur}）` : ''}。下载后点开安装，会直接覆盖这一版，歌单和缓存都还在。`,
+    (tag, cur) => `Version ${tag} is available${cur ? ` (you have ${cur})` : ''}. Download it and tap to install over this version. Your playlists and cache stay.`,
+  ],
+  later: ['以后再说', 'Later'],
+  downloadUpdate: ['下载新版', 'Download update'],
+
+  // 弹窗
+  cancel: ['取消', 'Cancel'],
+  importPlaylist: ['导入歌单', 'Import playlist'],
+  importSub: ['网易云歌单链接，或者本站导出的歌单字符串', 'A NetEase Cloud Music playlist link, or a playlist exported from this app'],
+  importUrlPlaceholder: ['粘贴歌单链接…', 'Paste a playlist link…'],
+  importUrlAria: ['歌单链接或导出字符串', 'Playlist link or exported playlist'],
+  importNamePlaceholder: ['歌单名称（可选）', 'Playlist name (optional)'],
+  playlistName: ['歌单名称', 'Playlist name'],
+  importHint: ['同名歌单会被直接覆盖；名称留空则整体替换「喜欢的音乐」（不是合并）', 'A playlist with the same name is replaced. Leave the name empty to replace “Liked Songs” entirely (not merged).'],
+  newPlaylist: ['新建歌单', 'New playlist'],
+  newPlaylistSub: ['建好之后在搜索结果里点 ＋ 把歌加进来', 'Then tap + on search results to add songs.'],
+  newPlaylistPlaceholder: ['歌单名称…', 'Playlist name…'],
+  create: ['创建', 'Create'],
+  shareSong: ['分享这首歌', 'Share this song'],
+  shareSub: ['把下面这段文字发给朋友，链接在微信 / QQ 里可以直接点开', 'Send this text to a friend. The link opens directly in WeChat or QQ.'],
+  shareNoLink: ['这首歌拿不到官方页面链接，只能分享歌曲信息，朋友需要自己搜一下', 'There’s no official link for this song, so only its details are shared. Your friend will need to search for it.'],
+  shareTo: ['分享到…', 'Share to…'],
+  copy: ['复制', 'Copy'],
+
+  // 弹出的提示（toast）和确认框
+  miniPlayerFailed: ['打不开迷你播放器', 'Couldn’t open the mini player'],
+  headphonesUnplugged: ['耳机断开了，已暂停', 'Headphones disconnected. Paused.'],
+  batterySettingsFailed: ['打不开系统设置，请手动在设置里找到「听音乐」', 'Couldn’t open system settings. Please find this app in Settings yourself.'],
+  updateOffline: ['离线中，联网后再检查', 'You’re offline. Check again once you’re online.'],
+  updateAvailable: [tag => `有新版本 ${tag}`, tag => `Version ${tag} is available`],
+  upToDate: [ver => `已经是最新版（${ver}）`, ver => `You’re up to date (${ver})`],
+  updateCheckFailed: ['检查更新失败，稍后再试', 'Couldn’t check for updates. Try again later.'],
+  openBrowserFailed: ['打不开浏览器，去 GitHub 的 Releases 页面下载', 'Couldn’t open the browser. Download it from the Releases page on GitHub.'],
+  preparingExport: ['正在准备导出…', 'Preparing export…'],
+  exportSong: ['导出这首歌', 'Export this song'],
+  exportFailed: ['导出失败，请稍后再试', 'Export failed. Try again later.'],
+  cacheIncomplete: ['检测到本地缓存不完整，正在重新下载…', 'The cached copy is incomplete. Downloading it again…'],
+  autoVolumeFailed: ['自适应音量遇到问题，已自动关闭', 'Auto volume ran into a problem and was turned off'],
+  removedFromPlaylist: ['已从歌单移除', 'Removed from playlist'],
+  confirmDeletePlaylist: [name => `确定删除歌单「${name}」？`, name => `Delete the playlist “${name}”?`],
+  playlistDeleted: ['已删除歌单', 'Playlist deleted'],
+  confirmClearCache: ['确定要清空本地音频缓存吗？之后每首歌第一次播放都要重新联网下载。', 'Clear the local audio cache? Every song will have to download again the first time you play it.'],
+  cacheCleared: ['本地音频缓存已清空', 'Local audio cache cleared'],
+  clearCacheFailed: ['清空缓存失败，请稍后再试', 'Couldn’t clear the cache. Try again later.'],
+  trimmedForCap: [n => `已按新上限删掉 ${n} 首最久没听的缓存`, n => `Removed ${enSongs(n)} you haven’t played for a while to fit the new limit`],
+  offlineOnlyOn: ['已开启：只播已缓存的歌', 'Cached only: on'],
+  offlineOnlyOff: ['已关闭「只播已缓存」', 'Cached only: off'],
+  confirmDeleteCached: [title => `删除《${title || '这首歌'}》的本地缓存？删了之后断网就放不了它。`, title => `Remove ${title ? `“${title}”` : 'this song'} from the cache? It won’t play offline after that.`],
+  cachedDeleted: ['已删除这首歌的缓存', 'Removed from the cache'],
+  stopping: ['正在停止…', 'Stopping…'],
+  batchBusy: ['正在缓存另一个歌单，等它完成或先停掉', 'Another playlist is being cached. Wait for it to finish, or stop it first.'],
+  allCached: ['这个歌单里的歌都已经缓存好了', 'Every song in this playlist is already cached'],
+  cacheWhenOnline: ['离线中，联网后再缓存', 'You’re offline. Cache it once you’re online.'],
+  apiNotLoaded: ['API 模块未加载，请刷新页面', 'Part of the app didn’t load. Please reload the page.'],
+  confirmCellular: [n => `现在用的是移动网络，要下载 ${n} 首歌吗？无损音质一首大约 30MB。`, n => `You’re on mobile data. Download ${enSongs(n)}? A lossless song is about 30 MB.`],
+  batchStoppedCap: [(cap, done) => `缓存空间到上限了（${cap}），这次缓存了 ${done} 首；可以在「缓存与离线」里调大`, (cap, done) => `The cache is full (${cap}). Cached ${enSongs(done)} this time. You can raise the limit in “Cache & offline”.`],
+  batchCancelled: [done => `已停止，这次缓存了 ${done} 首`, done => `Stopped. Cached ${enSongs(done)} this time.`],
+  batchFailStreak: [done => `连续几首都下载失败，先停了（这次缓存了 ${done} 首），检查一下网络`, done => `Several downloads failed in a row, so caching stopped (${enSongs(done)} cached). Check your connection.`],
+  batchDoneFailed: [(done, failed) => `缓存完成：${done} 首成功，${failed} 首失败`, (done, failed) => `Caching done: ${done} succeeded, ${failed} failed`],
+  batchDone: [done => `缓存完成：${done} 首都能离线播放了`, done => `Caching done: ${enSongs(done)} ready to play offline`],
+  offlineFoundLocal: [(n, cachedN) => `离线中，在本地曲库里找到 ${n} 首（${cachedN} 首已缓存）`, (n, cachedN) => `Offline: found ${enSongs(n)} in your library (${cachedN} cached)`],
+  offlineNoneLocal: [q => `离线中，本地曲库里没有「${q}」`, q => `Offline: no “${q}” in your library`],
+  onlineFallbackLocal: [(q, n) => `联网没搜到「${q}」，先显示本地曲库里的 ${n} 首`, (q, n) => `Nothing found online for “${q}”. Showing ${enSongs(n)} from your library.`],
+  noDiag: ['还没有诊断记录', 'No diagnostics yet'],
+  diagCopied: [n => `已复制 ${n} 条诊断记录`, n => `Copied ${n} diagnostic ${n === 1 ? 'entry' : 'entries'}`],
+  copyFailed: ['复制失败，请稍后再试', 'Copy failed. Try again later.'],
+  searchingFor: [q => `正在搜索 "${q}" …`, q => `Searching for “${q}”…`],
+  noSongsFor: [q => `没有找到「${q}」相关歌曲`, q => `No songs found for “${q}”`],
+  foundFor: [(q, n, srcs) => `"${q}" 找到 ${n} 首（${srcs}）`, (q, n, srcs) => `“${q}”: ${n} ${n === 1 ? 'result' : 'results'} (${srcs})`],
+  searchFailed: ['搜索失败，请检查网络连接', 'Search failed. Check your connection.'],
+  unliked: ['已取消喜欢', 'Removed from Liked Songs'],
+  likedToast: ['已添加到喜欢的歌曲', 'Added to Liked Songs'],
+  importedReplaced: [(n, name) => `已导入 ${n} 首到「${name}」（覆盖了原有同名歌单）`, (n, name) => `Imported ${enSongs(n)} into “${name}” (replaced the playlist with that name)`],
+  imported: [(n, name) => `已导入 ${n} 首到「${name}」`, (n, name) => `Imported ${enSongs(n)} into “${name}”`],
+  importedLiked: [n => `已导入 ${n} 首到「喜欢的音乐」（已整体覆盖原有收藏）`, n => `Imported ${enSongs(n)} into “Liked Songs” (replaced your previous likes)`],
+  exportParseFailed: ['导出内容解析失败，检查一下是不是完整复制的', 'Couldn’t read this export. Check that you copied all of it.'],
+  exportNoSongs: ['这段内容里没有歌曲', 'There are no songs in this text'],
+  linkUnsupported: ['暂不支持该链接，请粘贴网易云音乐或QQ音乐的歌单链接，或者导出字符串', 'This link isn’t supported. Paste a NetEase Cloud Music or QQ Music playlist link, or an exported playlist.'],
+  qqImportSoon: ['QQ音乐歌单导入正在开发中，先支持了网易云', 'Importing QQ Music playlists isn’t ready yet. NetEase playlists work.'],
+  shareLinkUnrecognized: ['识别不到分享链接，检查一下链接是否完整', 'Couldn’t recognize the link. Check that it’s complete.'],
+  resolvingShortLink: ['正在解析短链…', 'Resolving the short link…'],
+  shortLinkFailed: ['短链解析失败，请从网页版复制完整歌单链接重试', 'Couldn’t resolve the short link. Copy the full playlist link from the website and try again.'],
+  playlistIdUnrecognized: ['识别不到歌单 id，检查一下链接是否完整', 'Couldn’t find a playlist ID. Check that the link is complete.'],
+  importing: ['正在导入歌单…', 'Importing playlist…'],
+  importNoSongs: ['没有解析到歌曲，确认一下歌单是否公开可见', 'No songs found. Make sure the playlist is public.'],
+  importFailed: ['导入失败，请稍后重试', 'Import failed. Try again later.'],
+  nothingToShare: ['没有可分享的歌曲', 'No song to share'],
+  shareCopied: ['已复制，去微信 / QQ 粘贴发送', 'Copied. Paste it into WeChat or QQ to send.'],
+  shareCopyFailed: ['复制失败，请手动选中上面的文字', 'Copy failed. Select the text above and copy it yourself.'],
+  playlistCreated: [name => `已创建歌单「${name}」`, name => `Created “${name}”`],
+  addedTo: [name => `已添加到「${name}」`, name => `Added to “${name}”`],
+  playAllNoneCachedOnly: ['已开启「只播已缓存」，这个歌单里还没有缓存好的歌', 'Cached only is on, and nothing in this playlist is cached yet'],
+  playAllNoneOffline: ['离线中，这个歌单里还没有缓存好的歌', 'You’re offline, and nothing in this playlist is cached yet'],
+  playingCachedOf: [name => `正在播放「${name}」里已缓存的歌`, name => `Playing the cached songs in “${name}”`],
+  playingPlaylist: [name => `正在播放「${name}」`, name => `Playing “${name}”`],
+  exportEmptyPlaylist: ['这个歌单还没有歌曲，没什么可导出的', 'This playlist is empty. Nothing to export.'],
+  exportCopied: [name => `已复制「${name}」，发给朋友在「导入」里粘贴`, name => `Copied “${name}”. Your friend can paste it under “Import”.`],
+  copyManually: ['复制失败，请手动复制', 'Copy failed. Please copy it manually.'],
+  exportNotCached: ['这首歌还没缓存完，听一遍后再导出', 'This song isn’t fully cached yet. Play it through once, then export.'],
+  exported: [title => `已导出 "${title}"`, title => `Exported “${title}”`],
+  playRetrying: ['播放失败，正在重试…', 'Playback failed. Retrying…'],
+  playSkipped: [title => `${title ? `《${title}》` : '这首歌'}播放失败，已跳过`, title => `Couldn’t play ${title ? `“${title}”` : 'this song'}. Skipped.`],
+  playFailed: ['播放失败，请尝试其他音源', 'Playback failed. Try another source.'],
+  noPlayLink: ['暂无可用播放链接', 'No playable link for this song'],
+  loadingLink: [title => `正在加载 "${title}" 的播放链接…`, title => `Loading “${title}”…`],
+  offlineQueueNoneCached: ['离线中，播放队列里没有已缓存的歌', 'You’re offline, and nothing in the queue is cached'],
+  trackNotCachedCachedOnly: ['已开启「只播已缓存」，这首还没缓存', 'Cached only is on, and this song isn’t cached yet'],
+  trackNotCachedOffline: ['离线中，这首还没缓存，联网后才能播', 'You’re offline and this song isn’t cached. It can play once you’re online.'],
+  queueNoneCached: ['播放队列里没有已缓存的歌，联网后才能切', 'Nothing in the queue is cached. Go online to skip.'],
+};
+
+function loadLang() {
+  try { return localStorage.getItem(LANG_STORAGE_KEY) === 'en' ? 'en' : 'zh'; } catch (e) { return 'zh'; }
+}
+
+function saveLang(lang) {
+  try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch (e) { /* 隐私模式下存不了就下次打开回到中文 */ }
+}
+
+// 当前界面语言：tr() 读它。只在 setLang 里和 state.lang 一起改，两边始终一致
+let currentLang = loadLang();
+
+// <html lang> 的值：读屏按它选发音，浏览器按它挑中文字形
+function htmlLang(lang) { return lang === 'en' ? 'en' : 'zh-CN'; }
+
+// 取一条文字：tr('songs', 3) → '3 首' / '3 songs'。英文没写就退回中文（测试里的漏翻检查会报出来）
+function tr(key, ...args) {
+  const pair = STRINGS[key];
+  if (!pair) return key;
+  const v = currentLang === 'en' && pair[1] !== undefined ? pair[1] : pair[0];
+  return typeof v === 'function' ? v(...args) : v;
+}
+
+// 模板用的那一份（renderVals 返回的 L）：当前语言的全部文字，键名和 STRINGS 一样。每种语言只拼一次
+const _langViews = {};
+function langView(lang) {
+  if (!_langViews[lang]) {
+    const i = lang === 'en' ? 1 : 0;
+    _langViews[lang] = Object.fromEntries(Object.entries(STRINGS).map(([k, pair]) => [k, pair[i] !== undefined ? pair[i] : pair[0]]));
+  }
+  return _langViews[lang];
+}
+
+function sourceLabel(source) { return tr('sourceNames')[source] || source; }
+function playModeLabel(mode) { return tr('playModes')[mode] || ''; }
 
 // 可搜索的音源。SoundCloud 反复修不好（client_id 失效 / HLS 流打不开），已从搜索里下掉：
 // 不出现在筛选芯片里，也不参与聚合搜索。但它仍然是一个合法的 source 取值——已经在歌单 /
 // 播放队列里的 SoundCloud 曲目照旧显示、照旧能试着播放，详情 / 分享 / 缓存那套代码一行没删，
-// 所以上面 SOURCE_LABELS 里的 soundcloud 条目得留着。
+// 所以上面 STRINGS.sourceNames 里的 soundcloud 条目得留着。
 // 特别注意：千万不要拿这份数组去 DRY 下面的 EXPORT_SOURCE_CODES / EXPORT_SOURCE_LIST——
 // 那两个是歌单导出串的位置相关编码，少了 soundcloud 会把用户已经存下的导出串解错。
 // 想恢复搜索：把 'soundcloud' 加回这个数组即可（筛选芯片和 state.sources 都从这里推导），
@@ -976,6 +1261,13 @@ const SEARCH_SOURCES = ['netease', 'qq'];
 // 歌单列表里「已缓存」那一项的 id。它不是真歌单，不进持久化的 playlists；起个不会和 'liked' / 'pl_…' 撞的名字
 const CACHED_VIEW_ID = '__cached';
 
+// 歌单显示的名字：内置的「喜欢的音乐」「已缓存」跟着界面语言，用户自己起的名字原样显示
+function playlistLabel(p) {
+  if (p.id === 'liked') return tr('likedName');
+  if (p.id === CACHED_VIEW_ID) return tr('cachedName');
+  return p.name;
+}
+
 // 宽屏歌词栏的断点，只写这一处：JS 按它决定渲不渲歌词栏、藏不藏「歌词」标签，CSS 跟着 shell 上的 has-lyrics-col 走。
 // 1600 是内容区（1040）+ 歌词栏最窄（360）+ 播放栏（400）再留一点余量；再窄就没有多出来的空白可填了
 const LYRICS_COL_QUERY = '(min-width: 1600px) and (min-height: 560px)';
@@ -984,9 +1276,8 @@ const MINI_PLAYER_W = 420;
 const MINI_PLAYER_H = 140;
 const MINI_PLAYER_LIST_H = 460;
 
-// 播放模式（playMode 0 / 1 / 2）的图标和名字：主播放器和迷你播放器共用
+// 播放模式（playMode 0 / 1 / 2）的图标：主播放器和迷你播放器共用。名字在 STRINGS.playModes（playModeLabel）
 const PLAY_MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
-const PLAY_MODE_LABELS = ['列表循环', '随机播放', '单曲循环'];
 
 function lyricsColMatches() {
   try { return !!(window.matchMedia && window.matchMedia(LYRICS_COL_QUERY).matches); } catch (e) { return false; }
@@ -1106,7 +1397,7 @@ function audioCacheCapBytes() {
 }
 
 function capLabel(mb) {
-  if (mb === 0) return '不限';
+  if (mb === 0) return tr('capNoLimit');
   return mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`;
 }
 
@@ -1960,7 +2251,7 @@ const SILENCE_RMS_FLOOR = Math.pow(10, -50 / 20); // 低于此 RMS（约 -50dBFS
 class Component extends DCLogic {
   state = (() => {
     const base = {
-      theme: loadTheme(), searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
+      theme: loadTheme(), lang: currentLang, searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
       // 当前页：顶栏三个图标 search（搜索）/ library（歌单，viewingPlaylistId 有值时是歌单详情）/ settings（设置）。
       // 不存盘，每次打开都从搜索页开始
       page: 'search',
@@ -2111,6 +2402,7 @@ class Component extends DCLogic {
       }
     }, 0);
     this.syncThemeChrome();
+    this.syncLangChrome();
     // 诊断记录：前后台切换、页面被系统冻结 / 恢复、网络断开 / 恢复——后台切歌卡住时拿这些时间点对照
     this._onDiagVisibility = () => diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' });
     this._onDiagFreeze = () => diagLog('页面被冻结', { 在播: this.state.playing ? '是' : '否' });
@@ -2179,7 +2471,7 @@ class Component extends DCLogic {
       win = await window.documentPictureInPicture.requestWindow({ width: MINI_PLAYER_W, height: MINI_PLAYER_H, disallowReturnToOpener: true });
     } catch (e) {
       console.warn('mini player failed:', e);
-      this.showToast('打不开迷你播放器');
+      this.showToast(tr('miniPlayerFailed'));
       return;
     } finally {
       this._mpOpening = false;
@@ -2196,21 +2488,20 @@ class Component extends DCLogic {
         doc.head.append(node.cloneNode(true));
       }
     }
-    doc.documentElement.lang = 'zh-CN';
-    doc.title = '听音乐';
     doc.body.className = 'sw-mp';
-    doc.body.innerHTML = '<div class="sw-mp-list dc-scrollbar"><div class="sw-head-rule"><span class="sw-label">播放队列</span><span class="sw-mp-count"></span></div><div class="sw-mp-rows"></div></div>'
+    // 字（标签页标题、「播放队列」、按钮的读屏名字）不写在这里，由 syncMiniPlayer 按当前语言填：切换语言时跟着换
+    doc.body.innerHTML = '<div class="sw-mp-list dc-scrollbar"><div class="sw-head-rule"><span class="sw-label sw-mp-list-t"></span><span class="sw-mp-count"></span></div><div class="sw-mp-rows"></div></div>'
       + '<div class="sw-mp-player"><div class="sw-mp-bar" data-act="seek"><div class="sw-mp-fill"></div></div>'
       + '<div class="sw-mp-cover"></div>'
       + '<div class="sw-mp-main"><div class="sw-mp-meta"><span class="sw-mp-t"></span><span class="sw-mp-a"></span>'
-      + '<button class="sw-mp-back" data-act="back" aria-label="回到网页" title="回到网页"><span class="ms">open_in_full</span></button></div>'
+      + '<button class="sw-mp-back" data-act="back"><span class="ms">open_in_full</span></button></div>'
       + '<div class="sw-mp-ly"><span class="sw-mp-ly-txt"></span></div>'
       + '<div class="sw-mp-ctrls">'
       + '<button data-act="mode"><span class="ms">repeat</span></button>'
-      + '<button data-act="prev" class="sw-mp-skip" aria-label="上一首" title="上一首"><span class="ms">skip_previous</span></button>'
-      + '<button data-act="play" class="sw-mp-play" aria-label="播放" title="播放"><span class="ms">play_arrow</span></button>'
-      + '<button data-act="next" class="sw-mp-skip" aria-label="下一首" title="下一首"><span class="ms">skip_next</span></button>'
-      + '<button data-act="list" aria-label="播放队列" title="播放队列"><span class="ms">playlist_play</span></button>'
+      + '<button data-act="prev" class="sw-mp-skip"><span class="ms">skip_previous</span></button>'
+      + '<button data-act="play" class="sw-mp-play"><span class="ms">play_arrow</span></button>'
+      + '<button data-act="next" class="sw-mp-skip"><span class="ms">skip_next</span></button>'
+      + '<button data-act="list"><span class="ms">playlist_play</span></button>'
       + '</div></div></div>';
     doc.addEventListener('click', (e) => {
       const el = e.target.closest && e.target.closest('[data-act]');
@@ -2345,7 +2636,7 @@ class Component extends DCLogic {
     const lyrics = s.lyricsTrackId != null && s.lyricsTrackId === s.currentId ? s.lyrics : [];
     let idx = 0;
     for (let i = 0; i < lyrics.length; i++) { if (lyrics[i].time <= s.currentTime) idx = i; }
-    const ly = lyrics.length ? lyrics[idx].text : (!track ? '' : (s.lyricsLoading || loading ? '歌词加载中…' : '暂无歌词'));
+    const ly = lyrics.length ? lyrics[idx].text : (!track ? '' : tr(s.lyricsLoading || loading ? 'lyricsLoading' : 'noLyrics'));
     const orderIdx = s.playOrder.indexOf(s.currentId);
     const canStep = orderIdx >= 0 && s.playOrder.length > 1;
     // 进度每秒变好几次，单独改；其余的拼成一个 key，没变就不碰
@@ -2371,21 +2662,29 @@ class Component extends DCLogic {
       }
     }
     this.mpLyricFrame();
-    const key = [s.theme, track && track.id, track && track.cover, s.cacheRev, s.playing, loading, s.playMode, canStep, this._mpListOpen].join('\n');
+    const key = [s.theme, s.lang, track && track.id, track && track.cover, s.cacheRev, s.playing, loading, s.playMode, canStep, this._mpListOpen].join('\n');
     if (key !== this._mpShown) {
       this._mpShown = key;
       doc.documentElement.setAttribute('data-app-theme', s.theme);
+      doc.documentElement.lang = htmlLang(s.lang);
+      doc.title = tr('appName');
+      $('.sw-mp-list-t').textContent = tr('queue');
+      for (const [act, label] of [['back', tr('backToPage')], ['prev', tr('prev')], ['next', tr('next')], ['list', tr('queue')]]) {
+        const b = $(`[data-act="${act}"]`);
+        b.setAttribute('aria-label', label);
+        b.title = label;
+      }
       const cover = $('.sw-mp-cover');
       cover.setAttribute('style', track ? coverStyle(track) : '');
       cover.textContent = track ? coverInitial(track) : '';
-      $('.sw-mp-t').textContent = track ? track.title : '暂无播放';
+      $('.sw-mp-t').textContent = track ? track.title : tr('nothingPlaying');
       $('.sw-mp-a').textContent = track ? fmtArtistAlbum(track) : '';
       const play = $('[data-act="play"]');
       play.disabled = !track;
       const playIcon = play.querySelector('.ms');
       playIcon.textContent = loading ? 'progress_activity' : (s.playing ? 'pause' : 'play_arrow');
       playIcon.classList.toggle('is-spinning', loading);
-      const playLabel = loading ? '加载中' : (s.playing ? '暂停' : '播放');
+      const playLabel = tr(loading ? 'loading' : (s.playing ? 'pause' : 'play'));
       play.setAttribute('aria-label', playLabel);
       play.title = playLabel;
       $('[data-act="prev"]').disabled = !canStep;
@@ -2393,18 +2692,18 @@ class Component extends DCLogic {
       const mode = $('[data-act="mode"]');
       mode.querySelector('.ms').textContent = PLAY_MODE_ICONS[s.playMode];
       mode.className = s.playMode ? 'is-on' : 'is-dim';
-      mode.setAttribute('aria-label', PLAY_MODE_LABELS[s.playMode]);
-      mode.title = PLAY_MODE_LABELS[s.playMode];
+      mode.setAttribute('aria-label', playModeLabel(s.playMode));
+      mode.title = playModeLabel(s.playMode);
       $('[data-act="list"]').className = this._mpListOpen ? 'is-on' : '';
     }
     // 播放队列：弹出来的时候才画；队列、当前曲目、离线状态变了才重画。歌名是外面接口来的，一律用 textContent 填
     if (!this._mpListOpen) return;
     const offlineMode = this.isOfflineMode(s);
-    const listKey = [s.playOrder.join(','), s.currentId, offlineMode, s.cacheRev].join('|');
+    const listKey = [s.playOrder.join(','), s.currentId, offlineMode, s.cacheRev, s.lang].join('|');
     if (listKey === this._mpListShown) return;
     this._mpListShown = listKey;
     const order = s.playOrder.map(id => s.queue.find(t => t.id === id)).filter(Boolean);
-    $('.sw-mp-count').textContent = order.length + ' 首';
+    $('.sw-mp-count').textContent = tr('songs', order.length);
     const rows = $('.sw-mp-rows');
     rows.textContent = '';
     const btn = (act, id, icon, label, disabled) => {
@@ -2448,7 +2747,7 @@ class Component extends DCLogic {
       txt.append(title, artist);
       const btns = doc.createElement('span');
       btns.className = 'sw-mp-row-btns';
-      btns.append(btn('up', t.id, 'keyboard_arrow_up', '上移', i === 0), btn('down', t.id, 'keyboard_arrow_down', '下移', i === order.length - 1), btn('remove', t.id, 'close', '移出队列'));
+      btns.append(btn('up', t.id, 'keyboard_arrow_up', tr('moveUp'), i === 0), btn('down', t.id, 'keyboard_arrow_down', tr('moveDown'), i === order.length - 1), btn('remove', t.id, 'close', tr('removeFromQueue')));
       row.append(num, txt, btns);
       rows.append(row);
     });
@@ -2468,7 +2767,7 @@ class Component extends DCLogic {
     nativeListen('AppShell', 'audioBecomingNoisy', () => {
       if (this._audio && !this._audio.paused) {
         this._audio.pause();
-        this.showToast('耳机断开了，已暂停');
+        this.showToast(tr('headphonesUnplugged'));
       }
     });
     // 从系统设置页回来时重新问一次后台运行放没放行，放行了就把提示条收起来
@@ -2512,6 +2811,7 @@ class Component extends DCLogic {
       album: track ? track.album || '' : '',
       playing: !!s.playing,
       mode: s.playMode || 0,
+      lang: s.lang,
     };
     const key = JSON.stringify(info);
     if (key === this._widgetKey) return;
@@ -2550,7 +2850,7 @@ class Component extends DCLogic {
   // 还没放行就弹系统的"允许在后台运行"对话框；已经放行了就打开应用详情页（小米的省电策略、华为的
   // 应用启动管理这类厂商开关都在那儿）。见 AppShellPlugin.openBatterySettings
   openBatterySettings() {
-    nativeCall('AppShell', 'openBatterySettings', { target: 'auto' }).catch(() => this.showToast('打不开系统设置，请手动在设置里找到「听音乐」'));
+    nativeCall('AppShell', 'openBatterySettings', { target: 'auto' }).catch(() => this.showToast(tr('batterySettingsFailed')));
   }
 
   // 检查更新：自动检查每天最多一次，手动（设置页里点「检查更新」）随时查。失败都不打扰，手动的才提示
@@ -2564,7 +2864,7 @@ class Component extends DCLogic {
         if (Date.now() - Number(localStorage.getItem(UPDATE_CHECK_STORAGE_KEY) || 0) < 20 * 3600 * 1000) return;
       } catch (e) { /* 读不到就照常检查 */ }
     }
-    if (!navigator.onLine) { if (manual) this.showToast('离线中，联网后再检查'); return; }
+    if (!navigator.onLine) { if (manual) this.showToast(tr('updateOffline')); return; }
     try {
       const r = await fetch(LATEST_RELEASE_API, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -2574,9 +2874,9 @@ class Component extends DCLogic {
       let dismissed = '';
       try { dismissed = localStorage.getItem(UPDATE_DISMISSED_STORAGE_KEY) || ''; } catch (e) { /* 读不到就当没忽略过 */ }
       if (latest > current && (manual || dismissed !== rel.tag_name)) this.patch({ updateInfo: { tag: rel.tag_name } });
-      else if (manual) this.showToast(latest > current ? `有新版本 ${rel.tag_name}` : `已经是最新版（${(info && info.version) || current}）`);
+      else if (manual) this.showToast(latest > current ? tr('updateAvailable', rel.tag_name) : tr('upToDate', (info && info.version) || current));
     } catch (e) {
-      if (manual) this.showToast('检查更新失败，稍后再试');
+      if (manual) this.showToast(tr('updateCheckFailed'));
     }
   }
 
@@ -2590,7 +2890,7 @@ class Component extends DCLogic {
   downloadUpdate() {
     nativeCall('AppShell', 'openUrl', { url: LATEST_APK_URL })
       .then(() => this.patch({ updateInfo: null }))
-      .catch(() => this.showToast('打不开浏览器，去 GitHub 的 Releases 页面下载'));
+      .catch(() => this.showToast(tr('openBrowserFailed')));
   }
 
   // APK 里 WebView 不支持 <a download>：把缓存的音频写进 App 的缓存目录，再交给系统分享面板（可以存到
@@ -2599,7 +2899,7 @@ class Component extends DCLogic {
   async exportViaShare(track, blob) {
     const name = `${sanitizeFilename(`${track.title || 'audio'}${track.artist ? ' - ' + track.artist : ''}`)}.${audioExtFromBlob(blob)}`;
     const path = `exports/${name}`;
-    this.showToast('正在准备导出…');
+    this.showToast(tr('preparingExport'));
     try {
       await nativeCall('Filesystem', 'rmdir', { path: 'exports', directory: 'CACHE', recursive: true }).catch(() => {});
       const CHUNK = 768 * 1024;
@@ -2608,12 +2908,12 @@ class Component extends DCLogic {
         await nativeCall('Filesystem', off === 0 ? 'writeFile' : 'appendFile', { path, data, directory: 'CACHE', recursive: true });
       }
       const { uri } = await nativeCall('Filesystem', 'getUri', { path, directory: 'CACHE' });
-      await nativeCall('Share', 'share', { title: name, files: [uri], dialogTitle: '导出这首歌' });
+      await nativeCall('Share', 'share', { title: name, files: [uri], dialogTitle: tr('exportSong') });
     } catch (e) {
       // 在分享面板里点了取消也会走到这里，那不算失败
       if (/cancel/i.test(String((e && e.message) || e))) return;
       console.warn('export via share failed:', e);
-      this.showToast('导出失败，请稍后再试');
+      this.showToast(tr('exportFailed'));
     }
   }
 
@@ -2703,7 +3003,7 @@ class Component extends DCLogic {
         track.audioUrl = null;
         track.detailsLoaded = false;
         track.scIsHLS = false;
-        this.showToast('检测到本地缓存不完整，正在重新下载…');
+        this.showToast(tr('cacheIncomplete'));
         this.armLoadWatchdog(track.id);
         this.loadAndPlay(track, 0);
         return;
@@ -2844,7 +3144,7 @@ class Component extends DCLogic {
       this.stopAdaptiveLoop();
       this.patch({ adaptiveVolume: false });
       this.persist();
-      this.showToast('自适应音量遇到问题，已自动关闭');
+      this.showToast(tr('autoVolumeFailed'));
       return;
     }
     let sumSq = 0;
@@ -2877,19 +3177,19 @@ class Component extends DCLogic {
     if (pid === CACHED_VIEW_ID) { this.deleteCachedTrack(this.state.queue.find(t => t.id === trackId)); return; }
     this.patch(s => ({ playlists: s.playlists.map(p => p.id === pid ? { ...p, trackIds: (p.trackIds || []).filter(id => id !== trackId) } : p) }));
     this.persist();
-    this.showToast('已从歌单移除');
+    this.showToast(tr('removedFromPlaylist'));
   }
   deletePlaylist(id, e) {
     e.stopPropagation();
     const pl = this.state.playlists.find(p => p.id === id);
     if (!pl || pl.builtin) return;
-    if (!confirm(`确定删除歌单「${pl.name}」？`)) return;
+    if (!confirm(tr('confirmDeletePlaylist', playlistLabel(pl)))) return;
     this.patch(s => ({
       playlists: s.playlists.filter(p => p.id !== id),
       viewingPlaylistId: s.viewingPlaylistId === id ? null : s.viewingPlaylistId,
     }));
     this.persist();
-    this.showToast('已删除歌单');
+    this.showToast(tr('playlistDeleted'));
   }
 
   stop(e) { e.stopPropagation(); }
@@ -2905,14 +3205,32 @@ class Component extends DCLogic {
     this.syncThemeChrome(next);
   }
 
+  // 界面语言：中文 / English。和主题一样存自己的 key（<head> 的脚本渲染前就要读到它）。
+  // currentLang（tr() 读的）和 state.lang（触发重画、模板的 L）在这里一起改
+  setLang(next) {
+    if (next !== 'zh' && next !== 'en') return;
+    currentLang = next;
+    saveLang(next);
+    this.patch({ lang: next });
+    this.syncLangChrome();
+  }
+
+  // <html lang>、标签页标题、添加到主屏幕时用的名字，跟着界面语言。<head> 的脚本已经按存的语言设过一遍，挂载后再校准
+  syncLangChrome() {
+    document.documentElement.lang = htmlLang(currentLang);
+    document.title = tr('appName');
+    const meta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+    if (meta) meta.setAttribute('content', tr('appName'));
+  }
+
   clearAudioCache() {
-    if (!confirm('确定要清空本地音频缓存吗？之后每首歌第一次播放都要重新联网下载。')) return;
+    if (!confirm(tr('confirmClearCache'))) return;
     clearAllCachedAudio().then(() => {
       this.patch({ exportReady: false });
-      this.showToast('本地音频缓存已清空');
+      this.showToast(tr('cacheCleared'));
     }).catch(e => {
       console.warn('clear audio cache failed:', e);
-      this.showToast('清空缓存失败，请稍后再试');
+      this.showToast(tr('clearCacheFailed'));
     });
   }
 
@@ -3064,7 +3382,7 @@ class Component extends DCLogic {
     this.patch({ cacheCapMB: mb });
     // 调小了就马上按新上限清一次，不等下一首歌写入缓存时才清
     evictAudioCacheIfOverCap().then(n => {
-      if (n > 0) this.showToast(`已按新上限删掉 ${n} 首最久没听的缓存`);
+      if (n > 0) this.showToast(tr('trimmedForCap', n));
     });
   }
 
@@ -3072,27 +3390,28 @@ class Component extends DCLogic {
     const next = !this.state.offlineOnly;
     saveOfflineOnly(next);
     this.patch({ offlineOnly: next });
-    this.showToast(next ? '已开启：只播已缓存的歌' : '已关闭「只播已缓存」');
+    this.showToast(next ? tr('offlineOnlyOn') : tr('offlineOnlyOff'));
   }
 
   deleteCachedTrack(t) {
     if (!t) return;
-    if (!confirm(`删除《${t.title || '这首歌'}》的本地缓存？删了之后断网就放不了它。`)) return;
-    deleteCachedAudio(audioCacheKey(t)).then(() => this.showToast('已删除这首歌的缓存'));
+    if (!confirm(tr('confirmDeleteCached', t.title))) return;
+    deleteCachedAudio(audioCacheKey(t)).then(() => this.showToast(tr('cachedDeleted')));
     if (t.id === this.state.currentId) this.patch({ exportReady: false });
   }
 
   // 歌单 id → { name, tracks }：普通歌单按 trackIds，「喜欢的音乐」按 likedOrder，「已缓存」按最近播放时间。
+  // name 是显示用的名字（内置的两个跟着界面语言，见 playlistLabel）
   // 列表显示 / 播放全部 / 导出 / 缓存全部都从这里取，三种来源只写这一遍
   playlistContext(pid, s = this.state) {
     if (pid === CACHED_VIEW_ID) {
-      return { name: '已缓存', virtual: true, tracks: this.cachedTrackIds().map(id => s.queue.find(t => t.id === id)).filter(Boolean) };
+      return { name: tr('cachedName'), virtual: true, tracks: this.cachedTrackIds().map(id => s.queue.find(t => t.id === id)).filter(Boolean) };
     }
     const pl = s.playlists.find(p => p.id === pid);
     if (!pl) return null;
     const ids = pid === 'liked' ? likedIdsOrdered(s) : (pl.trackIds || []);
     // 按歌单自己的顺序取曲目（不是曲库里的顺序——那只是曲目第一次被搜到/导入时落进去的顺序）
-    return { name: pl.name, virtual: false, tracks: ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean) };
+    return { name: playlistLabel(pl), virtual: false, tracks: ids.map(id => s.queue.find(t => t.id === id)).filter(Boolean) };
   }
 
   // 「缓存全部」：把歌单里还没缓存的歌一首一首下载下来（同时只下一首，不跟正在播放的歌抢太多网速）。
@@ -3102,8 +3421,8 @@ class Component extends DCLogic {
     const s = this.state;
     const pid = s.viewingPlaylistId;
     if (this._batch) {
-      if (this._batch.pid === pid) { this._batch.cancelled = true; this.showToast('正在停止…'); }
-      else this.showToast('正在缓存另一个歌单，等它完成或先停掉');
+      if (this._batch.pid === pid) { this._batch.cancelled = true; this.showToast(tr('stopping')); }
+      else this.showToast(tr('batchBusy'));
       return;
     }
     const ctx = pid ? this.playlistContext(pid) : null;
@@ -3115,12 +3434,12 @@ class Component extends DCLogic {
       seen.add(k);
       return true;
     });
-    if (!todo.length) { this.showToast('这个歌单里的歌都已经缓存好了'); return; }
-    if (!navigator.onLine) { this.showToast('离线中，联网后再缓存'); return; }
+    if (!todo.length) { this.showToast(tr('allCached')); return; }
+    if (!navigator.onLine) { this.showToast(tr('cacheWhenOnline')); return; }
     const API = window.ListeningAPI;
-    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
+    if (!API) { this.showToast(tr('apiNotLoaded')); return; }
     const conn = navigator.connection;
-    if (conn && conn.type === 'cellular' && !confirm(`现在用的是移动网络，要下载 ${todo.length} 首歌吗？无损音质一首大约 30MB。`)) return;
+    if (conn && conn.type === 'cellular' && !confirm(tr('confirmCellular', todo.length))) return;
 
     const batch = { pid, cancelled: false };
     this._batch = batch;
@@ -3139,10 +3458,10 @@ class Component extends DCLogic {
     this._batch = null;
     this.patch({ batchCache: null });
     this.persist(); // 下载前解析到的歌词 / 专辑也存一下，断网时歌词页能用
-    if (stoppedForCap) this.showToast(`缓存空间到上限了（${capLabel(this.state.cacheCapMB)}），这次缓存了 ${done} 首；可以在「缓存与离线」里调大`);
-    else if (batch.cancelled) this.showToast(`已停止，这次缓存了 ${done} 首`);
-    else if (streak >= 3) this.showToast(`连续几首都下载失败，先停了（这次缓存了 ${done} 首），检查一下网络`);
-    else this.showToast(failed ? `缓存完成：${done} 首成功，${failed} 首失败` : `缓存完成：${done} 首都能离线播放了`);
+    if (stoppedForCap) this.showToast(tr('batchStoppedCap', capLabel(this.state.cacheCapMB), done));
+    else if (batch.cancelled) this.showToast(tr('batchCancelled', done));
+    else if (streak >= 3) this.showToast(tr('batchFailStreak', done));
+    else this.showToast(failed ? tr('batchDoneFailed', done, failed) : tr('batchDone', done));
   }
 
   // 下载一首歌进缓存，返回是否成功。播放链接的解析跟 prefetchTrack 一样：QQ 一律现要新链接。
@@ -3198,9 +3517,9 @@ class Component extends DCLogic {
     this.patch({ page: 'search', appliedQuery: q, hasSearched: true, isSearching: false, searchResults: results, localSearch: true, suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
     const cachedN = results.filter(t => this.isTrackCached(t)).length;
     if (reason === 'offline') {
-      this.showToast(results.length ? `离线中，在本地曲库里找到 ${results.length} 首（${cachedN} 首已缓存）` : `离线中，本地曲库里没有「${q}」`);
+      this.showToast(results.length ? tr('offlineFoundLocal', results.length, cachedN) : tr('offlineNoneLocal', q));
     } else {
-      this.showToast(`联网没搜到「${q}」，先显示本地曲库里的 ${results.length} 首`);
+      this.showToast(tr('onlineFallbackLocal', q, results.length));
     }
     return true;
   }
@@ -3208,9 +3527,9 @@ class Component extends DCLogic {
   // 顶栏按钮：把切歌诊断记录（见 diagLog）复制到剪贴板，方便贴出来排查
   copyDiagLog() {
     const list = readDiagLog();
-    if (!list.length) { this.showToast('还没有诊断记录'); return; }
+    if (!list.length) { this.showToast(tr('noDiag')); return; }
     this.copyToClipboard(formatDiagLog(list)).then(ok => {
-      this.showToast(ok ? `已复制 ${list.length} 条诊断记录` : '复制失败，请稍后再试');
+      this.showToast(ok ? tr('diagCopied', list.length) : tr('copyFailed'));
     });
   }
 
@@ -3348,7 +3667,7 @@ class Component extends DCLogic {
     const q = this.state.searchQuery.trim();
     if (!q) return;
     const API = window.ListeningAPI;
-    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
+    if (!API) { this.showToast(tr('apiNotLoaded')); return; }
     clearTimeout(this._suggestTimer);
     this.rememberSearch(q);
     // 请求序号守卫：先搜 A 再快速搜 B 时，慢返回的 A 不会覆盖 B 的结果
@@ -3357,7 +3676,7 @@ class Component extends DCLogic {
     // 断网时联网搜索必然失败，直接在本地曲库里搜
     if (!navigator.onLine) { this.showLocalSearch(q, seq, 'offline'); return; }
     this.patch({ page: 'search', appliedQuery: q, hasSearched: true, isSearching: true, localSearch: false, searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
-    this.showToast(`正在搜索 "${q}" …`);
+    this.showToast(tr('searchingFor', q));
     // 从 SEARCH_SOURCES 而不是 state.sources 的 key 出发：让可搜索源只有这一个卡口，即使
     // state.sources 里残留了已下掉的源（部分回退 / 手改 / 以后改成持久化）也注不进搜索；
     // 顺带把交错排列的优先顺序固定成这份显式数组，不再依赖对象 key 的插入顺序
@@ -3371,18 +3690,18 @@ class Component extends DCLogic {
         // 本地曲库里有匹配的就先给这些，总比一句"没有找到"有用
         if (this.showLocalSearch(q, seq, 'empty')) return;
         this.patch({ searchResults: [], isSearching: false });
-        this.showToast(`没有找到「${q}」相关歌曲`);
+        this.showToast(tr('noSongsFor', q));
         return;
       }
       this.patch({ searchResults: tracks, isSearching: false });
-      const srcLabels = [...new Set(tracks.map(t => SOURCE_LABELS[t.source] || t.source))].join('、');
-      this.showToast(`"${q}" 找到 ${tracks.length} 首（${srcLabels}）`);
+      const srcLabels = [...new Set(tracks.map(t => sourceLabel(t.source)))].join(tr('listSep'));
+      this.showToast(tr('foundFor', q, tracks.length, srcLabels));
     }).catch(e => {
       if (seq !== this._searchSeq) return;
       console.error('search error:', e);
       if (this.showLocalSearch(q, seq, 'empty')) return;
       this.patch({ isSearching: false });
-      this.showToast('搜索失败，请检查网络连接');
+      this.showToast(tr('searchFailed'));
     });
   }
   toggleSource(key) { this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] } })); }
@@ -3406,7 +3725,7 @@ class Component extends DCLogic {
     if (!isLiked) likedOrder.unshift(id);
     this.patch({ liked, likedOrder });
     this.persist();
-    this.showToast(isLiked ? '已取消喜欢' : '已添加到喜欢的歌曲');
+    this.showToast(isLiked ? tr('unliked') : tr('likedToast'));
   }
 
   openImportModal() { this.patch({ importModalOpen: true, importUrl: '', importPlaylistName: '' }); }
@@ -3418,25 +3737,26 @@ class Component extends DCLogic {
   // 覆盖语义：
   //  - name 命中已有的非内置歌单 -> 原地替换它的 trackIds（保留 id/glyph/tileBg，不会建出重名的第二个）
   //  - name 没命中已有歌单 -> 新建
-  //  - name 留空，或者刚好等于内置「喜欢的音乐」的名字 -> 整个替换 s.liked（不是合并，旧的喜欢里没在这次导入里的歌会被摘掉）
+  //  - name 留空，或者刚好等于内置「喜欢的音乐」的名字（存着的那个，或者中文、英文界面上显示的那两个）
+  //    -> 整个替换 s.liked（不是合并，旧的喜欢里没在这次导入里的歌会被摘掉）
   applyImportedTracks(tracks, name) {
     const trackIds = tracks.map(t => t.id);
-    const likedName = this.state.playlists.find(p => p.id === 'liked').name;
-    if (name && name !== likedName) {
+    const likedNames = [this.state.playlists.find(p => p.id === 'liked').name, ...STRINGS.likedName];
+    if (name && !likedNames.includes(name)) {
       const existing = this.state.playlists.find(p => !p.builtin && p.name === name);
       if (existing) {
         this.patch(s => ({
           queue: [...s.queue, ...tracks],
           playlists: s.playlists.map(p => p.id === existing.id ? { ...p, trackIds } : p),
         }));
-        this.showToast(`已导入 ${tracks.length} 首到「${name}」（覆盖了原有同名歌单）`);
+        this.showToast(tr('importedReplaced', tracks.length, name));
       } else {
         const plId = 'pl_' + Date.now();
         this.patch(s => ({
           queue: [...s.queue, ...tracks],
           playlists: [...s.playlists, { id: plId, name, builtin: false, trackIds, glyph: 'queue_music', iconFill: 0, tileBg: pickTileColor() }],
         }));
-        this.showToast(`已导入 ${tracks.length} 首到「${name}」`);
+        this.showToast(tr('imported', tracks.length, name));
       }
     } else {
       this.patch(s => ({
@@ -3444,7 +3764,7 @@ class Component extends DCLogic {
         liked: Object.fromEntries(trackIds.map(id => [id, true])),
         likedOrder: trackIds,
       }));
-      this.showToast(`已导入 ${tracks.length} 首到「喜欢的音乐」（已整体覆盖原有收藏）`);
+      this.showToast(tr('importedLiked', tracks.length));
     }
     this.persist();
   }
@@ -3462,11 +3782,11 @@ class Component extends DCLogic {
         payload = await decodePlaylistExport(raw);
       } catch (e) {
         console.error('parse export string error:', e);
-        this.showToast('导出内容解析失败，检查一下是不是完整复制的');
+        this.showToast(tr('exportParseFailed'));
         return;
       }
       if (!payload.tracks.length) {
-        this.showToast('这段内容里没有歌曲');
+        this.showToast(tr('exportNoSongs'));
         return;
       }
       const tracks = payload.tracks.map(t => normalizeTrack({ ...t }));
@@ -3482,15 +3802,15 @@ class Component extends DCLogic {
     else if (/163cn\.tv/.test(raw)) source = 'netease-short';
     else if (/y\.qq\.com/.test(raw)) source = 'qq';
     if (!source) {
-      this.showToast('暂不支持该链接，请粘贴网易云音乐或QQ音乐的歌单链接，或者导出字符串');
+      this.showToast(tr('linkUnsupported'));
       return;
     }
     if (source === 'qq') {
-      this.showToast('QQ音乐歌单导入正在开发中，先支持了网易云');
+      this.showToast(tr('qqImportSoon'));
       return;
     }
     const API = window.ListeningAPI;
-    if (!API) { this.showToast('API 模块未加载，请刷新页面'); return; }
+    if (!API) { this.showToast(tr('apiNotLoaded')); return; }
 
     let longUrl = raw;
     if (source === 'netease-short') {
@@ -3498,13 +3818,13 @@ class Component extends DCLogic {
       // 短链本身不带歌单 id，需要先跟进跳转拿到真实的 music.163.com 长链接
       const shortMatch = raw.match(/https?:\/\/163cn\.tv\/[a-zA-Z0-9]+/);
       if (!shortMatch) {
-        this.showToast('识别不到分享链接，检查一下链接是否完整');
+        this.showToast(tr('shareLinkUnrecognized'));
         return;
       }
-      this.showToast('正在解析短链…');
+      this.showToast(tr('resolvingShortLink'));
       longUrl = await API.resolveNeteaseShortLink(shortMatch[0]);
       if (!longUrl) {
-        this.showToast('短链解析失败，请从网页版复制完整歌单链接重试');
+        this.showToast(tr('shortLinkFailed'));
         return;
       }
     }
@@ -3514,22 +3834,22 @@ class Component extends DCLogic {
     const idMatch = longUrl.match(/[?&]id=(\d+)/);
     const playlistId = idMatch ? idMatch[1] : null;
     if (!playlistId) {
-      this.showToast('识别不到歌单 id，检查一下链接是否完整');
+      this.showToast(tr('playlistIdUnrecognized'));
       return;
     }
 
-    this.showToast('正在导入歌单…');
+    this.showToast(tr('importing'));
     try {
       const tracks = await API.fetchNeteasePlaylist(playlistId);
       if (!tracks.length) {
-        this.showToast('没有解析到歌曲，确认一下歌单是否公开可见');
+        this.showToast(tr('importNoSongs'));
         return;
       }
       tracks.forEach(t => normalizeTrack(t));
       this.applyImportedTracks(tracks, typedName);
     } catch (e) {
       console.error('import playlist error:', e);
-      this.showToast('导入失败，请稍后重试');
+      this.showToast(tr('importFailed'));
     }
   }
 
@@ -3544,26 +3864,26 @@ class Component extends DCLogic {
     // 和 render 里 matchedTrack 用同一套回退，保证面板里显示的就是播放器上那首
     const track = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]);
     if (!API || !track) return '';
-    return API.shareText(track);
+    return API.shareText(track, this.state.lang);
   }
 
   copyShareText() {
     const text = this.currentShareText();
-    if (!text) { this.showToast('没有可分享的歌曲'); return; }
+    if (!text) { this.showToast(tr('nothingToShare')); return; }
     this.copyToClipboard(text).then(ok => {
       if (ok) this.closeShareModal();
-      this.showToast(ok ? '已复制，去微信 / QQ 粘贴发送' : '复制失败，请手动选中上面的文字');
+      this.showToast(ok ? tr('shareCopied') : tr('shareCopyFailed'));
     });
   }
 
   systemShare() {
     const text = this.currentShareText();
-    if (!text) { this.showToast('没有可分享的歌曲'); return; }
+    if (!text) { this.showToast(tr('nothingToShare')); return; }
     // 只传 text、不传 url：一旦带上 url 字段，iOS 微信会优先把它渲染成链接卡片，
     // 就不是这里要的纯文本了。只给 text 时 iOS / Android 都发成普通文本消息。
     // APK 里 WebView 没有 navigator.share，走原生的系统分享面板，同样只给文本
     if (IS_NATIVE) {
-      nativeCall('Share', 'share', { text, dialogTitle: '分享这首歌' }).then(() => this.closeShareModal()).catch(err => {
+      nativeCall('Share', 'share', { text, dialogTitle: tr('shareSong') }).then(() => this.closeShareModal()).catch(err => {
         if (/cancel/i.test(String((err && err.message) || err))) return;
         this.copyShareText();
       });
@@ -3591,7 +3911,7 @@ class Component extends DCLogic {
       createModalOpen: false, createName: '', page: 'library', viewingPlaylistId: id,
     }));
     this.persist();
-    this.showToast(`已创建歌单「${name}」`);
+    this.showToast(tr('playlistCreated', name));
   }
   confirmAdd(playlistId, playlistName) {
     const trackId = this.state.addModalId;
@@ -3612,7 +3932,7 @@ class Component extends DCLogic {
       }));
     }
     this.persist();
-    this.showToast(`已添加到「${playlistName}」`);
+    this.showToast(tr('addedTo', playlistName));
   }
 
   // "播放全部"：整个替换当前播放队列（不是接在后面），曲库（s.queue）不动——
@@ -3624,10 +3944,10 @@ class Component extends DCLogic {
     const ctx = s.viewingPlaylistId ? this.playlistContext(s.viewingPlaylistId) : null;
     if (!ctx || !ctx.tracks.length) return;
     const first = ctx.tracks.find(t => this.isPlayable(t));
-    if (!first) { this.showToast(s.online ? '已开启「只播已缓存」，这个歌单里还没有缓存好的歌' : '离线中，这个歌单里还没有缓存好的歌'); return; }
+    if (!first) { this.showToast(s.online ? tr('playAllNoneCachedOnly') : tr('playAllNoneOffline')); return; }
     this.patch({ playOrder: ctx.tracks.map(t => t.id) });
     this.startTrack(first);
-    this.showToast(this.isOfflineMode() ? `正在播放「${ctx.name}」里已缓存的歌` : `正在播放「${ctx.name}」`);
+    this.showToast(this.isOfflineMode() ? tr('playingCachedOf', ctx.name) : tr('playingPlaylist', ctx.name));
   }
 
   // "导出歌单"：把当前歌单的曲目编码成可复制粘贴的字符串，不动播放/曲库状态
@@ -3637,11 +3957,11 @@ class Component extends DCLogic {
     const ctx = pid ? this.playlistContext(pid) : null;
     if (!ctx) return;
     const tracks = ctx.tracks;
-    if (!tracks.length) { this.showToast('这个歌单还没有歌曲，没什么可导出的'); return; }
+    if (!tracks.length) { this.showToast(tr('exportEmptyPlaylist')); return; }
 
     const text = await encodePlaylistExport(ctx.name, tracks);
     this.copyToClipboard(text).then(ok => {
-      this.showToast(ok ? `已复制「${ctx.name}」，发给朋友在「导入」里粘贴` : '复制失败，请手动复制');
+      this.showToast(ok ? tr('exportCopied', ctx.name) : tr('copyManually'));
     });
   }
 
@@ -3759,7 +4079,7 @@ class Component extends DCLogic {
     const track = s.queue.find(t => t.id === s.currentId);
     if (!track) return;
     const blob = await getCachedAudio(audioCacheKey(track));
-    if (!blob) { this.showToast('这首歌还没缓存完，听一遍后再导出'); return; }
+    if (!blob) { this.showToast(tr('exportNotCached')); return; }
     if (IS_NATIVE) { this.exportViaShare(track, blob); return; }
     const base = sanitizeFilename(`${track.title || 'audio'}${track.artist ? ' - ' + track.artist : ''}`);
     const url = URL.createObjectURL(blob);
@@ -3770,7 +4090,7 @@ class Component extends DCLogic {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    this.showToast(`已导出 "${track.title}"`);
+    this.showToast(tr('exported', track.title));
   }
 
   // 列表循环模式下"下一首"是谁：playOrder 里紧跟着 currentId 后面那个，到头了绕回队首。
@@ -3911,7 +4231,7 @@ class Component extends DCLogic {
       track.audioUrl = null;
       track.detailsLoaded = false;
       track.scIsHLS = false;
-      this.showToast('播放失败，正在重试…');
+      this.showToast(tr('playRetrying'));
       this.armLoadWatchdog(track.id);
       this.loadAndPlay(track, this.state.currentTime || 0);
       return;
@@ -3923,20 +4243,20 @@ class Component extends DCLogic {
     if (this.state.playMode !== 2 && this._consecutiveLoadFailures <= MAX_CONSECUTIVE_LOAD_FAILURES) {
       diagLog('播放失败', { 原因: why, 处理: '跳过' });
       if (this.handleTrackEnd()) {
-        this.showToast(`${track && track.title ? `《${track.title}》` : '这首歌'}播放失败，已跳过`);
+        this.showToast(tr('playSkipped', track && track.title));
         return;
       }
     } else {
       diagLog('播放失败', { 原因: why, 处理: '停止' });
     }
-    this.showToast('播放失败，请尝试其他音源');
+    this.showToast(tr('playFailed'));
     this.patch({ playing: false, loadingTrackId: null });
   }
 
   loadAndPlay(track, resumeAt = 0) {
     if (!track) return;
     const API = window.ListeningAPI;
-    if (!API) { this.showToast('API 模块未加载'); return; }
+    if (!API) { this.showToast(tr('apiNotLoaded')); return; }
 
     // 给这次加载尝试编个号：handlePlaybackFailure 靠它分辨"这个失败信号还对应最新的这次尝试吗"——
     // 一次真实失败常常会同时触发 error 事件和 play() 被拒绝两个信号，靠这个编号只处理一次、
@@ -3999,7 +4319,7 @@ class Component extends DCLogic {
         // 缓存未命中，这时才真正需要播放链接：没有就去解析详情（onNeedDetails），有就直接用
         if (!track.audioUrl) {
           diagLog('音源', { 走: onNeedDetails ? '现场要链接' : '没有链接' });
-          if (onNeedDetails) onNeedDetails(); else this.showToast('暂无可用播放链接');
+          if (onNeedDetails) onNeedDetails(); else this.showToast(tr('noPlayLink'));
           return;
         }
         // onNeedDetails 只在第一次 go() 时传：带着它走到这里 = 身上本来就有链接；不带 = 刚现场要到的
@@ -4054,7 +4374,7 @@ class Component extends DCLogic {
     // 先让 go() 查本地缓存：命中就直接放 blob、完全跳过联网（哪怕对象上还没 audioUrl）；
     // 未命中且没有播放链接时，才通过 onNeedDetails 走一次 ensureTrackDetails 解析详情后重放
     go(() => {
-      this.showToast(`正在加载 "${track.title}" 的播放链接…`);
+      this.showToast(tr('loadingLink', track.title));
       if (!track.lrc) this.patch({ lyricsLoading: true });
       const detailsStartAt = Date.now();
       API.ensureTrackDetails(track).then(() => {
@@ -4122,7 +4442,7 @@ class Component extends DCLogic {
         if (track && !this.isPlayable(track)) {
           track = this.findPlayableInOrder(s.playOrder.indexOf(track.id), 1);
           resumeAt = 0;
-          if (!track) { this.showToast('离线中，播放队列里没有已缓存的歌'); return; }
+          if (!track) { this.showToast(tr('offlineQueueNoneCached')); return; }
         }
         // 一首都没有（播放队列被移空了）就什么都不做：对着空的 audio 调 play() 也会触发 play 事件，
         // 界面会显示"正在播放"，其实没有声音（耳机 / 通知栏上的播放键会走到这里）
@@ -4180,7 +4500,7 @@ class Component extends DCLogic {
     if (!track) return;
     // 离线挑歌模式下点没缓存的歌：提示一下就行，别去加载（断网时加载必然失败，还会触发重试和跳歌）
     if (!this.isPlayable(track)) {
-      this.showToast(s.online ? '已开启「只播已缓存」，这首还没缓存' : '离线中，这首还没缓存，联网后才能播');
+      this.showToast(s.online ? tr('trackNotCachedCachedOnly') : tr('trackNotCachedOffline'));
       return;
     }
     this.ensureQueued(id);
@@ -4198,7 +4518,7 @@ class Component extends DCLogic {
     // 手动切歌允许在队首/队尾绕圈，跟自动播放到头时的列表循环行为保持一致；离线挑歌模式下跳过没缓存的
     const track = this.findPlayableInOrder(idx, dir, { includeSelf: true });
     if (track) this.startTrack(track);
-    else this.showToast('播放队列里没有已缓存的歌，联网后才能切');
+    else this.showToast(tr('queueNoneCached'));
   }
 
   // 播放页队列里的 ×：只把这首移出播放队列（playOrder），曲库、歌单、「喜欢的音乐」都不动。
@@ -4222,7 +4542,7 @@ class Component extends DCLogic {
       this.startTrack(playable);
       return;
     }
-    if (s.playing && playOrder.length) this.showToast('播放队列里没有已缓存的歌，联网后才能切');
+    if (s.playing && playOrder.length) this.showToast(tr('queueNoneCached'));
     const nextId = playable ? playable.id : (playOrder.length ? playOrder[idx % playOrder.length] : null);
     this.unloadAudio();
     this.patch({ currentId: nextId, currentTime: 0, playing: false, loadingTrackId: null, lyrics: [], lyricsTrackId: null, lyricsLoading: false, exportReady: false });
@@ -4279,7 +4599,7 @@ class Component extends DCLogic {
     // 离线挑歌模式下没缓存的歌在列表里变淡，一眼看出哪些现在放不了
     const offlineMode = this.isOfflineMode(s);
     const matchedTrack = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]) || null;
-    const rawTrack = matchedTrack || { title: '暂无播放', artist: '', duration: 0, source: 'empty' };
+    const rawTrack = matchedTrack || { title: tr('nothingPlaying'), artist: '', duration: 0, source: 'empty' };
     const track = {
       ...rawTrack, artistDisplay: fmtArtistAlbum(rawTrack),
       coverStyle: coverStyle(rawTrack), coverInitial: matchedTrack ? coverInitial(rawTrack) : '',
@@ -4314,7 +4634,7 @@ class Component extends DCLogic {
       return {
         ...t, index: i + 1, indexLabel: pad2(i + 1), isCurrent, notCurrent: !isCurrent,
         coverStyle: coverStyle(t), coverInitial: coverInitial(t),
-        sourceLabel: SOURCE_LABELS[t.source] || t.source, durationStr: t.duration ? fmtTime(t.duration) : '',
+        sourceLabel: sourceLabel(t.source), durationStr: t.duration ? fmtTime(t.duration) : '',
         artistDisplay: fmtArtistAlbum(t),
         isCached: cached,
         rowClass: 'sw-qrow sw-press' + (isCurrent ? ' is-current' : ''),
@@ -4360,11 +4680,11 @@ class Component extends DCLogic {
         isCached: cached,
         rowOpacity: offlineMode && !cached ? '0.45' : '1',
         rowClass: 'sw-row sw-press dc-result-row' + (isCurrent ? ' is-current' : ''),
-        coverStyle: coverStyle(t), coverInitial: coverInitial(t), sourceLabel: SOURCE_LABELS[t.source] || t.source,
+        coverStyle: coverStyle(t), coverInitial: coverInitial(t), sourceLabel: sourceLabel(t.source),
         artistDisplay: fmtArtistAlbum(t),
         likeBtnClass: liked ? 'sw-icon-btn is-liked' : 'sw-icon-btn',
         primaryActionIcon: isCachedView ? 'delete' : (isPlaylistView ? 'playlist_remove' : 'playlist_add'),
-        primaryActionLabel: isCachedView ? '删除缓存' : (isPlaylistView ? '移出歌单' : '加到歌单'),
+        primaryActionLabel: tr(isCachedView ? 'removeCached' : (isPlaylistView ? 'removeFromPlaylist' : 'addToPlaylist')),
         onPlay: () => this.playTrackAt(t.id),
         onAdd: isPlaylistView ? (e) => { e.stopPropagation(); this.removeFromPlaylist(t.id); } : (e) => { e.stopPropagation(); this.openAddModal(t.id); },
         onLike: (e) => { e.stopPropagation(); this.toggleLike(t.id); },
@@ -4374,7 +4694,7 @@ class Component extends DCLogic {
     // 音源勾选：文字按钮，选中的方块填实
     const sourcesRender = SEARCH_SOURCES.map(key => {
       const checked = !!s.sources[key];
-      return { key, label: SOURCE_LABELS[key], checked, cls: checked ? 'sw-check is-on' : 'sw-check', onClick: () => this.toggleSource(key) };
+      return { key, label: sourceLabel(key), checked, cls: checked ? 'sw-check is-on' : 'sw-check', onClick: () => this.toggleSource(key) };
     });
 
     // 搜索联想 / 历史：输入框有字时下拉展示网易云联想曲目；没字时是搜索历史。还没搜过的时候，点进输入框（框里没字）
@@ -4405,31 +4725,31 @@ class Component extends DCLogic {
     // 列表上方那一行：搜索页是「“关键词” 找到 N 首」（关键词加粗），歌单详情是标题下面的「N 首 · 已缓存 M 首」。
     // statusText 是整句，测试和读屏用；页面上搜索页拆成 statusLead（加粗）+ statusTail 两段排
     const offlineNote = offlineMode && !isCachedView
-      ? (s.online ? ' · 只播已缓存：灰色的歌先跳过' : ' · 离线中：灰色的歌没缓存，暂时放不了')
+      ? tr(s.online ? 'offlineNoteCachedOnly' : 'offlineNoteOffline')
       : '';
     let statusLead = '', statusTail = '';
     if (isPlaylistView) {
       const n = displayTracks.length;
       if (isCachedView) {
-        statusTail = `${n} 首 · 占用 ${formatBytes(s.cachedBytes)} · 断网也能播`;
+        statusTail = tr('statusCachedView', n, formatBytes(s.cachedBytes));
       } else {
         const cachedN = displayTracks.filter(t => this.isTrackCached(t)).length;
-        statusTail = `${n} 首` + (cachedN ? ` · 已缓存 ${cachedN} 首` : '');
+        statusTail = tr('statusPlaylist', n, cachedN);
       }
       statusTail += offlineNote;
     } else if (s.localSearch) {
       statusLead = `“${q}”`;
-      statusTail = ` 在本地曲库里找到 ${displayTracks.length} 首（不是联网搜索结果）` + offlineNote;
+      statusTail = tr('statusLocal', displayTracks.length) + offlineNote;
     } else {
       statusLead = q ? `“${q}”` : '';
-      statusTail = `${q ? ' ' : ''}找到 ${displayTracks.length} 首` + offlineNote;
+      statusTail = tr('statusFound', displayTracks.length, q) + offlineNote;
     }
     const hasNoResults = !s.isSearching && (isPlaylistView || (isSearchPage && s.hasSearched)) && displayTracks.length === 0;
     let emptyTitle = '', emptyText = '';
-    if (isCachedView) { emptyTitle = '还没有缓存好的歌'; emptyText = '听过一遍的歌会自动缓存；也可以打开一个歌单，点「缓存全部」'; }
-    else if (isPlaylistView) { emptyTitle = '这个歌单还没有歌'; emptyText = '去搜索页找歌，点 ＋ 加进来'; }
-    else if (s.localSearch) { emptyTitle = `本地曲库里没有“${q}”`; emptyText = '离线时只能搜听过、存过的歌，联网后再搜'; }
-    else { emptyTitle = `没有找到“${q}”`; emptyText = '换个关键词试试，或者把另一个音源也勾上'; }
+    if (isCachedView) { emptyTitle = tr('emptyCachedTitle'); emptyText = tr('emptyCachedText'); }
+    else if (isPlaylistView) { emptyTitle = tr('emptyPlaylistTitle'); emptyText = tr('emptyPlaylistText'); }
+    else if (s.localSearch) { emptyTitle = tr('emptyLocalTitle', q); emptyText = tr('emptyLocalText'); }
+    else { emptyTitle = tr('emptySearchTitle', q); emptyText = tr('emptySearchText'); }
 
     const idx = s.playOrder.indexOf(s.currentId);
     const modeActive = s.playMode !== 0;
@@ -4438,7 +4758,7 @@ class Component extends DCLogic {
     const canExport = s.exportReady && !!matchedTrack;
     // 分享面板的文本预览。API bundle 还没加载好时留空，按钮照常在，点了会提示
     const shareAPI = window.ListeningAPI;
-    const shareTextPreview = (shareAPI && matchedTrack) ? shareAPI.shareText(matchedTrack) : '';
+    const shareTextPreview = (shareAPI && matchedTrack) ? shareAPI.shareText(matchedTrack, s.lang) : '';
     const shareHasLink = !!(shareAPI && matchedTrack && shareAPI.officialSongUrl(matchedTrack));
 
     // 歌单数量：和歌单详情页用同一套「在 queue 里能查到」的过滤逻辑算，避免 trackIds/liked 里有 queue 已经删掉的
@@ -4448,15 +4768,15 @@ class Component extends DCLogic {
       : s.queue.filter(t => (pl.trackIds || []).includes(t.id)).length;
     // 「已缓存」排在最上面：它不是真歌单（不进持久化的 playlists），不能删，数量就是能列出来的已缓存首数。
     // 编号 01、02…；内置的两个（已缓存、喜欢的音乐）名字后面带个小图标。歌单里存的 tileBg 不再画出来，但数据原样留着
-    const cachedEntry = { id: CACHED_VIEW_ID, name: '已缓存', builtin: true, glyph: 'download_done', countLabel: s.cachedCount };
-    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => ({ ...pl, countLabel: playlistCount(pl) }))].map((pl, i) => ({
+    const cachedEntry = { id: CACHED_VIEW_ID, name: tr('cachedName'), builtin: true, glyph: 'download_done', countLabel: s.cachedCount };
+    const playlistsRender = [cachedEntry, ...s.playlists.map(pl => ({ ...pl, name: playlistLabel(pl), countLabel: playlistCount(pl) }))].map((pl, i) => ({
       ...pl, indexLabel: pad2(i + 1),
       hasGlyph: !!pl.builtin, glyph: pl.builtin ? (pl.glyph || '') : '',
       onClick: () => this.selectPlaylist(pl.id),
     }));
     const playlistOptions = s.playlists.map((pl, i) => ({
-      id: pl.id, name: pl.name, indexLabel: pad2(i + 1), countLabel: playlistCount(pl),
-      onClick: () => this.confirmAdd(pl.id, pl.name),
+      id: pl.id, name: playlistLabel(pl), indexLabel: pad2(i + 1), countLabel: playlistCount(pl),
+      onClick: () => this.confirmAdd(pl.id, playlistLabel(pl)),
     }));
     const addTrack = s.addModalId != null
       ? (s.searchResults.find(t => t.id === s.addModalId) || s.queue.find(t => t.id === s.addModalId))
@@ -4479,6 +4799,8 @@ class Component extends DCLogic {
     const playlistMenuOpen = s.openMenu === 'playlist' && isPlaylistView;
 
     return {
+      // 模板里的固定文字：{{ L.键名 }}，当前语言的那一份（见 STRINGS）
+      L: langView(s.lang),
       v: {
         // 有当前曲目时手机底部有迷你播放条，列表和提示条要给它让位
         shellClass: 'dc-app-shell' + (matchedTrack ? ' has-mini' : '') + (s.lyricsCol ? ' has-lyrics-col' : ''),
@@ -4496,7 +4818,7 @@ class Component extends DCLogic {
         showLyricsCol: !!s.lyricsCol, showLyricsTab: !s.lyricsCol, curLyricIdx,
         lyricsRender, lyricsOffset: offset,
         hasLyrics, lyricsEmpty: !hasLyrics,
-        lyricsEmptyText: lyricsPending ? '歌词加载中…' : '暂无歌词',
+        lyricsEmptyText: tr(lyricsPending ? 'lyricsLoading' : 'noLyrics'),
         lyricsEmptyClass: 'sw-empty-title' + (lyricsPending ? ' is-pulsing' : ''),
         queueRender, queueCount: s.playOrder.length, tracksRender,
         listClass: isPlaylistView ? 'sw-list has-rule' : 'sw-list',
@@ -4510,7 +4832,7 @@ class Component extends DCLogic {
         showPlayAll: isPlaylistView && displayTracks.length > 0,
         // 「缓存全部」：「已缓存」视图里没意义；正在缓存这个歌单时按钮变成进度，再点是停止
         showCacheAll: isPlaylistView && !isCachedView && displayTracks.length > 0,
-        cacheAllLabel: batchHere ? `缓存中 ${s.batchCache.done + s.batchCache.failed}/${s.batchCache.total} · 点此停止` : '缓存全部',
+        cacheAllLabel: batchHere ? tr('cachingProgress', s.batchCache.done + s.batchCache.failed, s.batchCache.total) : tr('cacheAll'),
         cacheAllIcon: batchHere ? 'progress_activity' : 'download',
         cacheAllIconClass: batchHere ? 'ms is-spinning' : 'ms',
         isSearching: isSearchPage && s.isSearching,
@@ -4534,8 +4856,8 @@ class Component extends DCLogic {
         playDisabled: !matchedTrack, hasTrack: !!matchedTrack,
         playIcon: isLoadingCurrent ? 'progress_activity' : (s.playing ? 'pause' : 'play_arrow'),
         playIconClass: 'ms' + (isLoadingCurrent ? ' is-spinning' : ''),
-        playLabel: isLoadingCurrent ? '加载中' : (s.playing ? '暂停' : '播放'),
-        modeIcon: PLAY_MODE_ICONS[s.playMode], modeLabel: PLAY_MODE_LABELS[s.playMode],
+        playLabel: tr(isLoadingCurrent ? 'loading' : (s.playing ? 'pause' : 'play')),
+        modeIcon: PLAY_MODE_ICONS[s.playMode], modeLabel: playModeLabel(s.playMode),
         modeBtnClass: 'sw-ctrl' + (modeActive ? ' is-on' : ' is-dim'),
         likeBtnClass: 'sw-ctrl' + (nowPlayingLiked ? ' is-liked' : ' is-dim'),
         playlistsRender,
@@ -4549,23 +4871,17 @@ class Component extends DCLogic {
         hasToast: !!s.toast, toastText: s.toast || '', toastKey: s.toastKey,
         showBatteryHint: !!s.showBatteryHint,
         isNative: IS_NATIVE,
-        batteryHintText: IS_NATIVE
-          ? '锁屏后要连续自动播放，需要允许「听音乐」在后台运行：点「去设置」在弹窗里选允许。小米、华为等手机还要在应用信息里把省电策略设成「无限制」、打开「自启动」。'
-          : '安卓锁屏后台要连续自动播放下一首，需要手动放行一次：设置 → 电池 → 找到浏览器（或本应用）→ 允许后台耗电/关闭省电限制。',
+        batteryHintText: tr(IS_NATIVE ? 'batteryHintNative' : 'batteryHintWeb'),
         // 和电池提示条位置重叠，那个先显示，点掉之后再出这个
         showUpdateBanner: !!s.updateInfo && !s.showBatteryHint,
-        updateBannerText: s.updateInfo
-          ? `有新版本 ${s.updateInfo.tag}${s.appVersion ? `（当前 ${s.appVersion}）` : ''}。下载后点开安装，会直接覆盖这一版，歌单和缓存都还在。`
-          : '',
+        updateBannerText: s.updateInfo ? tr('updateBanner', s.updateInfo.tag, s.appVersion) : '',
         appVersionText: s.appVersion || '—',
         // 离线：顶栏右边的红色图标（点了进设置页），以及设置页里的「缓存与离线」
         showOfflineChip: offlineMode,
         offlineChipIcon: s.online ? 'download_done' : 'cloud_off',
-        offlineChipText: s.online ? '只播缓存' : '离线',
-        netStatusText: s.online
-          ? (s.offlineOnly ? '已联网 · 只播已缓存的歌（省流量）' : '已联网 · 听过的歌会自动缓存')
-          : '没有网络 · 现在只能放已缓存的歌',
-        cachedCount: s.cachedCount,
+        offlineChipText: tr(s.online ? 'chipCachedOnly' : 'chipOffline'),
+        netStatusText: tr(s.online ? (s.offlineOnly ? 'netOnlineCachedOnly' : 'netOnline') : 'netOffline'),
+        cachedCount: s.cachedCount, cachedCountText: tr('cachedSongs', s.cachedCount),
         cacheUsageText: `${formatBytes(s.cachedBytes)} / ${capLabel(s.cacheCapMB)}`,
         showCacheBar: s.cacheCapMB > 0,
         cacheUsagePct: s.cacheCapMB > 0 ? Math.min(100, (s.cachedBytes / (s.cacheCapMB * 1024 * 1024)) * 100) : 0,
@@ -4575,6 +4891,9 @@ class Component extends DCLogic {
         isLightTheme: s.theme === 'light', isDarkTheme: s.theme === 'dark',
         themeLightClass: s.theme === 'light' ? 'is-on' : '',
         themeDarkClass: s.theme === 'dark' ? 'is-on' : '',
+        isLangZh: s.lang !== 'en', isLangEn: s.lang === 'en',
+        langZhClass: s.lang !== 'en' ? 'is-on' : '',
+        langEnClass: s.lang === 'en' ? 'is-on' : '',
       },
       H: {
         goSearch: () => this.setPage('search'),
@@ -4583,6 +4902,8 @@ class Component extends DCLogic {
         openSettings: () => this.openSettings(),
         setThemeLight: () => this.setTheme('light'),
         setThemeDark: () => this.setTheme('dark'),
+        setLangZh: () => this.setLang('zh'),
+        setLangEn: () => this.setLang('en'),
         clearAudioCache: () => this.clearAudioCache(),
         copyDiagLog: () => this.copyDiagLog(),
         doSearch: () => this.doSearch(),

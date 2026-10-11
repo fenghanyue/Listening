@@ -103,7 +103,7 @@ public class AppShellPlugin extends Plugin {
         if (command != null) sendWidgetCommand(command);
     }
 
-    /** 页面报来挂件要显示的东西：{ hasTrack, title, artist, album, playing, mode } */
+    /** 页面报来挂件要显示的东西：{ hasTrack, title, artist, album, playing, mode, lang }（lang 是 App 里选的语言 "zh" / "en"） */
     @PluginMethod
     public void updateWidget(PluginCall call) {
         PlayerWidget.saveState(
@@ -113,7 +113,8 @@ public class AppShellPlugin extends Plugin {
             call.getString("artist", ""),
             call.getString("album", ""),
             Boolean.TRUE.equals(call.getBoolean("playing", false)),
-            call.getInt("mode", 0)
+            call.getInt("mode", 0),
+            call.getString("lang", "")
         );
         call.resolve();
     }
