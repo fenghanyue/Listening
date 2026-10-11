@@ -1,0 +1,24 @@
+/* 由 scripts/vendor-assets.mjs 生成，别手改；来源见脚本里的 HEROS */
+/* TeX Gyre Heros：Helvetica 的开源复刻（GUST 字体许可），CTAN 原版 OTF，没改过。行距按 Inter 覆盖，换字体不挪版面 */
+
+@font-face {
+  font-family: 'TeX Gyre Heros';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(./fonts/texgyreheros-regular.otf) format('opentype');
+  ascent-override: 96.88%;
+  descent-override: 24.12%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'TeX Gyre Heros';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(./fonts/texgyreheros-bold.otf) format('opentype');
+  ascent-override: 96.88%;
+  descent-override: 24.12%;
+  line-gap-override: 0%;
+}

@@ -29,8 +29,12 @@ function findRemoteResources(text) {
 }
 
 const html = await fs.readFile(path.join(SRC, PAGE), 'utf8');
-const fontsCss = await fs.readFile(path.join(SRC, 'vendor', 'fonts.css'), 'utf8');
-const remote = [...findRemoteResources(html), ...findRemoteResources(fontsCss)];
+// vendor/ 下的样式表（fonts.css、fonts-heros.css …）里的 url() 也要查
+const vendorCss = [];
+for (const f of await fs.readdir(path.join(SRC, 'vendor'))) {
+  if (f.endsWith('.css')) vendorCss.push(await fs.readFile(path.join(SRC, 'vendor', f), 'utf8'));
+}
+const remote = [...findRemoteResources(html), ...vendorCss.flatMap(findRemoteResources)];
 if (remote.length) {
   console.error('页面引用了外网资源，APK 断网时会加载失败（改成放进 examples/vendor/，见 scripts/vendor-assets.mjs）：');
   for (const r of remote) console.error('  ' + r.slice(0, 160));

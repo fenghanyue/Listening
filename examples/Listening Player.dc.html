@@ -77,6 +77,7 @@
      断网时页面得能起来（APK 离线打开就靠这个），也不再受国内 unpkg / jsdelivr / Google Fonts 时好时坏的影响。
      support.js 看到 window.React 已经在了就不会再去 unpkg 拉；别往这里加回外链，mobile/scripts/build-www.mjs 会拦 -->
 <link rel="stylesheet" href="./vendor/fonts.css">
+<link rel="stylesheet" href="./vendor/fonts-heros.css">
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
 <script src="./vendor/hls.min.js"></script>
@@ -104,7 +105,8 @@ if ('serviceWorker' in navigator) {
        歌单只从顶栏进：电脑上原来还有一条左边歌单栏，跟顶栏的「歌单」重复，去掉了（#27） */
 
     /* ---------- 基础 ---------- */
-    body { margin: 0; font-family: 'Inter', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+    /* 西文和数字用 TeX Gyre Heros（Helvetica 的开源复刻），它没有的字（比如俄文）用 Inter，中文用系统黑体 */
+    body { margin: 0; font-family: 'TeX Gyre Heros', 'Inter', 'PingFang SC', 'HarmonyOS Sans SC', 'MiSans', 'Noto Sans SC', 'Source Han Sans SC', 'Microsoft YaHei', system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
     /* App 化的触感细节：去掉移动端点击灰块，控件文字（含 Material Symbols 连字图标）不可长按选中，输入框除外 */
     html, body { -webkit-tap-highlight-color: transparent; }
     body { -webkit-user-select: none; user-select: none; }
