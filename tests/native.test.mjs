@@ -117,6 +117,23 @@ await fire('MediaSession:setActionHandler:play', { action: 'play' });
 await page.waitForTimeout(800);
 check('notification play resumes audio', !(await page.evaluate(() => document.getElementById('player-audio').paused)));
 
+// --- 桌面挂件：页面把在放的歌报给原生（AppShell.updateWidget），挂件上的键由原生发 widgetCommand 过来 ---
+const lastWidget = async () => ((await calls('AppShell', 'updateWidget')).slice(-1)[0] || {}).options;
+let widget = await lastWidget();
+check('widget is told the playing track (title, playing, mode)', widget && widget.hasTrack && widget.title === t0.title && widget.playing === true && widget.mode === 0, widget);
+const widgetKeyOk = await fire('AppShell:widgetCommand', { command: 'toggle' });
+await page.waitForTimeout(500);
+widget = await lastWidget();
+check('widget play key pauses, and the widget shows it', widgetKeyOk && (await page.evaluate(() => document.getElementById('player-audio').paused)) && widget.playing === false, widget);
+await fire('AppShell:widgetCommand', { command: 'mode' });
+await page.waitForTimeout(300);
+widget = await lastWidget();
+check('widget mode key switches to shuffle (随机播放)', (await L(`return logic.state.playMode;`)) === 1 && widget.mode === 1, widget);
+await L(`logic.patch({ playMode: 0 }); logic.persist();`);
+await fire('AppShell:widgetCommand', { command: 'toggle' });
+await page.waitForTimeout(800);
+check('widget play key resumes', !(await page.evaluate(() => document.getElementById('player-audio').paused)));
+
 // --- 拔耳机 ---
 const noisyOk = await fire('AppShell:audioBecomingNoisy', {});
 await page.waitForTimeout(300);

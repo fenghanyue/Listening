@@ -32,6 +32,10 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
   `MainActivity` 会派发 `listening:ime-hidden`，见 [docs/mobile-status-bar.md](docs/mobile-status-bar.md)。
 - **安卓原生代码**：容器里没有安卓 SDK，`MainActivity` 等 Java 改动只能靠 Actions 打包来验证能不能编译；
   资源 XML 的注释里不能出现 `--`（比如写了个 CSS 变量名），否则打包直接失败。
+- **桌面挂件**（`PlayerWidget`，只在 APK）：页面通过 `AppShell.updateWidget` 报显示的内容，挂件的键以 `widgetCommand`
+  事件回到页面（`handleWidgetCommand`），来龙去脉见 [docs/android-app.md](docs/android-app.md) 第五节。布局只能用桌面认得的
+  控件（LinearLayout、FrameLayout、TextView、ImageView 等，普通 `View` 也不行）；颜色在 `colors.xml` 的 `widget_*`，
+  跟页面白底主题那几个颜色同步改；改了布局要重画 `drawable-nodpi/widget_preview.png`（安卓 12 以下挂件列表里的预览图）。
 - **电脑上的两样**（手机上看不到）：
   - 宽屏歌词栏（屏幕宽 1600 以上才出，三栏：当前页 | 播放栏 | 歌词）：断点只在 JS 的 `LYRICS_COL_QUERY` 写一处，
     CSS 跟着 shell 上的 `has-lyrics-col` 走。

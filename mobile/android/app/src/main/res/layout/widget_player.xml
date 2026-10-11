@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面 2×2 挂件（PlayerWidget 往里填字、换图标、挂点击）。只能用桌面认得的几种控件：
+     LinearLayout、FrameLayout、TextView、ImageView 这些，自定义控件和普通 View 都不行。
+     从上到下：歌手 和 专辑一行、一道 2dp 粗黑线、歌名大字（太长自动缩小，最多两行）、
+     最下面一排播放模式、上一首、下一首和红色播放键。直角，不加阴影 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/widget_bg"
+    android:orientation="vertical"
+    android:paddingStart="14dp"
+    android:paddingTop="12dp"
+    android:paddingEnd="14dp"
+    android:paddingBottom="14dp">
+
+    <TextView
+        android:id="@+id/widget_artist"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/widget_idle_artist"
+        android:textColor="@color/widget_ink2"
+        android:textSize="12sp" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:layout_marginTop="7dp"
+        android:background="@color/widget_ink" />
+
+    <!-- 歌名：占满中间剩下的高度，字号在 16 到 32 之间自动挑放得下的最大一档（安卓 8 起才有，更老的手机固定 32） -->
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="8dp"
+        android:layout_weight="1"
+        android:autoSizeMaxTextSize="32sp"
+        android:autoSizeMinTextSize="16sp"
+        android:autoSizeStepGranularity="1sp"
+        android:autoSizeTextType="uniform"
+        android:ellipsize="end"
+        android:gravity="top|start"
+        android:includeFontPadding="false"
+        android:maxLines="2"
+        android:text="@string/widget_idle_title"
+        android:textColor="@color/widget_ink"
+        android:textSize="32sp"
+        android:textStyle="bold" />
+
+    <!-- 最下面一排：三个小键平分左边，红色播放键 44dp 靠右。左边往外伸一点，让第一个图标和上面的字对齐 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginStart="-5dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/widget_mode"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:contentDescription="@string/widget_mode_list"
+            android:scaleType="center"
+            android:src="@drawable/ic_widget_repeat" />
+
+        <ImageView
+            android:id="@+id/widget_prev"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:contentDescription="@string/widget_prev"
+            android:scaleType="center"
+            android:src="@drawable/ic_widget_prev" />
+
+        <ImageView
+            android:id="@+id/widget_next"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:contentDescription="@string/widget_next"
+            android:scaleType="center"
+            android:src="@drawable/ic_widget_next" />
+
+        <ImageView
+            android:id="@+id/widget_play"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@color/widget_red"
+            android:contentDescription="@string/widget_play"
+            android:scaleType="center"
+            android:src="@drawable/ic_widget_play" />
+    </LinearLayout>
+</LinearLayout>

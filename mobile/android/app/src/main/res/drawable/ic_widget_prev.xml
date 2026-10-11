@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面挂件的图标：上一首。图形是 Material Symbols 的 skip_previous（填充版，Apache 2.0），和页面上用的是同一套 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+    <path
+        android:fillColor="@color/widget_ink"
+        android:pathData="M220,720L220,240L300,240L300,720L220,720ZM740,720L380,480L740,240L740,720Z" />
+</vector>

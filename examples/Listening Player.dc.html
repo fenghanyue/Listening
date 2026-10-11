@@ -2124,7 +2124,8 @@ class Component extends DCLogic {
     // 已缓存索引：启动时读一遍；之后缓存有增删（写入 / 淘汰 / 删除 / 清空 / 补了封面都会广播这个事件）就重读
     this._onCacheChanged = () => this.scheduleCacheRefresh();
     window.addEventListener('listening:cache-changed', this._onCacheChanged);
-    this.refreshCacheIndex();
+    // 记下第一次读完的时刻：从桌面挂件打开 App 时，挂件上的键要等它读完再执行（见 initNativeShell）
+    this._startupCacheRead = this.refreshCacheIndex().catch(e => console.warn('cache index read failed:', e));
     // 申请"持久化存储"：浏览器磁盘紧张时，没申请过的站点数据可能被整体清掉（缓存的歌一夜之间全没了）。
     // 浏览器不一定批（WebView 里多半直接拒），批不批都不影响别的功能
     try {
@@ -2157,6 +2158,7 @@ class Component extends DCLogic {
       this.ensureLyricsForCurrent();
     }
     this.syncMiniPlayer();
+    if (IS_NATIVE) this.syncWidget();
   }
 
   // ==== 迷你播放器：Document Picture-in-Picture 开一个浮在所有窗口最上面的小窗口（只有电脑上的 Chrome / Edge 有） ====
@@ -2477,8 +2479,42 @@ class Component extends DCLogic {
       if (el && el.classList && el.classList.contains('dc-search-input')) el.blur();
     };
     window.addEventListener('listening:ime-hidden', this._onImeHidden);
+    // 桌面挂件上的键，原生转过来的。从挂件打开 App 时这一条在页面刚挂载就到：等已缓存索引读完再执行
+    // （断网时要知道哪首能放）；平时早就读完了，马上执行
+    nativeListen('AppShell', 'widgetCommand', (d) => {
+      Promise.resolve(this._startupCacheRead).then(() => this.handleWidgetCommand(d.command));
+    });
+    this.syncWidget();
     this.refreshBatteryHint();
     this.checkForUpdate(false);
+  }
+
+  // 桌面挂件上的四个键：和通知栏、耳机上的键走同一套
+  handleWidgetCommand(command) {
+    this.initAudio(); // 从挂件冷启动时 audio 可能还没接上（componentDidMount 里是下一轮才接）
+    if (command === 'toggle') this.togglePlay();
+    else if (command === 'prev') this.stepTrack(-1);
+    else if (command === 'next') this.stepTrack(1);
+    else if (command === 'mode') this.cycleMode();
+  }
+
+  // 桌面挂件显示的东西（歌名、歌手、专辑、在不在放、播放模式）变了才报给原生：原生存下来、重画挂件
+  syncWidget() {
+    if (!nativeHas('AppShell')) return;
+    const s = this.state;
+    const track = s.queue.find(t => t.id === s.currentId) || null;
+    const info = {
+      hasTrack: !!track,
+      title: track ? track.title || '' : '',
+      artist: track ? track.artist || '' : '',
+      album: track ? track.album || '' : '',
+      playing: !!s.playing,
+      mode: s.playMode || 0,
+    };
+    const key = JSON.stringify(info);
+    if (key === this._widgetKey) return;
+    this._widgetKey = key;
+    nativeCall('AppShell', 'updateWidget', info).catch(() => {});
   }
 
   // 返回键 / 返回手势：一层层往回退；退到底就把 App 切到后台——不能直接退出，退出会把 WebView
