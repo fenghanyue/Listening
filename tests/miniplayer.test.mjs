@@ -75,6 +75,9 @@ const view = (mp) => mp.evaluate(() => {
     body: r(document.body), player: r($('.sw-mp-player')), listBox: r($('.sw-mp-list')), H: document.documentElement.clientHeight,
     // 图标字体没加载出来时，.ms 里的连字会显示成 skip_next 这样一长串字母
     wideIcons: [...document.querySelectorAll('.ms')].filter(el => el.getClientRects().length && el.getBoundingClientRect().width > 32).map(el => el.textContent),
+    // 主页面的 html 上 ms-loading 会把图标藏起来（图标字体还没到的时候）；小窗的 html 上没有它，图标不能跟着藏
+    hiddenIcons: [...document.querySelectorAll('.ms')].filter(el => el.getClientRects().length && getComputedStyle(el).visibility === 'hidden'
+      && getComputedStyle(el.parentElement).visibility !== 'hidden').map(el => el.textContent),
     unlabeled: [...document.querySelectorAll('button')].filter(b => !(b.getAttribute('aria-label') || '').trim()).map(b => b.outerHTML.slice(0, 80)),
   };
 });
@@ -129,7 +132,7 @@ let v = await view(mp);
 check('a normal-size window opens without the queue', !v.list && !(await L(`return logic._mpListOpen;`)), v.list);
 check('shows the current song: title, artist — album, cover letter, current lyric line',
   v.title === '第二首' && v.artist === '歌手乙 — 专辑二' && v.cover === '第' && v.ly === '短的一句' && !v.lyEmpty, v);
-check('icons draw as icons (the icon font loaded in the small window)', v.wideIcons.length === 0, v.wideIcons);
+check('icons draw as icons (the icon font loaded in the small window) and none is hidden', v.wideIcons.length === 0 && v.hiddenIcons.length === 0, [...v.wideIcons, ...v.hiddenIcons]);
 check('every button has a screen-reader label', v.unlabeled.length === 0, v.unlabeled);
 check('player is 420×140 at the top-left', v.body.x === 0 && v.body.y === 0 && v.body.w === 420 && v.body.h === 140 && v.player.y === 0 && v.player.h === 140, v.body);
 await shot(mp, 'default');

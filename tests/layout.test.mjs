@@ -212,12 +212,18 @@ const measure = () => {
     }
   }
   if (CJK.test(document.title)) cjk.push(`document.title: ${document.title}`);
+  // 每个图标都画成了一个图标（字体里有这个名字）：量的是字本身多宽（图标的框可能被网格撑得比字宽），没画成的是一串字母，
+  // 起码两个字宽（转着圈的图标斜过来最宽 1.41 个字）。字体还没到时图标被 ms-loading 藏着、量不出来，单独报
+  const textW = (el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect().width; };
+  const icons = document.documentElement.classList.contains('ms-loading') ? ['the icon font never arrived (html still has ms-loading)']
+    : [...document.querySelectorAll('.dc-app-shell .ms')].filter(vis)
+      .filter(el => textW(el) > parseFloat(getComputedStyle(el).fontSize) * 1.5).map(el => `${el.textContent} ${Math.round(textW(el))}px`);
   const ctrls = [...document.querySelectorAll('.sw-controls > button')].map(box);
   const lines = [...document.querySelectorAll('.sw-ly')].map(box).filter(Boolean);
   return {
     W, H: window.innerHeight,
     docOverflow: document.scrollingElement.scrollWidth - document.scrollingElement.clientWidth,
-    outside: outside.slice(0, 8), outsideCount: outside.length, unlabeled, cjk,
+    outside: outside.slice(0, 8), outsideCount: outside.length, unlabeled, cjk, icons,
     topbar: box($('.dc-topbar')),
     nav: [...document.querySelectorAll('.sw-nav-btn')].map(b => ({ label: b.getAttribute('aria-label'), title: b.getAttribute('title'), active: b.classList.contains('is-active'), w: b.offsetWidth, h: b.offsetHeight })),
     main: box($('.sw-main')), np: box($('.dc-nowplaying')), mini: box($('.sw-mini')),
@@ -296,7 +302,7 @@ for (const vp of VIEWPORTS) {
         !!atLoad && atLoad.lang === 'en' && atLoad.title === 'Listening' && !atLoad.rendered, atLoad);
     }
 
-    const bad = { outside: [], unlabeled: [], overflow: [], cjk: [] };
+    const bad = { outside: [], unlabeled: [], overflow: [], cjk: [], icons: [] };
     const shots = {};
     for (const [name, code] of Object.entries(SCREENS)) {
       await L(SEED, DATA);
@@ -309,10 +315,12 @@ for (const vp of VIEWPORTS) {
       if (m.unlabeled.length) bad.unlabeled.push(`${name}: ${m.unlabeled.join(' | ')}`);
       if (m.docOverflow > 0) bad.overflow.push(`${name}: ${m.docOverflow}px`);
       if (m.cjk.length) bad.cjk.push(`${name}: ${m.cjk.slice(0, 3).join(' | ')}`);
+      if (m.icons.length) bad.icons.push(`${name}: ${m.icons.join(' | ')}`);
       await page.screenshot({ path: `${OUT}/layout-${tag}-${name}.png` });
     }
     check(`${tag}: nothing sticks out past the screen edges`, bad.outside.length === 0 && bad.overflow.length === 0, [...bad.overflow, ...bad.outside]);
     check(`${tag}: every icon-only button has an aria-label`, bad.unlabeled.length === 0, bad.unlabeled);
+    check(`${tag}: every icon is drawn as one icon (the icon font has it)`, bad.icons.length === 0, bad.icons.slice(0, 6));
     if (variant === 'en') check(`${tag}: no Chinese left anywhere in the English interface`, bad.cjk.length === 0, bad.cjk.slice(0, 6));
 
     // 顶栏：48px 高，三个 48×48 图标按钮（搜索 / 歌单 / 设置），读屏名字和悬停提示都在，当前页那个是选中态

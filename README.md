@@ -242,6 +242,7 @@ await ListeningAPI.searchAll({ keyword: 'lofi', sources: ['soundcloud'] });
 - 改了页面或 `src/api` 推到 GitHub，APK 会由 Actions 自动重新打包；本机打包见 [`docs/android-app.md`](docs/android-app.md) 第四节
 - APK 专属的代码都在页面里 `IS_NATIVE` 的判断后面（原生桥那一节），网页版不受影响
 - 界面上的字都在页面的 `STRINGS` 表里，每条是 `[中文, English]` 一对：模板里写 `{{ L.键名 }}`，代码里写 `tr('键名')`。新加的字两种语言都要写，`node tests/i18n.test.mjs` 会查
+- 图标是 Material Symbols 字体，只打包页面用到的那些：加新图标先加进 `scripts/vendor-assets.mjs` 的 `ICONS`，再跑 `node scripts/vendor-assets.mjs icons` 重新生成字体，`node tests/run.mjs icons` 会查
 
 ---
 
