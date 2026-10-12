@@ -37,10 +37,14 @@ const icons = await page.evaluate(() => {
   }
   return out;
 });
-// 西文字体 TeX Gyre Heros 要确认是从 vendor/ 真加载成功的那份（常规和粗体都有）：fonts.check 对加载失败的字体
-// 也会返回 true，而测试机上可能本来就装着同名的系统字体，失败了也看不出来
-const fontOk = await page.evaluate(() => document.fonts.check("24px 'Material Symbols Outlined'")
-  && ['400', '700'].every(w => [...document.fonts].some(f => f.family.replace(/["']/g, '') === 'TeX Gyre Heros' && f.weight === w && f.status === 'loaded')));
+// 字体要确认是从 vendor/ 真加载成功的那份（Heros 常规和粗体都有）：fonts.check 对加载失败的字体也会返回 true，
+// 而测试机上可能本来就装着同名的系统字体，失败了也看不出来。图标字体没到时 html 上挂着 ms-loading，图标被藏起来、
+// 宽度压成一个图标，上面量宽度就量不出毛病，所以还得确认它已经摘掉了
+const fontOk = await page.evaluate(() => {
+  const loaded = (family, weight) => [...document.fonts].some(f => f.family.replace(/["']/g, '') === family && (!weight || f.weight === weight) && f.status === 'loaded');
+  return loaded('Material Symbols Outlined') && !document.documentElement.classList.contains('ms-loading')
+    && loaded('TeX Gyre Heros', '400') && loaded('TeX Gyre Heros', '700');
+});
 await page.screenshot({ path: `${OUT}/smoke-home.png` });
 
 check('page requested nothing from a CDN', blocked.length === 0, blocked);

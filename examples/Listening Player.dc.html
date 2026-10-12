@@ -83,6 +83,21 @@
      support.js 看到 window.React 已经在了就不会再去 unpkg 拉；别往这里加回外链，mobile/scripts/build-www.mjs 会拦 -->
 <link rel="stylesheet" href="./vendor/fonts.css">
 <link rel="stylesheet" href="./vendor/fonts-heros.css">
+<link rel="stylesheet" href="./vendor/fonts-icons.css">
+<script>
+// 图标是连字字体（<span class="ms">play_arrow</span>）：字体没到时浏览器先等 3 秒，再把 "play_arrow" 这种名字当文字
+// 显示出来，网慢时就是满屏叠在一起的英文。字体到之前 html 上挂着 ms-loading，图标先空着、只占一个图标的位置
+// （helmet 里 html.ms-loading .ms 那条），到了再摘掉；下载失败就一直空着，总比满屏英文强。
+// 写在图标样式表后面：样式表读完这段才会跑，document.fonts 里才有这个字体；顺带让字体现在就开始下，不用等页面画出来
+(function () {
+  if (!document.fonts || !document.fonts.load) return;
+  var html = document.documentElement;
+  html.classList.add('ms-loading');
+  document.fonts.load('24px "Material Symbols Outlined"').then(function () {
+    html.classList.remove('ms-loading');
+  }, function () { /* 下载失败：图标继续空着 */ });
+})();
+</script>
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
 <script src="./vendor/hls.min.js"></script>
@@ -135,6 +150,9 @@ if ('serviceWorker' in navigator) {
     /* 图标实心 / 空心一律靠 class 切 FILL 轴，别内联动态改 font-variation-settings：部分安卓浏览器
        （如 Edge App）对内联改这个属性不重绘，颜色变了填充不变；class 切换是 Material Symbols 官方推荐的做法 */
     .ms.fill { font-variation-settings: 'FILL' 1; }
+    /* 图标字体还没到（html 上挂着 ms-loading，见 <head> 里图标样式表后面那段脚本）：图标先空着、只占一个图标的位置，
+       不露出 "play_arrow" 这种名字。字体到了这条就不起作用，跟原来一模一样 */
+    html.ms-loading .ms { visibility: hidden; width: 1em; overflow: hidden; }
     .num { font-variant-numeric: tabular-nums; }
     .is-spinning { animation: swSpin .9s linear infinite; }
     .is-pulsing { animation: swPulse 1.2s ease-in-out infinite; }

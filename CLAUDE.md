@@ -26,6 +26,12 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
   断行用 `overflow-wrap: anywhere`，别用 `word-break: break-all`（英文单词会从中间断开）。
 - **字体**：西文和数字用 TeX Gyre Heros（Helvetica 的开源复刻，`examples/vendor/fonts-heros.css`；`node scripts/vendor-assets.mjs heros`
   只更新这一项），只有常规和粗体；中文用手机自带的字体。
+- **图标**：Material Symbols 连字字体（`<span class="ms">play_arrow</span>`，字体把这个词画成图标），只打包页面用到的那些，
+  名单是 `scripts/vendor-assets.mjs` 的 `ICONS`（整套 2.3MB，网页版每次打开都要重新下，国内网慢时会露出满屏英文名字）。
+  加新图标先加进名单，再跑 `node scripts/vendor-assets.mjs icons` 重新生成 `examples/vendor/fonts-icons.css` 和字体；
+  漏了的话那个图标是一片空白，`node tests/run.mjs icons` 会报错。图标名要写成测试认得出的样子：直接写在
+  `<span class="ms">名字</span>` 里，或者写成字符串放进模板 `{{ }}` 取的那个键、`…_ICONS` 数组里。字体到之前 `<html>` 上挂着
+  `ms-loading`，图标先空着、只占一个图标的位置（head 里图标样式表后面那段脚本 + helmet 里 `html.ms-loading .ms`）。
 - **界面（瑞士风格）**：颜色只在 `<head>` 里 `html[data-app-theme="light|dark"]` 的 CSS 变量定义一处（`--bg`、`--ink`、`--red`…），
   别处不写死色值；部件样式写在 `<helmet>` 里，类名用 `sw-` 前缀；`dc-` 开头的类是逻辑和测试找元素的钩子，别改名。
   默认白底：改了白底的 `--bg`，`mobile/` 里的 `colors.xml`、`capacitor.config.json` 和 `examples/manifest.json` 要一起改。
@@ -62,6 +68,8 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
 - 改界面先跑 `node tests/layout.test.mjs`：不联网，用手机、横屏、平板、电脑、宽屏电脑五种尺寸各走一遍（中文、英文各一遍，
   英文那遍界面上还有中文就算漏翻），截图存在系统临时目录的 `listening-tests/`。
 - 改了界面上的字先跑 `node tests/i18n.test.mjs`：不开浏览器，几秒钟，查 `STRINGS` 有没有漏写英文、键名写错、哪条没用上。
+- 加了、换了图标先跑 `node tests/run.mjs icons`：不联网，十几秒，查页面用到的图标名都在 `ICONS` 里、仓库里的字体都画得出来，
+  图标字体下得慢时图标空着（不露英文名字）、字体到了版面不跳。`layout` 也会查每一屏的图标都画成了图标。
 - Playwright 模拟不了真手机上的键盘、WebView 和状态栏。这类改动先推分支出预览版，让用户在手机上试。
 - 迷你播放器（电脑 Chrome / Edge 的小窗）：测它不能用 Playwright 拦请求，一拦小窗的样式就加载不出来；拖动、记位置
   这些要在有窗口管理器的真窗口里试。浏览器的限制和试法见 [docs/mini-player.md](docs/mini-player.md)。
