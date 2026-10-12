@@ -510,39 +510,33 @@ if ('serviceWorker' in navigator) {
 
     /* ---------- 迷你播放器（Chrome / Edge 的 Document Picture-in-Picture 小窗）：小窗里的内容不归 dc-runtime 管，
        打开时把主页面的样式整份搬过去，所以写在这里也生效。
-       固定尺寸：420×140（MINI_PLAYER_W / MINI_PLAYER_H），弹出播放队列时 420×460（MINI_PLAYER_LIST_H），里面的东西
-       不跟着窗口变（只有队列的高度跟着窗口，最多 460）；用户把窗口拖大了，内容照旧贴在左上角，在小窗里点一下就缩回
+       固定尺寸：420×100（MINI_PLAYER_W / MINI_PLAYER_H），弹出播放队列时 420×420（MINI_PLAYER_LIST_H），里面的东西
+       不跟着窗口变（只有队列的高度跟着窗口，最多 420）；用户把窗口拖大了，内容照旧贴在左上角，在小窗里点一下就缩回
        这个尺寸（见 fitMiniPlayer）。小窗只能按住 Chrome 画的标题栏拖，网页挪不了它，app-region: drag 在这里也不管用。
-       播放器那一块：左边封面；右边歌名 + 歌手 — 专辑一行（最右边「回到网页」）、当前这句歌词一行、一排五个键
-       （播放模式、上一首、播放、下一首、播放队列）；这一块最上沿一道进度细线。弹出的播放队列在整个播放器上面 ---------- */
-    .sw-mp { width: 420px; height: 140px; margin: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); color: var(--ink); }
-    /* 弹出播放队列：跟着窗口高度走，最多 460。点下去那一刻窗口还没加高，队列先是 0 高、播放器不动，窗口加高了队列才露出来 */
-    .sw-mp.is-list { height: clamp(140px, 100vh, 460px); }
-    .sw-mp-player { flex: 0 0 140px; position: relative; display: flex; align-items: center; gap: 16px; padding: 16px 20px; }
-    .sw-mp-cover { width: 108px; height: 108px; flex-shrink: 0; background: var(--cover-empty) center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: 700; color: var(--ink-2); }
+       播放器那一块：左边封面；右边歌名 + 歌手 — 专辑一行、一排六个键（播放模式、上一首、播放、下一首、播放队列、
+       回到网页）；这一块最上沿一道进度细线。不放歌词：放了窗口得高出一截。弹出的播放队列在整个播放器上面 ---------- */
+    .sw-mp { width: 420px; height: 100px; margin: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); color: var(--ink); }
+    /* 弹出播放队列：跟着窗口高度走，最多 420。点下去那一刻窗口还没加高，队列先是 0 高、播放器不动，窗口加高了队列才露出来 */
+    .sw-mp.is-list { height: clamp(100px, 100vh, 420px); }
+    .sw-mp-player { flex: 0 0 100px; position: relative; display: flex; align-items: center; gap: 16px; padding: 16px 20px; }
+    .sw-mp-cover { width: 68px; height: 68px; flex-shrink: 0; background: var(--cover-empty) center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; color: var(--ink-2); }
     .sw-mp-main { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
     .sw-mp-meta { display: flex; align-items: center; gap: 10px; font-size: 13px; line-height: 18px; white-space: nowrap; }
     .sw-mp-t { font-weight: 700; flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
     .sw-mp-a { min-width: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
-    .sw-mp-ly { margin-top: 6px; font-size: 22px; font-weight: 700; line-height: 28px; color: var(--red); white-space: nowrap; overflow: hidden; }
-    .sw-mp-ly.is-empty { color: var(--ink-3); font-weight: 500; }
-    /* 一句放不下时整句往左平移（位置在 mpLyricFrame 里按播放进度算），还藏着字的那一头淡出。
-       遮罩只看透明度，里面的 #000 不是显示出来的颜色 */
-    .sw-mp-ly-txt { display: inline-block; vertical-align: top; }
-    .sw-mp-ly.is-fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
-    .sw-mp-ly.is-fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 24px); mask-image: linear-gradient(to right, transparent, #000 24px); }
-    .sw-mp-ly.is-fade-l.is-fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
-    /* 五个键两头贴边、中间等距：两边的键一样宽，播放键就正好在正中间 */
+    /* 六个键两头贴边、中间等距 */
     .sw-mp-ctrls { display: flex; justify-content: space-between; align-items: center; margin: 10px -8px 0; }
-    .sw-mp-ctrls button, .sw-mp-back { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--ink); flex-shrink: 0; }
-    .sw-mp-ctrls .ms, .sw-mp-back .ms { font-size: 22px; }
+    .sw-mp-ctrls button { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--ink); flex-shrink: 0; }
+    .sw-mp-ctrls .ms { font-size: 22px; }
     .sw-mp-ctrls .is-dim { color: var(--ink-2); }
     .sw-mp-ctrls .is-on { color: var(--red); }
     .sw-mp-ctrls .sw-mp-skip .ms { font-size: 28px; font-variation-settings: 'FILL' 1; }
     .sw-mp-ctrls .sw-mp-play { width: 40px; height: 40px; background: var(--red); color: var(--on-red); }
     .sw-mp-ctrls .sw-mp-play .ms { font-size: 28px; font-variation-settings: 'FILL' 1; }
-    /* 「回到网页」：歌名那一行的最右边，跟下面「播放队列」那个键上下对齐（同样 36px、同样往外伸 8px），不把这一行撑高 */
-    .sw-mp-back { margin: -9px -8px -9px auto; color: var(--ink-2); }
+    /* 「播放队列」：list_arrow 本来是箭头朝下的列表，上下翻过来成了「↑≡」——队列是从播放器上面弹出来的 */
+    .sw-mp-ctrls [data-act="list"] .ms { transform: scaleY(-1); }
+    /* 「回到网页」：一排的最右边，比别的键淡一点 */
+    .sw-mp-ctrls .sw-mp-back { color: var(--ink-2); }
     /* 进度：播放器那一块最上沿一道 3px 的线（跟手机底部的迷你播放条一样），点哪儿跳到哪儿；下面垫一块透明的热区 */
     .sw-mp-bar { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--rule); cursor: pointer; z-index: 1; }
     .sw-mp-bar::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 14px; }
@@ -564,7 +558,7 @@ if ('serviceWorker' in navigator) {
     .sw-mp-row-btns button { width: 28px; height: 36px; display: flex; align-items: center; justify-content: center; color: var(--ink-2); }
     .sw-mp-row-btns .ms { font-size: 20px; }
     @media (hover: hover) {
-      .sw-mp-ctrls button:not(.sw-mp-play):hover, .sw-mp-back:hover, .sw-mp-row:hover, .sw-mp-row-btns button:hover { background: var(--hover); }
+      .sw-mp-ctrls button:not(.sw-mp-play):hover, .sw-mp-row:hover, .sw-mp-row-btns button:hover { background: var(--hover); }
       .sw-mp-back:hover, .sw-mp-row-btns button:hover { color: var(--ink); }
       .sw-mp-ctrls .sw-mp-play:hover { opacity: .86; }
     }
@@ -1289,10 +1283,10 @@ function playlistLabel(p) {
 // 宽屏歌词栏的断点，只写这一处：JS 按它决定渲不渲歌词栏、藏不藏「歌词」标签，CSS 跟着 shell 上的 has-lyrics-col 走。
 // 1600 是内容区（1040）+ 歌词栏最窄（360）+ 播放栏（400）再留一点余量；再窄就没有多出来的空白可填了
 const LYRICS_COL_QUERY = '(min-width: 1600px) and (min-height: 560px)';
-// 迷你播放器的固定尺寸，和 CSS 里 .sw-mp 的宽高是同一组数，改一处要改另一处：平时 420×140，弹出播放队列时 420×460
+// 迷你播放器的固定尺寸，和 CSS 里 .sw-mp 的宽高是同一组数，改一处要改另一处：平时 420×100，弹出播放队列时 420×420
 const MINI_PLAYER_W = 420;
-const MINI_PLAYER_H = 140;
-const MINI_PLAYER_LIST_H = 460;
+const MINI_PLAYER_H = 100;
+const MINI_PLAYER_LIST_H = 420;
 
 // 播放模式（playMode 0 / 1 / 2）的图标：主播放器和迷你播放器共用。名字在 STRINGS.playModes（playModeLabel）
 const PLAY_MODE_ICONS = ['repeat', 'shuffle', 'repeat_one'];
@@ -2463,9 +2457,9 @@ class Component extends DCLogic {
 
   componentDidUpdate() {
     const s = this.state;
-    // 歌词栏 / 小窗一直摆着歌词：刚打开 App、或者暂停着换了当前曲目时还没放过，歌词得自己去补
+    // 宽屏歌词栏一直摆着歌词：刚打开 App、或者暂停着换了当前曲目时还没放过，歌词得自己去补
     // （在放的时候 loadAndPlay 会带上歌词，不用管）
-    if ((s.lyricsCol || this._mpWin) && !s.playing && s.currentId != null && s.currentId !== this._lyricsShownFor) {
+    if (s.lyricsCol && !s.playing && s.currentId != null && s.currentId !== this._lyricsShownFor) {
       this._lyricsShownFor = s.currentId;
       this.ensureLyricsForCurrent();
     }
@@ -2511,15 +2505,14 @@ class Component extends DCLogic {
     doc.body.innerHTML = '<div class="sw-mp-list dc-scrollbar"><div class="sw-head-rule"><span class="sw-label sw-mp-list-t"></span><span class="sw-mp-count"></span></div><div class="sw-mp-rows"></div></div>'
       + '<div class="sw-mp-player"><div class="sw-mp-bar" data-act="seek"><div class="sw-mp-fill"></div></div>'
       + '<div class="sw-mp-cover"></div>'
-      + '<div class="sw-mp-main"><div class="sw-mp-meta"><span class="sw-mp-t"></span><span class="sw-mp-a"></span>'
-      + '<button class="sw-mp-back" data-act="back"><span class="ms">open_in_full</span></button></div>'
-      + '<div class="sw-mp-ly"><span class="sw-mp-ly-txt"></span></div>'
+      + '<div class="sw-mp-main"><div class="sw-mp-meta"><span class="sw-mp-t"></span><span class="sw-mp-a"></span></div>'
       + '<div class="sw-mp-ctrls">'
       + '<button data-act="mode"><span class="ms">repeat</span></button>'
       + '<button data-act="prev" class="sw-mp-skip"><span class="ms">skip_previous</span></button>'
       + '<button data-act="play" class="sw-mp-play"><span class="ms">play_arrow</span></button>'
       + '<button data-act="next" class="sw-mp-skip"><span class="ms">skip_next</span></button>'
-      + '<button data-act="list"><span class="ms">playlist_play</span></button>'
+      + '<button data-act="list"><span class="ms">list_arrow</span></button>'
+      + '<button data-act="back" class="sw-mp-back"><span class="ms">open_in_full</span></button>'
       + '</div></div></div>';
     doc.addEventListener('click', (e) => {
       const el = e.target.closest && e.target.closest('[data-act]');
@@ -2554,8 +2547,6 @@ class Component extends DCLogic {
     });
     // 点了「播放队列」、窗口加高以后，再把当前这首滚到队列中间（点下去那一刻队列还没有高度）
     win.addEventListener('resize', () => { if (this._mpListOpen && this._mpCenterPending) this.centerMiniPlayerRow(); });
-    // 字体晚到会改变歌词的宽度：到了重新量一遍这句放不放得下
-    doc.fonts.addEventListener('loadingdone', () => { this._mpLyKey = null; this.syncMiniPlayer(); });
     // 点小窗自己的关闭键、或者主页面关掉 / 刷新，都会走到这里
     win.addEventListener('pagehide', () => {
       this._mpWin = null;
@@ -2563,7 +2554,6 @@ class Component extends DCLogic {
       this.patch({ miniPlayerOpen: false });
     });
     this._mpWin = win;
-    this._mpReduceMotion = !!(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
     this.resetMiniPlayerMarks();
     // Chrome 按上回关掉时的大小打开：上回是开着播放队列关的（窗口是高的），这回也把队列展开，免得下面空一大块
     if (win.innerHeight >= (MINI_PLAYER_H + MINI_PLAYER_LIST_H) / 2) this.toggleMiniPlayerList();
@@ -2576,9 +2566,6 @@ class Component extends DCLogic {
     this._mpListShown = null;
     this._mpListOpen = false;
     this._mpCenterPending = false;
-    this._mpLyKey = null;
-    this._mpLy = null;
-    this._mpLyRaf = 0;
   }
 
   // 播放队列弹出来：窗口临时加高到 MINI_PLAYER_LIST_H，队列在整个播放器上面；再点一下收起、缩回去。
@@ -2620,28 +2607,6 @@ class Component extends DCLogic {
     try { win.resizeTo(w + (win.outerWidth - win.innerWidth), h + (win.outerHeight - win.innerHeight)); } catch (e) { /* 不让改就算了，内容本来就是固定大小 */ }
   }
 
-  // 一句歌词放不下：在唱这一句的时间里往左滑——前 15% 停在句首，到 80% 滑到句尾停住，下一句开始前整句都露过面。
-  // 位置只看播放进度（在放读 audio，暂停读 state），所以暂停会停住、拖进度条会跟着跳。在放的时候每帧走一次
-  mpLyricFrame() {
-    const win = this._mpWin;
-    const L = this._mpLy;
-    if (!win || !L) return;
-    const s = this.state;
-    const a = this._audio;
-    const t = s.playing && a && isFinite(a.currentTime) ? a.currentTime : s.currentTime;
-    // 后面跟着一大段间奏的句子按 12 秒算，别慢慢悠悠滑一整段间奏
-    const span = Math.max(0.5, Math.min(L.t1 - L.t0, 12));
-    let p = Math.min(1, Math.max(0, ((t - L.t0) / span - 0.15) / 0.65));
-    // 系统设了「减少动态效果」：不滑，唱到一半直接换成句尾
-    if (this._mpReduceMotion) p = p < 0.5 ? 0 : 1;
-    L.el.style.transform = p ? `translateX(${(-L.over * p).toFixed(1)}px)` : '';
-    L.box.classList.toggle('is-fade-l', p > 0);
-    L.box.classList.toggle('is-fade-r', p < 1);
-    if (s.playing && !this._mpReduceMotion && !this._mpLyRaf) {
-      this._mpLyRaf = win.requestAnimationFrame(() => { this._mpLyRaf = 0; this.mpLyricFrame(); });
-    }
-  }
-
   syncMiniPlayer() {
     const win = this._mpWin;
     if (!win) return;
@@ -2650,36 +2615,11 @@ class Component extends DCLogic {
     const $ = (sel) => doc.querySelector(sel);
     const track = s.queue.find(t => t.id === s.currentId) || null;
     const loading = s.loadingTrackId != null && s.loadingTrackId === s.currentId;
-    // 歌词和主页面一样：对得上当前曲目才用；没有时分「加载中」（刚点播放、或者后台在补）和「暂无」
-    const lyrics = s.lyricsTrackId != null && s.lyricsTrackId === s.currentId ? s.lyrics : [];
-    let idx = 0;
-    for (let i = 0; i < lyrics.length; i++) { if (lyrics[i].time <= s.currentTime) idx = i; }
-    const ly = lyrics.length ? lyrics[idx].text : (!track ? '' : tr(s.lyricsLoading || loading ? 'lyricsLoading' : 'noLyrics'));
     const orderIdx = s.playOrder.indexOf(s.currentId);
     const canStep = orderIdx >= 0 && s.playOrder.length > 1;
     // 进度每秒变好几次，单独改；其余的拼成一个 key，没变就不碰
     const dur = track && track.duration > 0 ? track.duration : 0;
     $('.sw-mp-fill').style.width = (dur ? Math.min(100, (s.currentTime / dur) * 100) : 0) + '%';
-    // 当前这句歌词：换了句（或者字体刚到）才重新填字、量一量放不放得下；放不下的交给 mpLyricFrame 往左滑
-    const lyKey = [track && track.id, lyrics.length ? idx : -1, ly].join('\n');
-    if (lyKey !== this._mpLyKey) {
-      this._mpLyKey = lyKey;
-      const box = $('.sw-mp-ly');
-      const txt = $('.sw-mp-ly-txt');
-      txt.textContent = ly;
-      txt.style.transform = '';
-      box.classList.toggle('is-empty', !lyrics.length);
-      box.classList.remove('is-fade-l', 'is-fade-r');
-      const over = txt.getBoundingClientRect().width - box.clientWidth;
-      if (lyrics.length && over > 1) {
-        const t0 = lyrics[idx].time;
-        const t1 = idx + 1 < lyrics.length ? lyrics[idx + 1].time : (dur > t0 ? dur : t0 + 8);
-        this._mpLy = { el: txt, box, over, t0, t1 };
-      } else {
-        this._mpLy = null;
-      }
-    }
-    this.mpLyricFrame();
     const key = [s.theme, s.lang, track && track.id, track && track.cover, s.cacheRev, s.playing, loading, s.playMode, canStep, this._mpListOpen].join('\n');
     if (key !== this._mpShown) {
       this._mpShown = key;

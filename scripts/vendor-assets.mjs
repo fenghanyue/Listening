@@ -49,8 +49,8 @@ const SCRIPTS = [
 const ICONS = [
   'add', 'arrow_back', 'arrow_forward', 'arrow_outward', 'close', 'cloud_off', 'content_copy', 'delete', 'download',
   'download_done', 'drag_indicator', 'favorite', 'graphic_eq', 'history', 'ios_share', 'keyboard_arrow_down',
-  'keyboard_arrow_up', 'more_vert', 'music_note', 'open_in_full', 'pause', 'picture_in_picture_alt', 'play_arrow',
-  'playlist_add', 'playlist_play', 'playlist_remove', 'progress_activity', 'queue_music', 'repeat', 'repeat_one',
+  'keyboard_arrow_up', 'list_arrow', 'more_vert', 'music_note', 'open_in_full', 'pause', 'picture_in_picture_alt',
+  'play_arrow', 'playlist_add', 'playlist_remove', 'progress_activity', 'queue_music', 'repeat', 'repeat_one',
   'search', 'settings', 'share', 'shuffle', 'skip_next', 'skip_previous', 'upload', 'volume_up',
 ];
 

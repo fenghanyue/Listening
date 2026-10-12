@@ -1,6 +1,6 @@
 // 迷你播放器（不联网）：电脑上的 Chrome / Edge 点音量那一排的按钮，播放器单独弹成一个浮在所有窗口最上面的小窗
-// （Document Picture-in-Picture）。小窗里的键都管用、跟着主页面的状态走；播放队列弹在播放器上面，每行能上移 / 下移 /
-// 移出；长歌词放不下时按播放进度往左滑；跟着主题换黑白、跟着界面语言换中英文；「回到网页」关掉小窗。startTrack 换成只记一笔的假函数。
+// （Document Picture-in-Picture）。420×100，不放歌词；一排六个键都管用、跟着主页面的状态走；播放队列弹在播放器上面，
+// 每行能上移 / 下移 / 移出；跟着主题换黑白、跟着界面语言换中英文；「回到网页」关掉小窗。startTrack 换成只记一笔的假函数。
 // 注意两点：
 // - 不能用 page.route / ctx.route 拦请求：Playwright 一拦，搬到小窗里的样式表就加载不出来（图标变成一串英文）。
 //   这里只监听、不拦，最后检查没有请求出本机。
@@ -27,21 +27,20 @@ const L = logicDriver(page);
 const T = (id, title, artist, album) => ({ id, songid: String(7000 + id), title, artist, album, source: 'netease', duration: 200, cover: null });
 const TRACKS = [T(1, '第一首', '歌手甲', '专辑一'), T(2, '第二首', '歌手乙', '专辑二'), T(3, '第三首', '歌手丙', ''), T(4, '第四首', '歌手丁', ''),
   ...[5, 6, 7, 8, 9, 10, 11, 12].map(i => T(i, `第${i}首`, '歌手', ''))];
-const LONG = '后来我总算学会了如何去爱，可惜你早已远去消失在人海，后来终于在眼泪中明白';
-const LRC = [{ time: 0, text: '短的一句' }, { time: 20, text: LONG }, { time: 26, text: '下一句' }];
 
-// 每一段从同一份数据开始：曲库 12 首，播放队列前 4 首，暂停在第二首的第 10 秒，有歌词
+// 每一段从同一份数据开始：曲库 12 首，播放队列前 4 首，暂停在第二首的第 10 秒。去补歌词的只记个数（小窗不放歌词，不该去补）
 const seed = (opt = {}) => L(`
   logic.__started = [];
   logic.startTrack = function (t, at) { logic.__started.push(t.id); logic.patch({ currentId: t.id, currentTime: at || 0, playing: true }); };
-  logic.ensureLyricsForCurrent = function () {};
+  logic.__lyricsAsked = 0;
+  logic.ensureLyricsForCurrent = function () { logic.__lyricsAsked++; };
   logic.prefetchTrack = async function () {}; // 真放起来时会预取下一首（要联网）
   logic.patch({
     page: 'search', openMenu: null, rightPanel: 'browse', mediaView: 'cover', toast: null, theme: 'light',
     queue: arg.tracks, playOrder: arg.order || [1, 2, 3, 4], currentId: arg.current ?? 2, currentTime: 10, playing: false, playMode: 0,
-    online: true, offlineOnly: false, lyrics: arg.lrc, lyricsTrackId: arg.current ?? 2, lyricsLoading: false, loadingTrackId: null,
+    online: true, offlineOnly: false, lyrics: [], lyricsTrackId: null, lyricsLoading: false, loadingTrackId: null,
   });
-`, { tracks: TRACKS, lrc: LRC, ...opt });
+`, { tracks: TRACKS, ...opt });
 const wait = (ms) => page.waitForTimeout(ms);
 
 const btn = page.locator('button[aria-label="迷你播放器"]');
@@ -56,13 +55,14 @@ const openMini = async () => {
 const view = (mp) => mp.evaluate(() => {
   const $ = (s) => document.querySelector(s);
   const r = (el) => { const b = el.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height, r: b.right, b: b.bottom }; };
-  const shift = ($('.sw-mp-ly-txt').style.transform.match(/-?[\d.]+/) || ['0'])[0];
+  // 下面那一排键：按顺序记下是哪个键、在哪儿
+  const ctrls = [...document.querySelectorAll('.sw-mp-ctrls > button')].map(b => ({ act: b.getAttribute('data-act'), ...r(b) }));
+  const listIcon = $('[data-act="list"] .ms');
   return {
     theme: document.documentElement.getAttribute('data-app-theme'), bg: getComputedStyle(document.body).backgroundColor,
-    title: $('.sw-mp-t').textContent, artist: $('.sw-mp-a').textContent, cover: $('.sw-mp-cover').textContent,
-    ly: $('.sw-mp-ly-txt').textContent, lyEmpty: $('.sw-mp-ly').classList.contains('is-empty'), shift: Number(shift),
-    fadeL: $('.sw-mp-ly').classList.contains('is-fade-l'), fadeR: $('.sw-mp-ly').classList.contains('is-fade-r'),
-    lyBox: r($('.sw-mp-ly')), lyTxt: r($('.sw-mp-ly-txt')),
+    title: $('.sw-mp-t').textContent, artist: $('.sw-mp-a').textContent, cover: $('.sw-mp-cover').textContent, coverBox: r($('.sw-mp-cover')),
+    lyricLine: !!$('.sw-mp-ly'), metaButtons: document.querySelectorAll('.sw-mp-meta button').length,
+    ctrls, row: r($('.sw-mp-ctrls')), listIcon: [listIcon.textContent, getComputedStyle(listIcon).transform],
     play: [$('[data-act="play"] .ms').textContent, $('[data-act="play"]').getAttribute('aria-label'), $('[data-act="play"]').disabled],
     mode: [$('[data-act="mode"] .ms').textContent, $('[data-act="mode"]').getAttribute('aria-label'), $('[data-act="mode"]').className],
     stepDisabled: [$('[data-act="prev"]').disabled, $('[data-act="next"]').disabled],
@@ -117,34 +117,44 @@ await wait(100);
 st = { gone, open: await L(`return logic.state.miniPlayerOpen;`), cls: await btn.getAttribute('class') };
 check('the button closes it again', st.gone && !st.open && st.cls.includes('is-dim'), st);
 
-// 再开一次，这回让小窗报告自己是平常的 140 高；顺便记下页面要的窗口参数
+// 再开一次，这回让小窗报告自己是平常的 100 高；顺便记下页面要的窗口参数
 await page.evaluate(() => {
   const orig = documentPictureInPicture.requestWindow.bind(documentPictureInPicture);
-  documentPictureInPicture.requestWindow = async (o) => { window.__mpOpts = o; const w = await orig(o); w.innerHeight = 140; return w; };
+  documentPictureInPicture.requestWindow = async (o) => { window.__mpOpts = o; const w = await orig(o); w.innerHeight = 100; return w; };
 });
 mp = await openMini();
-await mp.setViewportSize({ width: 420, height: 140 });
+await mp.setViewportSize({ width: 420, height: 100 });
 await wait(150);
 const opts = await page.evaluate(() => window.__mpOpts);
-check('asks for 420×140, hides Chrome\'s own back-to-tab button, lets Chrome reopen it where the user left it',
-  opts.width === 420 && opts.height === 140 && opts.disallowReturnToOpener === true && !('preferInitialWindowPlacement' in opts), opts);
+check('asks for 420×100, hides Chrome\'s own back-to-tab button, lets Chrome reopen it where the user left it',
+  opts.width === 420 && opts.height === 100 && opts.disallowReturnToOpener === true && !('preferInitialWindowPlacement' in opts), opts);
 let v = await view(mp);
 check('a normal-size window opens without the queue', !v.list && !(await L(`return logic._mpListOpen;`)), v.list);
-check('shows the current song: title, artist — album, cover letter, current lyric line',
-  v.title === '第二首' && v.artist === '歌手乙 — 专辑二' && v.cover === '第' && v.ly === '短的一句' && !v.lyEmpty, v);
+check('shows the current song: title, artist — album, cover letter; no lyric line',
+  v.title === '第二首' && v.artist === '歌手乙 — 专辑二' && v.cover === '第' && !v.lyricLine, v);
+// 一排六个键：播放模式、上一首、播放、下一首、播放队列、回到网页（最右边，歌名那一行里没有键了）；都在同一行，从左往右排
+const acts = v.ctrls.map(c => c.act).join();
+const oneRow = v.ctrls.every(c => Math.abs((c.y + c.h / 2) - (v.ctrls[0].y + v.ctrls[0].h / 2)) <= 0.5)
+  && v.ctrls.every((c, i) => i === 0 || c.x > v.ctrls[i - 1].r);
+check('one row of six buttons: mode, previous, play, next, queue, back to page at the far right',
+  acts === 'mode,prev,play,next,list,back' && oneRow && v.metaButtons === 0 && Math.abs(v.ctrls[5].r - v.row.r) <= 0.5, { acts, oneRow, meta: v.metaButtons });
+check('cover and the right-hand side fit the 100px player: cover 68px, buttons inside', v.coverBox.w === 68 && v.coverBox.h === 68
+  && v.coverBox.y === 16 && v.ctrls.every(c => c.b <= 100 - 16 + 0.5) && v.row.r <= 420, { cover: v.coverBox, row: v.row });
+check('the queue button is a list with an upward arrow (list_arrow flipped upside down)',
+  v.listIcon[0] === 'list_arrow' && v.listIcon[1] === 'matrix(1, 0, 0, -1, 0, 0)', v.listIcon);
 check('icons draw as icons (the icon font loaded in the small window) and none is hidden', v.wideIcons.length === 0 && v.hiddenIcons.length === 0, [...v.wideIcons, ...v.hiddenIcons]);
 check('every button has a screen-reader label', v.unlabeled.length === 0, v.unlabeled);
-check('player is 420×140 at the top-left', v.body.x === 0 && v.body.y === 0 && v.body.w === 420 && v.body.h === 140 && v.player.y === 0 && v.player.h === 140, v.body);
+check('player is 420×100 at the top-left', v.body.x === 0 && v.body.y === 0 && v.body.w === 420 && v.body.h === 100 && v.player.y === 0 && v.player.h === 100, v.body);
 await shot(mp, 'default');
 
 // 窗口被拖大了：内容不跟着变，照旧贴在左上角
 await mp.setViewportSize({ width: 640, height: 300 });
 await wait(150);
 v = await view(mp);
-check('dragging the window bigger does not stretch the player', v.body.x === 0 && v.body.y === 0 && v.body.w === 420 && v.body.h === 140, v.body);
-await mp.setViewportSize({ width: 420, height: 140 });
+check('dragging the window bigger does not stretch the player', v.body.x === 0 && v.body.y === 0 && v.body.w === 420 && v.body.h === 100, v.body);
+await mp.setViewportSize({ width: 420, height: 100 });
 
-// ---- 跟着主页面：主题、没歌、歌词加载中 / 暂无 ----
+// ---- 跟着主页面：主题、语言、没歌 ----
 await L(`logic.patch({ theme: 'dark' });`);
 await wait(150);
 const dark = await view(mp);
@@ -154,7 +164,7 @@ await wait(150);
 const light = await view(mp);
 check('follows the light / dark theme', dark.theme === 'dark' && light.theme === 'light' && dark.bg !== light.bg, [dark.bg, light.bg]);
 
-// 主页面切到英文：小窗里的字（标签页标题、按钮的读屏名字、播放队列的标题和首数、没歌词时那一行）都跟着换，切回来再换回中文。
+// 主页面切到英文：小窗里的字（标签页标题、按钮的读屏名字、播放队列的标题和首数）都跟着换，切回来再换回中文。
 // 弹出播放队列直接调 toggleMiniPlayerList：点按钮会顺带改窗口大小
 const mpText = (mp) => mp.evaluate(() => {
   const $ = (s) => document.querySelector(s);
@@ -164,28 +174,25 @@ const mpText = (mp) => mp.evaluate(() => {
     lang: document.documentElement.lang, title: document.title,
     buttons: ['back', 'mode', 'prev', 'play', 'next', 'list'].map(a => label($(`[data-act="${a}"]`))),
     row: row ? [...row.querySelectorAll('button')].map(label) : [],
-    head: $('.sw-mp-list-t').textContent, count: $('.sw-mp-count').textContent, ly: $('.sw-mp-ly-txt').textContent,
+    head: $('.sw-mp-list-t').textContent, count: $('.sw-mp-count').textContent,
   };
 });
-await L(`logic.setLang('en'); logic.patch({ lyricsTrackId: null, lyricsLoading: false }); logic.toggleMiniPlayerList();`);
+await L(`logic.setLang('en'); logic.toggleMiniPlayerList();`);
 await wait(150);
 const enText = await mpText(mp);
 await shot(mp, 'english');
 await L(`logic.toggleMiniPlayerList(); logic.setLang('zh');`);
 await wait(150);
 const zhText = await mpText(mp);
-check('switching the page to English switches the small window too (title, button labels, queue, lyric line)',
+check('switching the page to English switches the small window too (title, button labels, queue)',
   JSON.stringify(enText) === JSON.stringify({ lang: 'en', title: 'Listening', buttons: ['Back to page', 'Repeat all', 'Previous', 'Play', 'Next', 'Queue'],
-    row: ['Move up', 'Move down', 'Remove from queue'], head: 'Queue', count: '4 songs', ly: 'No lyrics' }), enText);
+    row: ['Move up', 'Move down', 'Remove from queue'], head: 'Queue', count: '4 songs' }), enText);
 check('…and back to Chinese', zhText.lang === 'zh-CN' && zhText.title === '听音乐'
-  && zhText.buttons.join() === '回到网页,列表循环,上一首,播放,下一首,播放队列' && zhText.ly === '暂无歌词', zhText);
-await L(`logic.patch({ lyricsTrackId: null, lyricsLoading: true });`);
+  && zhText.buttons.join() === '回到网页,列表循环,上一首,播放,下一首,播放队列', zhText);
+// 小窗不放歌词：开着小窗、暂停着换了当前曲目，不去补歌词（只有宽屏歌词栏会去补，这里 1440 宽没有歌词栏）
+await L(`logic.patch({ currentId: 3, playing: false });`);
 await wait(100);
-const lyLoading = (await view(mp)).ly;
-await L(`logic.patch({ lyricsLoading: false });`);
-await wait(100);
-v = await view(mp);
-check('lyric line says 歌词加载中… / 暂无歌词 when there are none', lyLoading === '歌词加载中…' && v.ly === '暂无歌词' && v.lyEmpty, [lyLoading, v.ly]);
+check('with the small window open, changing songs while paused does not go and fetch lyrics', (await L(`return logic.__lyricsAsked;`)) === 0);
 await L(`logic.patch({ currentId: null, playOrder: [] });`);
 await wait(100);
 v = await view(mp);
@@ -234,49 +241,19 @@ await wait(150);
 st = await L(`return { audio: document.getElementById('player-audio').currentTime, state: logic.state.currentTime };`);
 check('clicking the progress line seeks (a quarter of the way → 7.5s of 30s)', Math.abs(st.audio - 7.5) < 0.3 && Math.abs(st.state - 7.5) < 0.3, st);
 
-// ---- 长歌词：放不下就在唱这句的时间里往左滑（20s 开始、26s 下一句：20.9s 前停在句首，24.8s 滑到句尾） ----
-const lyricAt = async (t, name) => {
-  await L(`logic.patch({ currentTime: arg, playing: false });`, t);
-  await wait(120);
-  if (name) await shot(mp, name);
-  return view(mp);
-};
-const shortLine = await lyricAt(10);
-const start = await lyricAt(20, 'lyric-1-start');
-const over = start.lyTxt.w - start.lyBox.w;
-const middle = await lyricAt(22.85, 'lyric-2-middle');
-const end = await lyricAt(24.8, 'lyric-3-end');
-const next = await lyricAt(26);
-check('a short lyric line stays put, no fading edges', shortLine.ly === '短的一句' && shortLine.shift === 0 && !shortLine.fadeL && !shortLine.fadeR, shortLine);
-check('a long line keeps all its words (no …) and starts at its beginning, right edge fading',
-  start.ly === LONG && over > 100 && start.shift === 0 && !start.fadeL && start.fadeR, { over, shift: start.shift });
-check('…halfway through the line it has slid halfway, both edges fading', Math.abs(middle.shift + over / 2) <= 2 && middle.fadeL && middle.fadeR, { shift: middle.shift, over });
-check('…by 80% of the line its end is showing, left edge fading', Math.abs(end.shift + over) <= 1 && Math.abs(end.lyTxt.r - end.lyBox.r) <= 1 && end.fadeL && !end.fadeR, { shift: end.shift, txtR: end.lyTxt.r, boxR: end.lyBox.r });
-check('the next (short) line starts fresh', next.ly === '下一句' && next.shift === 0 && !next.fadeL && !next.fadeR, next);
-// 在放的时候按 audio 的进度走，每帧更新；暂停就停下
-await page.evaluate(() => { document.getElementById('player-audio').currentTime = 22.85; });
-await L(`logic.patch({ currentTime: 22.85, playing: true });`);
-await wait(150);
-const playingView = await view(mp);
-const looping = await L(`return !!logic._mpLyRaf;`);
-await L(`logic.patch({ playing: false });`);
-await wait(150);
-check('while playing it follows the audio every frame, and stops when paused',
-  Math.abs(playingView.shift + over / 2) <= 2 && looping && !(await L(`return !!logic._mpLyRaf;`)), { shift: playingView.shift, looping });
-
 // ---- 播放队列：弹在整个播放器上面，每行上移 / 下移 / 移出，点一行放那首 ----
 await seed();
 await wait(100);
 await mp.click('[data-act="list"]');
 await wait(120);
 v = await view(mp);
-check('opening the queue does not push the player out while the window is still small', v.list && v.listBtnOn && v.listBox.h === 0 && v.player.y === 0 && v.player.b === 140, { list: v.listBox, player: v.player });
-await mp.setViewportSize({ width: 420, height: 460 }); // 真窗口里 fitMiniPlayer 会把窗口加高到 460
+check('opening the queue does not push the player out while the window is still small', v.list && v.listBtnOn && v.listBox.h === 0 && v.player.y === 0 && v.player.b === 100, { list: v.listBox, player: v.player });
+await mp.setViewportSize({ width: 420, height: 420 }); // 真窗口里 fitMiniPlayer 会把窗口加高到 420
 await wait(150);
 v = await view(mp);
 await shot(mp, 'queue');
-check('once the window is 460 tall: queue on top, player at the bottom',
-  v.listBox.y === 0 && v.listBox.h === 320 && v.player.y === 320 && v.player.b === 460, { list: v.listBox, player: v.player });
+check('once the window is 420 tall: queue on top (320px, as tall as before), player at the bottom',
+  v.listBox.y === 0 && v.listBox.h === 320 && v.player.y === 320 && v.player.b === 420, { list: v.listBox, player: v.player });
 check('queue lists the play order with the current song marked',
   v.count === '4 首' && JSON.stringify(v.rows.map(r => r.id)) === '[1,2,3,4]' && v.rows.filter(r => r.cur).map(r => r.id).join() === '2'
   && v.rows[0].up && !v.rows[0].down && v.rows[3].down && !v.rows[3].up, v.rows);
@@ -298,13 +275,13 @@ check('clicking a row plays that song', JSON.stringify(await L(`return logic.__s
 await mp.click('[data-act="list"]');
 await wait(100);
 check('the queue button folds it away again', !(await view(mp)).list && !(await L(`return logic._mpListOpen;`)));
-await mp.setViewportSize({ width: 420, height: 140 });
+await mp.setViewportSize({ width: 420, height: 100 });
 
 // 长队列：窗口加高以后把正在放的那首滚到队列中间
 await seed({ order: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], current: 7 });
 await wait(100);
 await mp.click('[data-act="list"]');
-await mp.setViewportSize({ width: 420, height: 460 });
+await mp.setViewportSize({ width: 420, height: 420 });
 await wait(200);
 const centred = await mp.evaluate(() => {
   const lr = document.querySelector('.sw-mp-list').getBoundingClientRect();
@@ -314,7 +291,7 @@ const centred = await mp.evaluate(() => {
 check('in a long queue the current song is scrolled to the middle (only the queue scrolls)',
   Math.abs(centred.row - centred.list) <= 24 && centred.scrolled > 0 && centred.bodyScroll === 0, centred);
 await mp.click('[data-act="list"]');
-await mp.setViewportSize({ width: 420, height: 140 });
+await mp.setViewportSize({ width: 420, height: 100 });
 
 // ---- 回到网页：关掉小窗 ----
 await mp.click('[data-act="back"]');
