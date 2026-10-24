@@ -2218,17 +2218,22 @@ const mediaSessionBridge = {
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
   },
 
-  // 锁屏进度条。系统会按播放状态自己往前推，只需要在播放 / 暂停 / 拖动 / 换歌时报一次；时长未知时不报
-  setPosition(duration, position) {
-    if (!isFinite(duration) || duration <= 0) return;
-    const pos = Math.min(Math.max(0, position || 0), duration);
+  // 通知栏 / 锁屏 / 蓝牙车机共用的进度。0 倍速表示加载、缓冲或暂停，不能继续向前推算；
+  // 新曲目时长未知时也要清掉上一首的时长和位置。原生插件的对应修正在 mobile/scripts/patch-media-session.mjs。
+  setPosition(duration, position, playbackRate = 1) {
+    const dur = Number.isFinite(duration) && duration > 0 ? duration : 0;
+    const pos = Math.min(Math.max(0, Number.isFinite(position) ? position : 0), dur);
+    const rate = Number.isFinite(playbackRate) && playbackRate >= 0 ? playbackRate : 1;
     if (this.native) {
-      nativeCall('MediaSession', 'setPositionState', { duration, position: pos, playbackRate: 1 }).catch(() => {});
+      nativeCall('MediaSession', 'setPositionState', { duration: dur, position: pos, playbackRate: rate }).catch(() => {});
       return;
     }
     try {
-      if ('mediaSession' in navigator && navigator.mediaSession.setPositionState) {
-        navigator.mediaSession.setPositionState({ duration, position: pos, playbackRate: 1 });
+      if ('mediaSession' in navigator) {
+        // 浏览器不接受 0 倍速；播放状态仍由 play / pause 事件报告，保留后台自然切歌的行为。
+        if (navigator.mediaSession.setPositionState) {
+          navigator.mediaSession.setPositionState(dur ? { duration: dur, position: pos, playbackRate: rate || 1 } : undefined);
+        }
       }
     } catch (e) { /* 参数不合法或浏览器不支持，不影响播放 */ }
   },
@@ -2343,9 +2348,15 @@ class Component extends DCLogic {
       this._audio.removeEventListener('timeupdate', this._onTimeUpdate);
       this._audio.removeEventListener('ended', this._onEnded);
       this._audio.removeEventListener('play', this._onPlay);
+      this._audio.removeEventListener('playing', this._onPlaying);
+      this._audio.removeEventListener('waiting', this._onWaiting);
       this._audio.removeEventListener('pause', this._onPause);
+      this._audio.removeEventListener('seeking', this._onSeeking);
+      this._audio.removeEventListener('seeked', this._onSeeked);
+      this._audio.removeEventListener('ratechange', this._onRateChange);
       this._audio.removeEventListener('error', this._onError);
       this._audio.removeEventListener('loadedmetadata', this._onMeta);
+      this._audio.removeEventListener('durationchange', this._onMeta);
     }
     this.stopHLS();
     if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
@@ -2882,6 +2893,23 @@ class Component extends DCLogic {
     if (h && h !== this.state.lyricsViewportH) this.patch({ lyricsViewportH: h });
   }
 
+  // timeupdate 在前台、后台都能带来真实音频位置，最多每秒校准一次；关键事件立即同步。
+  // 不用独立定时器推算位置。换歌的异步缓存 / 详情查询期间，不能把旧 audio 的位置配到新歌名上。
+  syncMediaSessionPosition(force = false) {
+    const a = this._audio;
+    if (!a) return;
+    const now = performance.now();
+    if (!force && this._mediaPositionReportedAt != null && now - this._mediaPositionReportedAt < 1000) return;
+    this._mediaPositionReportedAt = now;
+    const pending = this._mediaPositionPending;
+    const advancing = !pending && !this._mediaBuffering && !a.paused && !a.ended && !a.seeking;
+    mediaSessionBridge.setPosition(
+      pending ? pending.duration : a.duration,
+      pending ? pending.position : a.currentTime,
+      advancing ? a.playbackRate : 0
+    );
+  }
+
   initAudio() {
     if (this._audio) return;
     const el = document.getElementById('player-audio');
@@ -2894,6 +2922,7 @@ class Component extends DCLogic {
       if (!isFinite(t)) return;
       // 拖动进度条圆球时不要让这里的真实播放进度覆盖拖动中的预览位置
       if (!this.state.seeking) this.setState({ currentTime: t });
+      this.syncMediaSessionPosition();
 
       // 真正有播放进度了：这次加载没卡死，清掉守护计时器/加载中状态/失败计数。用 trackId 判断
       // 而不是"清了就清"，防止一个已经过期（曲目已被切走）的旧计时器误清了新曲目正在等待的加载状态
@@ -2924,12 +2953,18 @@ class Component extends DCLogic {
         }
       }
     };
-    this._onEnded = () => this.handleTrackEnd();
+    this._onEnded = () => { this.syncMediaSessionPosition(true); this.handleTrackEnd(); };
     this._onPlay = () => {
       this.setState({ playing: true });
       mediaSessionBridge.setPlaybackState('playing');
-      mediaSessionBridge.setPosition(a.duration, a.currentTime);
+      this._mediaBuffering = a.readyState < 3;
+      this.syncMediaSessionPosition(true);
     };
+    this._onPlaying = () => { this._mediaBuffering = false; this.syncMediaSessionPosition(true); };
+    this._onWaiting = () => { this._mediaBuffering = true; this.syncMediaSessionPosition(true); };
+    this._onSeeking = () => this.syncMediaSessionPosition(true);
+    this._onSeeked = () => { this._mediaBuffering = a.readyState < 3; this.syncMediaSessionPosition(true); };
+    this._onRateChange = () => this.syncMediaSessionPosition(true);
     this._onPause = () => {
       // 自然播完时浏览器会先触发一次 pause、再触发 ended——这一步的 paused=true 只是流程自带的步骤，
       // 不是真的暂停，此时 a.ended 已经是 true。把这种“假暂停”同步成 Media Session 的 paused 状态，
@@ -2939,15 +2974,18 @@ class Component extends DCLogic {
       if (a.ended) return;
       this.setState({ playing: false });
       mediaSessionBridge.setPlaybackState('paused');
-      mediaSessionBridge.setPosition(a.duration, a.currentTime);
+      this.syncMediaSessionPosition(true);
     };
     this._onError = () => {
       console.error('audio error:', a.error);
       this.handlePlaybackFailure('audio error: ' + (a.error ? a.error.code : 'unknown'), this._audioErrorToken);
     };
     this._onMeta = () => {
+      // 旧音频的 metadata 可能在新歌查询详情时才到达；只接受当前加载尝试实际装入的音源。
+      if (this._mediaPositionPending && this._mediaSourceToken !== this._loadToken) return;
       const dur = a.duration;
-      if (!isFinite(dur) || dur <= 0) return;
+      if (!isFinite(dur) || dur <= 0) { this.syncMediaSessionPosition(true); return; }
+      this._mediaPositionPending = null;
       const track = this.state.queue.find(t => t.id === this.state.currentId);
       // 命中本地缓存播放，但这次加载到的时长比之前记录的完整时长短很多——大概率是这首歌的缓存
       // 被一次不完整的后台下载静默覆盖了（截断的 blob），而不是这首歌真的变短了。删掉这份坏缓存，
@@ -2973,15 +3011,21 @@ class Component extends DCLogic {
       });
       // 真实时长补写进缓存元数据：离线列表里显示得出时长，也是"缓存被截断"检测的基准
       if (track && this._playingFromCache) this.syncCacheMeta(track);
-      mediaSessionBridge.setPosition(dur, a.currentTime);
+      this.syncMediaSessionPosition(true);
     };
 
     a.addEventListener('timeupdate', this._onTimeUpdate);
     a.addEventListener('ended', this._onEnded);
     a.addEventListener('play', this._onPlay);
+    a.addEventListener('playing', this._onPlaying);
+    a.addEventListener('waiting', this._onWaiting);
     a.addEventListener('pause', this._onPause);
+    a.addEventListener('seeking', this._onSeeking);
+    a.addEventListener('seeked', this._onSeeked);
+    a.addEventListener('ratechange', this._onRateChange);
     a.addEventListener('error', this._onError);
     a.addEventListener('loadedmetadata', this._onMeta);
+    a.addEventListener('durationchange', this._onMeta);
 
     // 手机端后台切歌失败的根因：不注册 Media Session，系统不知道这个标签页在持续播放媒体，
     // 后台时会限流/拦截 ended 事件里异步发起的下一首 play()。这里把播放控制接到已有方法上，
@@ -4226,6 +4270,11 @@ class Component extends DCLogic {
     const a = this._audio;
     if (!a) return;
 
+    this._mediaPositionPending = { duration: track.duration, position: resumeAt };
+    this._mediaSourceToken = null;
+    this._mediaBuffering = true;
+    this.syncMediaSessionPosition(true);
+
     // 如果已有播放链接就直接播放，否则加载详情
     const go = (onNeedDetails) => {
       // _onError 是常驻监听器，不像这里其他回调能直接闭包捕获 myToken，靠这个字段告诉它
@@ -4255,6 +4304,7 @@ class Component extends DCLogic {
         if (blob) {
           diagLog('音源', { 走: '本地缓存' });
           this._playingFromCache = true;
+          this._mediaSourceToken = myToken;
           this._objectUrl = URL.createObjectURL(blob);
           a.src = this._objectUrl;
           startPlayback();
@@ -4283,6 +4333,7 @@ class Component extends DCLogic {
         // onNeedDetails 只在第一次 go() 时传：带着它走到这里 = 身上本来就有链接；不带 = 刚现场要到的
         diagLog('音源', { 走: onNeedDetails ? '已有链接' : '新链接' });
         this._playingFromCache = false;
+        this._mediaSourceToken = myToken;
         // 未命中且是 HLS 曲目：后台顺手解析同一首歌的 progressive mp3 存起来，下次就能命中本地 blob。
         // 纯后台工作，失败/没有 progressive 都不影响这次的 HLS 播放
         const cacheHlsMp3 = () => {
@@ -4508,7 +4559,8 @@ class Component extends DCLogic {
     const next = s.queue.find(t => t.id === nextId);
     if (next) {
       mediaSessionBridge.setMetadata(next);
-      mediaSessionBridge.setPosition(next.duration, 0);
+      this._mediaPositionPending = { duration: next.duration, position: 0 };
+      this.syncMediaSessionPosition(true);
     }
   }
 
@@ -4521,6 +4573,11 @@ class Component extends DCLogic {
     this._loadWatchdogTrackId = null;
     this._prefetchedForId = null;
     this._shufflePrefetchedNextId = null;
+    this._mediaPositionPending = { duration: 0, position: 0 };
+    this._mediaSourceToken = null;
+    this._mediaBuffering = true;
+    mediaSessionBridge.setPlaybackState('paused');
+    this.syncMediaSessionPosition(true);
     this.stopHLS();
     const a = this._audio;
     if (a) { a.pause(); a.removeAttribute('src'); a.load(); }

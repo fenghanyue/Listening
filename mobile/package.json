@@ -5,7 +5,7 @@
   "description": "听音乐 Android 壳（Capacitor）。页面本身在 ../examples，打包前由 scripts/build-www.mjs 拷进 www/",
   "scripts": {
     "build:www": "node scripts/build-www.mjs",
-    "sync": "npm run build:www && cap sync android",
+    "sync": "node scripts/patch-media-session.mjs && npm run build:www && cap sync android",
     "apk:debug": "npm run sync && cd android && ./gradlew assembleDebug",
     "apk:release": "npm run sync && cd android && ./gradlew assembleRelease"
   },
