@@ -698,6 +698,15 @@ if ('serviceWorker' in navigator) {
               <button class="sw-set-row" onclick="{{ H.clearAudioCache }}"><span class="sw-row-t">{{ L.clearCache }}</span><span class="ms">delete</span></button>
             </div>
           </div>
+          <sc-if value="{{ v.showCarLyricsSettings }}">
+            <div class="sw-sec">
+              <span class="sw-label">{{ L.carBluetooth }}</span>
+              <button class="sw-set-row" onclick="{{ H.toggleCarLyrics }}" role="switch" aria-label="{{ L.carBluetoothLyrics }}" aria-checked="{{ v.carBluetoothLyrics }}">
+                <span><span class="sw-row-t">{{ L.carBluetoothLyrics }}</span><span class="sw-hint">{{ L.carBluetoothLyricsHint }}</span></span>
+                <span class="{{ v.carLyricsToggleClass }}"></span>
+              </button>
+            </div>
+          </sc-if>
           <div class="sw-sec">
             <span class="sw-label">{{ L.appearance }}</span>
             <div class="sw-seg">
@@ -1062,6 +1071,9 @@ const STRINGS = {
   offlineOnly: ['只播已缓存的歌', 'Play cached songs only'],
   offlineOnlyHint: ['断网时自动按这个来；联网时打开可以省流量', 'Always on when offline. Turn it on when online to save data.'],
   clearCache: ['清空缓存', 'Clear cache'],
+  carBluetooth: ['车载蓝牙', 'Car Bluetooth'],
+  carBluetoothLyrics: ['车载蓝牙歌词', 'Car Bluetooth lyrics'],
+  carBluetoothLyricsHint: ['逐句显示到车机，通知栏和锁屏标题也会显示歌词。效果取决于车机支持。', 'Show each lyric line on your car display, notifications and lock screen. Requires a compatible car stereo.'],
   appearance: ['外观', 'Appearance'],
   themeLight: ['白', 'Light'],
   themeDark: ['黑', 'Dark'],
@@ -1428,6 +1440,11 @@ function loadOfflineOnly() {
 
 function saveOfflineOnly(on) {
   try { localStorage.setItem(OFFLINE_ONLY_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* 存不下就下次回到关闭 */ }
+}
+
+const CAR_LYRICS_STORAGE_KEY = 'listening-car-bluetooth-lyrics-v1';
+function loadCarLyrics() {
+  try { return localStorage.getItem(CAR_LYRICS_STORAGE_KEY) === '1'; } catch (e) { return false; }
 }
 
 // 缓存 key 得用音源自己的真实曲目 id（哪个字段算"真实 id"跟 fetchQQDetails 的取值优先级保持一致），
@@ -2185,9 +2202,16 @@ function appIconDataUrl() {
 const mediaSessionBridge = {
   native: IS_NATIVE && nativeHas('MediaSession'),
   _metaToken: 0,
+  _nativeTrack: null,
+  _nativeTitle: '',
 
   setMetadata(track) {
-    if (this.native) { this._setNativeMetadata(track); return; }
+    if (this.native) {
+      this._nativeTrack = track;
+      this._nativeTitle = track.title || '';
+      this._setNativeMetadata(track);
+      return;
+    }
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || '',
@@ -2200,17 +2224,27 @@ const mediaSessionBridge = {
   // 标题先换（封面可能要等网络），封面拿到后再补一次；切歌快的时候，晚到的旧封面靠 _metaToken 丢掉
   async _setNativeMetadata(track) {
     const token = ++this._metaToken;
-    const base = { title: track.title || '', artist: track.artist || '', album: track.album || '' };
+    const base = { artist: track.artist || '', album: track.album || '' };
     const coverKey = httpsCover(track.cover);
     const coverIsLocal = !!coverKey && (coverObjectUrls.has(coverKey) || nativeArtworkCache.has(coverKey));
     const first = (coverIsLocal && await artworkDataUrl(track.cover)) || await appIconDataUrl();
     if (token !== this._metaToken) return;
-    nativeCall('MediaSession', 'setMetadata', { ...base, artwork: first ? [{ src: first }] : [] }).catch(() => {});
+    nativeCall('MediaSession', 'setMetadata', { ...base, title: this._nativeTitle, artwork: first ? [{ src: first }] : [] }).catch(() => {});
     if (coverIsLocal || !track.cover) return;
     const cover = await artworkDataUrl(track.cover);
     if (cover && token === this._metaToken) {
-      nativeCall('MediaSession', 'setMetadata', { ...base, artwork: [{ src: cover }] }).catch(() => {});
+      nativeCall('MediaSession', 'setMetadata', { ...base, title: this._nativeTitle, artwork: [{ src: cover }] }).catch(() => {});
     }
+  },
+
+  // 借用蓝牙标题字段逐句显示歌词。只改标题，复用原生已有封面，避免每句都下载 / 解码图片。
+  // 晚到的封面也读取 _nativeTitle，不会把正在显示的歌词改回歌名。
+  setLyric(track, text) {
+    if (!this.native || !this._nativeTrack || (track && track.id !== this._nativeTrack.id)) return;
+    const title = text || this._nativeTrack.title || '';
+    if (title === this._nativeTitle) return;
+    this._nativeTitle = title;
+    nativeCall('MediaSession', 'setMetadata', { title }).catch(() => {});
   },
 
   setPlaybackState(state) {
@@ -2311,6 +2345,7 @@ class Component extends DCLogic {
       // batchCache 是「缓存全部」的进度 { pid, done, total, failed }；localSearch 标记当前搜索结果来自本地曲库
       online: navigator.onLine !== false,
       offlineOnly: loadOfflineOnly(),
+      carBluetoothLyrics: mediaSessionBridge.native && loadCarLyrics(),
       cacheCapMB: loadCacheCapMB(),
       cacheRev: 0, cachedCount: 0, cachedBytes: 0,
       batchCache: null,
@@ -2470,12 +2505,12 @@ class Component extends DCLogic {
     const s = this.state;
     // 宽屏歌词栏一直摆着歌词：刚打开 App、或者暂停着换了当前曲目时还没放过，歌词得自己去补
     // （在放的时候 loadAndPlay 会带上歌词，不用管）
-    if (s.lyricsCol && !s.playing && s.currentId != null && s.currentId !== this._lyricsShownFor) {
+    if ((s.lyricsCol || (mediaSessionBridge.native && s.carBluetoothLyrics)) && !s.playing && s.currentId != null && s.currentId !== this._lyricsShownFor) {
       this._lyricsShownFor = s.currentId;
       this.ensureLyricsForCurrent();
     }
     this.syncMiniPlayer();
-    if (IS_NATIVE) this.syncWidget();
+    if (IS_NATIVE) { this.syncWidget(); this.syncCarLyrics(); }
   }
 
   // ==== 迷你播放器：Document Picture-in-Picture 开一个浮在所有窗口最上面的小窗口（只有电脑上的 Chrome / Edge 有） ====
@@ -2893,11 +2928,37 @@ class Component extends DCLogic {
     if (h && h !== this.state.lyricsViewportH) this.patch({ lyricsViewportH: h });
   }
 
-  // timeupdate 在前台、后台都能带来真实音频位置，最多每秒校准一次；关键事件立即同步。
+  toggleCarLyrics() {
+    if (!mediaSessionBridge.native) return;
+    const next = !this.state.carBluetoothLyrics;
+    try { localStorage.setItem(CAR_LYRICS_STORAGE_KEY, next ? '1' : '0'); } catch (e) { /* 下次打开仍用默认关闭 */ }
+    this.patch({ carBluetoothLyrics: next });
+    if (next) this.ensureLyricsForCurrent();
+  }
+
+  syncCarLyrics() {
+    if (!mediaSessionBridge.native) return;
+    const s = this.state;
+    const track = s.queue.find(t => t.id === s.currentId);
+    let text = '';
+    if (track && s.carBluetoothLyrics && s.lyricsTrackId === track.id && !this._mediaPositionPending) {
+      const a = this._audio;
+      // 使用音频的真实位置，拖动中的界面预览不能提前把车机歌词跳到尚未播放的位置。
+      const time = a && this._mediaSourceToken != null && this._mediaSourceToken === this._loadToken ? a.currentTime : s.currentTime;
+      for (const line of s.lyrics) {
+        if (line.time > time) break;
+        text = line.text;
+      }
+    }
+    mediaSessionBridge.setLyric(track, text);
+  }
+
+  // 用 timeupdate 带来的真实音频位置，最多每秒校准一次；关键事件立即同步。
   // 不用独立定时器推算位置。换歌的异步缓存 / 详情查询期间，不能把旧 audio 的位置配到新歌名上。
   syncMediaSessionPosition(force = false) {
     const a = this._audio;
     if (!a) return;
+    this.syncCarLyrics();
     const now = performance.now();
     if (!force && this._mediaPositionReportedAt != null && now - this._mediaPositionReportedAt < 1000) return;
     this._mediaPositionReportedAt = now;
@@ -4903,6 +4964,9 @@ class Component extends DCLogic {
         capChoicesRender,
         offlineOnly: s.offlineOnly,
         offlineToggleClass: 'sw-toggle' + (s.offlineOnly ? ' is-on' : ''),
+        showCarLyricsSettings: mediaSessionBridge.native,
+        carBluetoothLyrics: s.carBluetoothLyrics,
+        carLyricsToggleClass: 'sw-toggle' + (s.carBluetoothLyrics ? ' is-on' : ''),
         isLightTheme: s.theme === 'light', isDarkTheme: s.theme === 'dark',
         themeLightClass: s.theme === 'light' ? 'is-on' : '',
         themeDarkClass: s.theme === 'dark' ? 'is-on' : '',
@@ -4920,6 +4984,7 @@ class Component extends DCLogic {
         setLangZh: () => this.setLang('zh'),
         setLangEn: () => this.setLang('en'),
         clearAudioCache: () => this.clearAudioCache(),
+        toggleCarLyrics: () => this.toggleCarLyrics(),
         copyDiagLog: () => this.copyDiagLog(),
         doSearch: () => this.doSearch(),
         setSearchQuery: (e) => this.setSearchQuery(e),
