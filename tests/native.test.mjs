@@ -164,10 +164,13 @@ check('back leaves the playlist view for the playlist list', (await L(`return [l
 await back(); await page.waitForTimeout(100);
 check('back on the playlist list returns to search', (await L(`return logic.state.page;`)) === 'search' && (await calls('App', 'minimizeApp')).length === 0);
 await back(); await page.waitForTimeout(100);
-check('back on the search page minimizes the app (does not exit)', (await calls('App', 'minimizeApp')).length === 1);
+check('back leaves active search for the recommendation home before minimizing',
+  (await L(`return !logic.state.searchMode && !logic.state.hasSearched && !logic.state.searchFocused;`)) && (await calls('App', 'minimizeApp')).length === 0);
+await back(); await page.waitForTimeout(100);
+check('back on the recommendation home minimizes the app (does not exit)', (await calls('App', 'minimizeApp')).length === 1);
 
 // --- 收起键盘 ---
-// MainActivity 确认键盘收起后派发 listening:ime-hidden：页面让搜索框失焦，「最近搜索」跟着收起
+// MainActivity 确认键盘收起后派发 listening:ime-hidden：让输入框失焦，保留搜索状态、音源和历史。
 await L(`logic.setPage('search'); logic.patch({ hasSearched: false, searchQuery: '', appliedQuery: '' });`);
 await page.waitForTimeout(150);
 await page.tap('.dc-search-input');
@@ -177,8 +180,9 @@ const imeOpen = await searchUi();
 await page.evaluate(() => window.dispatchEvent(new Event('listening:ime-hidden')));
 await page.waitForTimeout(300);
 const imeHidden = await searchUi();
-check('keyboard hidden (event from MainActivity) unfocuses the search box and hides recent searches',
-  imeOpen.focused && imeOpen.recents > 0 && !imeHidden.focused && imeHidden.recents === 0, { imeOpen, imeHidden });
+check('keyboard hidden unfocuses the input while keeping search mode, sources and recent searches',
+  imeOpen.focused && imeOpen.recents > 0 && !imeHidden.focused && imeHidden.recents === imeOpen.recents
+  && (await L(`return logic.state.searchMode && logic.renderVals().v.isSearchMode;`)), { imeOpen, imeHidden });
 
 // --- 导出 / 分享 ---
 await waitFor(`return logic.state.exportReady === true;`, 90000);

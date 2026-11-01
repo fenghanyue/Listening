@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BASE, OUT, launchBrowser, createChecker } from './lib.mjs';
+import { BASE, OUT, launchBrowser, createChecker, seedRecommendationCache } from './lib.mjs';
 
 const { check, finish } = createChecker();
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -130,6 +130,7 @@ for (const [label, opts] of [
   ['desktop', { viewport: { width: 1440, height: 900 } }],
 ]) {
   const ctx = await browser.newContext({ ...opts, serviceWorkers: 'block' });
+  await seedRecommendationCache(ctx);
   const pg = await ctx.newPage();
   const errors = [];
   pg.on('pageerror', e => errors.push(String(e)));

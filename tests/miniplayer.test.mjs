@@ -5,11 +5,12 @@
 // - 不能用 page.route / ctx.route 拦请求：Playwright 一拦，搬到小窗里的样式表就加载不出来（图标变成一串英文）。
 //   这里只监听、不拦，最后检查没有请求出本机。
 // - 没界面的 Chromium 不管小窗要多大，开出来跟主窗口一样大：用 setViewportSize 当作窗口被改了大小
-import { OUT, BASE, launchBrowser, logicDriver, createChecker } from './lib.mjs';
+import { OUT, BASE, launchBrowser, logicDriver, createChecker, seedRecommendationCache } from './lib.mjs';
 
 const { check, finish } = createChecker();
 const browser = await launchBrowser();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
+await seedRecommendationCache(ctx);
 const external = [];
 ctx.on('request', req => {
   const u = new URL(req.url());

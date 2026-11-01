@@ -19,7 +19,7 @@ import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
  * @param {number} [options.limit=10] - 每源取多少首
  * @returns {Promise<Array>} 按源交错排列的 track 数组
  */
-export async function searchAll({ keyword, sources = ['netease', 'qq'], limit = 10 } = {}) {
+export async function searchAll({ keyword, sources = ['netease', 'qq'], limit = 10, signal } = {}) {
   if (!keyword) throw new Error('keyword is required');
 
   const tasks = [];
@@ -27,13 +27,13 @@ export async function searchAll({ keyword, sources = ['netease', 'qq'], limit = 
   // 网易云
   if (sources.includes('netease')) {
     tasks.push(
-      searchNetease(keyword, 1, limit).then(tracks => ({ source: 'netease', tracks }))
+      searchNetease(keyword, 1, limit, {signal}).then(tracks => ({ source: 'netease', tracks }))
     );
   }
   // QQ
   if (sources.includes('qq')) {
     tasks.push(
-      searchQQ(keyword, limit).then(tracks => ({ source: 'qq', tracks }))
+      searchQQ(keyword, limit, {signal}).then(tracks => ({ source: 'qq', tracks }))
     );
   }
   // SoundCloud：不在默认源里，只有调用方显式点名才走到这里
@@ -110,3 +110,4 @@ export { searchNetease, fetchNeteaseDetails, fetchNeteasePlaylist, resolveNeteas
 export { searchQQ, fetchQQDetails } from './qq.js';
 export { searchSoundCloud, fetchSoundCloudDetails, resolveSoundCloudCacheUrl } from './soundcloud.js';
 export { officialSongUrl, shareText } from './share.js';
+export { RecommendationEngine, RECOMMENDATION_KEY, AI_CONFIG_KEY, normalizeAIConfig, validateAIConfig, aiEndpoint, aiConfigTag, buildAIRequest, parseAIResponse, aiHTTPError, recommendationKey, trackIdentity } from './recommendations.mjs';

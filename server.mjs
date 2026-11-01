@@ -19,6 +19,7 @@ import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
+import { handleAIRecommendations } from './server/ai-recommendations.mjs';
 
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'examples');
 const PORT = parseInt(process.env.PORT, 10) || 4444;
@@ -43,6 +44,11 @@ const server = http.createServer(async (req, res) => {
   // 跨域读自定义响应头得显式放行：APK 里页面来源是 https://localhost，调这里的 /proxy 属于跨域，
   // 不放行的话 resolveNeteaseShortLink 读到的 X-Proxy-Location 永远是 null，短链导入直接失败
   res.setHeader('Access-Control-Expose-Headers', 'X-Proxy-Location');
+
+  if (new URL(req.url, 'http://localhost').pathname === '/recommendations/ai') {
+    await handleAIRecommendations(req, res);
+    return;
+  }
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);

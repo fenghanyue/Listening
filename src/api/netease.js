@@ -71,18 +71,18 @@ function mapMetingItem(it, idx, keyword) {
  * @param {number} [num=10]
  * @returns {Promise<Array>} track 对象数组
  */
-export async function searchNetease(kw, page = 1, num = 10) {
+export async function searchNetease(kw, page = 1, num = 10, {signal} = {}) {
   const requestLimit = Math.max(1, page) * Math.max(1, num);
   const url = `${BASE_URL}?type=search&id=${encodeURIComponent(kw)}&limit=${encodeURIComponent(requestLimit)}&server=netease`;
   const results = [];
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {signal});
     const json = await res.json();
     if (!Array.isArray(json)) return results;
     json.forEach((it, idx) => results.push(mapMetingItem(it, idx, kw)));
   } catch (e) {
-    console.error('netease search error:', e);
+    if (!signal?.aborted) console.error('netease search error:', e);
   }
   return results;
 }
@@ -114,19 +114,19 @@ export async function resolveNeteaseShortLink(shortUrl) {
  * @param {string|number} playlistId - 歌单数字 id
  * @returns {Promise<Array>} track 对象数组
  */
-export async function fetchNeteasePlaylist(playlistId) {
+export async function fetchNeteasePlaylist(playlistId, {signal} = {}) {
   const id = String(playlistId || '').trim();
   const results = [];
   if (!/^\d+$/.test(id)) return results;
 
   const url = `${BASE_URL}?type=playlist&id=${encodeURIComponent(id)}&server=netease`;
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {signal});
     const json = await res.json();
     if (!Array.isArray(json)) return results;
     json.forEach((it, idx) => results.push(mapMetingItem(it, idx, '')));
   } catch (e) {
-    console.error('netease playlist fetch error:', e);
+    if (!signal?.aborted) console.error('netease playlist fetch error:', e);
   }
   return results;
 }

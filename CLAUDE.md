@@ -20,6 +20,7 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
 - **`server.mjs` 两边都依赖**：网页版的页面和代理都在它上面，APK 的代理也指向 Render 上的它
   （`LISTENING_PROXY_BASE`）。改了要等合并到 main、Render 部署后才生效。
 - **根目录 `package.json` 保持零依赖**（Render 部署用），安卓相关依赖只放 `mobile/package.json`。
+- **猜你喜欢 / AI 推荐**：引擎在 `src/api/recommendations.mjs`，网页专用 POST 转发在 `server/ai-recommendations.mjs`。推荐数据键 `listening-recommendations-v1` 与 AI 配置键 `listening-ai-config-v1` 必须和歌单存档、导出、诊断分开；推荐缓存不保存 Key。换一批不能调用模型，自动生成最多每 24 小时一次。网页转发只允许公开 HTTPS 目的地，保留 DNS 地址校验、IP 固定、TLS 校验、大小/时间限制与错误脱敏；APK 用现有 `CapacitorHttp`，不要打开接管全部 fetch 的开关。详见 [docs/recommendations.md](docs/recommendations.md)。
 - **界面上的字（中文 / English）**：都在页面的 `STRINGS` 表里，每条是 `[中文, English]` 一对，新加的字两种语言都要写；
   模板里写 `{{ L.键名 }}`，代码里写 `tr('键名', 参数…)`（不叫 `t`：页面里到处拿 `t` 当曲目变量）。歌名、歌手、专辑、歌词、
   用户起的歌单名不翻；内置「喜欢的音乐」存的还是中文名，显示走 `playlistLabel`；切歌诊断记录（`diagLog`）一直是中文。
