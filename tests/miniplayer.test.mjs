@@ -295,7 +295,11 @@ await mp.click('[data-act="list"]');
 await mp.setViewportSize({ width: 420, height: 100 });
 
 // ---- 回到网页：关掉小窗 ----
-await mp.click('[data-act="back"]');
+// Closing its own page can finish before Playwright receives the click acknowledgement.
+// Accept only that expected closure; the checks below still require the parent player to update.
+await mp.click('[data-act="back"]').catch(error => {
+  if (!mp.isClosed() || !error.message.includes('Target page, context or browser has been closed')) throw error;
+});
 const backGone = await closed(mp);
 await wait(100);
 st = { gone: backGone, open: await L(`return logic.state.miniPlayerOpen;`), cls: await btn.getAttribute('class') };
