@@ -13,12 +13,12 @@ const SEARCH_URL = 'https://tang.api.s01s.cn/music_open_api.php';
  * @param {number} [limit=10]
  * @returns {Promise<Array>} track 对象数组
  */
-export async function searchQQ(kw, limit = 10) {
+export async function searchQQ(kw, limit = 10, {signal} = {}) {
   const url = `${SEARCH_URL}?msg=${encodeURIComponent(kw)}&type=json`;
   const results = [];
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {signal});
     const json = await res.json();
     const data = Array.isArray(json) ? json : (Array.isArray(json?.data) ? json.data : []);
     if (!Array.isArray(data) || data.length === 0) return results;
@@ -57,7 +57,7 @@ export async function searchQQ(kw, limit = 10) {
       });
     });
   } catch (e) {
-    console.error('qq search error:', e);
+    if (!signal?.aborted) console.error('qq search error:', e);
   }
   return results;
 }

@@ -1,6 +1,6 @@
 // 本地音频 + 模拟 APK：验证发给原生 MediaSession 的进度，不依赖网易云 / QQ 接口。
 import fs from 'node:fs/promises';
-import { BASE, launchBrowser, logicDriver, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, logicDriver, createChecker, seedRecommendationCache } from './lib.mjs';
 import { patchMediaSessionSources } from '../mobile/scripts/patch-media-session.mjs';
 
 const { check, finish } = createChecker();
@@ -40,6 +40,7 @@ function serveAudio(route, seconds) {
 
 const browser = await launchBrowser(['--autoplay-policy=no-user-gesture-required']);
 const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, serviceWorkers: 'block' });
+await seedRecommendationCache(ctx);
 await ctx.addInitScript(() => {
   window.__calls = [];
   window.__handlers = {};

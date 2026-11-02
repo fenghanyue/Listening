@@ -1,12 +1,13 @@
 // 冒烟测试（不联网）：拦掉所有 CDN 后页面照常启动，字体都从本地加载，每个 Material Symbols 图标
 // 都渲染成图形（宽度不超过字号的 1.6 倍；字体没加载时会显示成一串英文单词，宽度远超）
-import { BASE, OUT, launchBrowser, createChecker } from './lib.mjs';
+import { BASE, OUT, launchBrowser, createChecker, seedRecommendationCache } from './lib.mjs';
 
 const CDN = /(unpkg\.com|cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)/;
 const { check, finish } = createChecker();
 
 const browser = await launchBrowser();
 const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+await seedRecommendationCache(ctx);
 const page = await ctx.newPage();
 const blocked = [];
 const pageErrors = [];

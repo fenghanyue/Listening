@@ -64,3 +64,14 @@ export function createChecker() {
   };
   return { check, finish };
 }
+
+// Offline suites start with a fresh empty recommendation cache, avoiding the cold-start public playlist.
+// Recommendation suites exercise that request explicitly with controlled responses.
+export async function seedRecommendationCache(context, tracks = []) {
+  await context.addInitScript(items => {
+    const key = 'listening-recommendations-v1';
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({
+      basic: { tracks: items, at: Date.now(), lastAttempt: Date.now() }, lastAutoAt: Date.now(),
+    }));
+  }, tracks);
+}

@@ -2,11 +2,12 @@
 // 移出正在放的那首：在放就接着放下一首，暂停着就停在下一首、点播放从头放，队列移空了就什么都不放；
 // 断网时跳过没缓存的。用电脑尺寸，队列就在右边的播放栏里，直接点每一行的 ×。
 // startTrack 换成只记一笔的假函数：真去加载要联网
-import { BASE, launchBrowser, logicDriver, createChecker } from './lib.mjs';
+import { BASE, launchBrowser, logicDriver, createChecker, seedRecommendationCache } from './lib.mjs';
 
 const { check, finish } = createChecker();
 const browser = await launchBrowser();
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
+await seedRecommendationCache(ctx);
 const page = await ctx.newPage();
 const errors = [];
 page.on('pageerror', e => errors.push(String(e)));

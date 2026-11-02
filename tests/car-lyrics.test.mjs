@@ -1,9 +1,10 @@
 // 本地音频 + 模拟原生壳：车载歌词开关、时间同步、去重、异步封面竞态和网页版隔离。
-import { BASE, OUT, launchBrowser, logicDriver, createChecker } from './lib.mjs';
+import { BASE, OUT, launchBrowser, logicDriver, createChecker, seedRecommendationCache } from './lib.mjs';
 
 const { check, finish } = createChecker();
 const browser = await launchBrowser(['--autoplay-policy=no-user-gesture-required']);
 const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, serviceWorkers: 'block' });
+await seedRecommendationCache(ctx);
 await ctx.addInitScript(() => {
   window.__calls = [];
   window.__coverReplies = [];
@@ -136,6 +137,7 @@ await page.waitForSelector('.dc-topbar');
 check('the setting remains enabled after reloading the app', await L('return logic.state.carBluetoothLyrics;'));
 
 const webCtx = await browser.newContext({ viewport: { width: 412, height: 915 }, serviceWorkers: 'block' });
+await seedRecommendationCache(webCtx);
 await webCtx.addInitScript(() => localStorage.setItem('listening-car-bluetooth-lyrics-v1', '1'));
 const web = await webCtx.newPage();
 await web.goto(BASE, { waitUntil: 'load' });

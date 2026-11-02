@@ -566,6 +566,55 @@ if ('serviceWorker' in navigator) {
     @media (prefers-reduced-motion: reduce) {
       .dc-app-shell *, .dc-app-shell *::before, .dc-app-shell *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
     }
+
+/* Recommendation home and model configuration. */
+.sw-rec-hidden { display: none; }
+.sw-suggest { position: static; max-height: none; margin-bottom: 16px; border: 0; }
+.sw-rec-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-top: 30px; }
+.sw-rec-heading h1 { font-size: 28px; line-height: 1.2; letter-spacing: -.02em; font-weight: 700; }
+.sw-rec-ai { font-size: 12px; color: var(--red); font-weight: 700; }
+.sw-rec-tools { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin-top: 12px; margin-bottom: 12px; }
+.sw-rec-text-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; font-size: 13px; }
+.sw-rec-text-action .ms { font-size: 17px; }
+.sw-rec-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 16px; }
+.sw-rec-featured { min-width: 0; text-align: left; }
+.sw-rec-card-cover { display: block; width: 100%; }
+.sw-rec-card-meta { display: flex; align-items: center; min-width: 0; margin-top: 8px; }
+.sw-rec-card-text { flex: 1; min-width: 0; text-align: left; }
+.sw-rec-featured-artist { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-cover.sw-rec-art { width: 100%; height: auto; aspect-ratio: 1; font-size: 32px; }
+.sw-rec-featured-title { display: block; margin-top: 0; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-rec-featured-artist { display: block; color: var(--ink-2); font-size: 12px; margin-top: 3px; }
+.sw-search-field > .sw-rec-search-icon { display: none; }
+.sw-search-cancel { min-width: 56px; height: 56px; margin-left: 8px; text-align: center; font-size: 14px; background: var(--bg); }
+.sw-rec-loading, .sw-rec-empty { margin-top: 24px; }
+.sw-rec-empty h2 { font-size: 18px; margin: 0 0 12px; }
+.sw-rec-menu { position: fixed; left: calc(16px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); right: calc(16px + var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); top: auto; bottom: calc(80px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); z-index: 110; }
+.sw-rec-scrim { z-index: 100; }
+.sw-ai-input { display: block; width: 100%; min-width: 0; height: 44px; padding: 8px 10px; background: transparent; color: var(--ink); border: 1px solid var(--rule); border-radius: 0; font: inherit; font-size: 14px; }
+label.sw-field-label { display: block; }
+.sw-ai-secret { display: flex; align-items: center; gap: 8px; }
+.sw-ai-secret > input { flex: 1; }
+.sw-ai-secret > button { min-width: 48px; min-height: 44px; font-size: 13px; }
+.sw-ai-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.sw-ai-actions > button { flex: 1; justify-content: center; min-width: 0; }
+.sw-ai-status { margin-top: 12px; font-size: 13px; color: var(--ink-2); overflow-wrap: anywhere; }
+@media (max-width: 860px), (max-height: 559px) {
+.sw-search { min-height: 48px; margin-bottom: 14px; background: var(--hover); }
+.dc-search-input { height: 48px; padding-left: 40px; font-size: 16px; font-weight: 400; border-bottom: 0; }
+.sw-search-btn { height: 48px; padding: 0 14px; font-size: 14px; background: none; color: var(--ink); }
+.sw-search-field > .sw-rec-search-icon { position: absolute; left: 12px; top: 14px; font-size: 20px; color: var(--ink-2); pointer-events: none; }
+.sw-search-clear { top: 6px; }
+.dc-result-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
+.dc-result-row > .sw-idx { display: none; }
+.sw-search-field > .sw-rec-search-icon { display: block; }
+.sw-search-cancel { min-width: 48px; height: 48px; }
+}
+@media (min-width: 1200px) and (min-height: 560px) {
+.sw-rec-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sw-search-cancel { height: 64px; }
+}
+
   </style>
 </helmet>
 
@@ -589,14 +638,23 @@ if ('serviceWorker' in navigator) {
 
         <sc-if value="{{ v.isSearchPage }}">
           <div class="sw-search">
-            <div class="sw-search-field">
+            <div class="sw-search-field"><span class="ms sw-rec-search-icon">search</span>
               <input class="dc-search-input" type="search" enterKeyHint="search" autoComplete="off" value="{{ v.searchQuery }}" oninput="{{ H.setSearchQuery }}" onkeydown="{{ H.searchKeyDown }}" onfocus="{{ H.focusSearch }}" onblur="{{ H.blurSearch }}" placeholder="{{ L.searchPlaceholder }}" aria-label="{{ L.searchAria }}">
               <sc-if value="{{ v.showClear }}">
                 <button class="sw-search-clear" onclick="{{ H.clearSearch }}" aria-label="{{ L.clearSearch }}" title="{{ L.clear }}"><span class="ms">close</span></button>
               </sc-if>
               <sc-if value="{{ v.isSearching }}"><div class="sw-search-loading"></div></sc-if>
             </div>
-            <button class="sw-btn sw-btn-primary sw-search-btn" onclick="{{ H.doSearch }}">{{ L.search }}</button>
+            <button class="sw-btn sw-btn-primary sw-search-btn" onclick="{{ H.doSearch }}">{{ L.search }}</button><sc-if value="{{ v.isSearchMode }}"><button class="sw-search-cancel" onclick="{{ H.cancelSearch }}">{{ L.cancel }}</button></sc-if>
+          </div>
+          <sc-if value="{{ v.isSearchMode }}"><div class="sw-filters">
+            <span class="sw-filter-group">
+              <sc-for list="{{ v.sourcesRender }}" as="src" hint-placeholder-count="2">
+                <button class="{{ src.cls }}" onclick="{{ src.onClick }}" aria-pressed="{{ src.checked }}">{{ src.label }}</button>
+              </sc-for>
+            </span>
+          </div>
+          </sc-if>
             <sc-if value="{{ v.showSuggest }}">
               <div class="sw-suggest dc-scrollbar">
                 <sc-if value="{{ v.suggestIsHistory }}">
@@ -607,14 +665,7 @@ if ('serviceWorker' in navigator) {
                 </sc-for>
               </div>
             </sc-if>
-          </div>
-          <div class="sw-filters">
-            <span class="sw-filter-group">
-              <sc-for list="{{ v.sourcesRender }}" as="src" hint-placeholder-count="2">
-                <button class="{{ src.cls }}" onclick="{{ src.onClick }}" aria-pressed="{{ src.checked }}">{{ src.label }}</button>
-              </sc-for>
-            </span>
-          </div>
+
           <sc-if value="{{ v.showRecents }}">
             <div class="sw-head-rule"><span class="sw-label">{{ L.recentSearches }}</span><button class="sw-btn-text" onmousedown="{{ H.clearHistory }}">{{ L.clear }}</button></div>
             <sc-for list="{{ v.recentRender }}" as="r" hint-placeholder-count="4">
@@ -629,6 +680,41 @@ if ('serviceWorker' in navigator) {
           </sc-if>
         </sc-if>
 
+
+        <sc-if value="{{ v.isRecommendationHome }}">
+          <div class="sw-rec-heading"><h1>{{ L.recommended }}</h1><sc-if value="{{ v.recommendationIsAI }}"><span class="sw-rec-ai">{{ L.aiRecommendation }}</span></sc-if></div>
+          <div class="sw-rec-tools">
+            <button class="sw-rec-text-action" onclick="{{ H.playAllRecommendations }}" disabled="{{ v.recommendationEmpty }}"><span class="ms">play_arrow</span>{{ L.playAll }}</button>
+            <button class="sw-rec-text-action" onclick="{{ H.nextRecommendationBatch }}" disabled="{{ v.recommendationRefreshing }}"><span class="ms">shuffle</span>{{ v.nextBatchLabel }}</button>
+          </div>
+          <div class="sw-rec-grid">
+            <sc-for list="{{ v.recommendationsRender }}" as="t">
+              <div class="sw-rec-featured">
+                <button class="sw-rec-card-cover" onclick="{{ t.onPlay }}" aria-label="{{ t.title }}">
+                  <div class="sw-cover sw-rec-art" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
+                </button>
+                <div class="sw-rec-card-meta">
+                  <button class="sw-rec-card-text" onclick="{{ t.onPlay }}">
+                    <span class="sw-rec-featured-title">{{ t.title }}</span>
+                    <span class="sw-rec-featured-artist">{{ t.artist }}</span>
+                  </button>
+                  <button class="sw-icon-btn" aria-label="{{ L.more }}" title="{{ L.more }}" onclick="{{ t.onMore }}"><span class="ms">more_vert</span></button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ v.recommendationLoading }}"><p class="sw-note sw-rec-loading" role="status">{{ L.recommendationLoading }}</p></sc-if>
+          <sc-if value="{{ v.showRecommendationEmpty }}"><div class="sw-rec-empty"><h2>{{ L.recommendationEmpty }}</h2><button class="sw-btn-text" onclick="{{ H.retryRecommendations }}">{{ L.retry }}</button></div></sc-if>
+          <sc-if value="{{ v.recommendationMenuOpen }}">
+            <div class="sw-menu-scrim sw-rec-scrim" onclick="{{ H.closeMenu }}"></div>
+            <div class="sw-menu sw-rec-menu" role="menu">
+              <button class="sw-menu-item" role="menuitem" onclick="{{ H.likeRecommendation }}"><span class="ms">favorite</span><span>{{ v.recommendationLikeLabel }}</span></button>
+              <button class="sw-menu-item" role="menuitem" onclick="{{ H.addRecommendation }}"><span class="ms">playlist_add</span><span>{{ L.addToPlaylist }}</span></button>
+              <button class="sw-menu-item" role="menuitem" onclick="{{ H.dismissRecommendation }}"><span class="ms">close</span><span>{{ L.notInterested }}</span></button>
+            </div>
+          </sc-if>
+        </sc-if>
         <sc-if value="{{ v.isLibraryRoot }}">
           <div class="sw-page-head">
             <h1 class="sw-title">{{ L.playlists }}</h1>
@@ -676,6 +762,27 @@ if ('serviceWorker' in navigator) {
 
         <sc-if value="{{ v.isSettingsPage }}">
           <h1 class="sw-title">{{ L.settings }}</h1>
+
+          <div class="sw-sec sw-ai-settings">
+            <span class="sw-label">{{ L.aiRecommendation }}</span>
+            <button class="sw-set-row" role="switch" aria-checked="{{ v.aiDraft.enabled }}" onclick="{{ H.toggleAIEnabled }}">
+              <span><span class="sw-row-t">{{ L.aiEnable }}</span><span class="sw-hint">{{ L.aiFallbackHint }}</span></span><span class="{{ v.aiEnableToggleClass }}"></span>
+            </button>
+            <label class="sw-field-label" for="ai-base-url">{{ L.aiBaseUrl }}</label>
+            <input id="ai-base-url" class="sw-ai-input" type="url" autoComplete="off" spellCheck="false" value="{{ v.aiDraft.baseUrl }}" oninput="{{ H.setAIBaseUrl }}" aria-label="{{ L.aiBaseUrl }}">
+            <label class="sw-field-label" for="ai-api-key">{{ L.aiKey }}</label>
+            <div class="sw-ai-secret"><input id="ai-api-key" class="sw-ai-input" type="{{ v.aiKeyType }}" autoComplete="off" spellCheck="false" value="{{ v.aiDraft.apiKey }}" oninput="{{ H.setAIKey }}" aria-label="{{ L.aiKey }}"><button onclick="{{ H.toggleAIKeyVisibility }}">{{ v.aiKeyToggleLabel }}</button></div>
+            <label class="sw-field-label" for="ai-model">{{ L.aiModel }}</label>
+            <input id="ai-model" class="sw-ai-input" autoComplete="off" spellCheck="false" value="{{ v.aiDraft.model }}" oninput="{{ H.setAIModel }}" placeholder="{{ L.aiModelPlaceholder }}" aria-label="{{ L.aiModel }}">
+            <div class="sw-ai-actions"><button class="sw-btn sw-btn-primary" onclick="{{ H.saveAISettings }}">{{ L.aiSave }}</button><button class="sw-btn sw-btn-outline" onclick="{{ H.testAIConnection }}" disabled="{{ v.aiTesting }}">{{ L.aiTest }}</button></div>
+            <button class="sw-set-row" role="switch" aria-checked="{{ v.aiDraft.auto }}" onclick="{{ H.toggleAIAuto }}"><span><span class="sw-row-t">{{ L.aiAuto }}</span><span class="sw-hint">{{ L.aiAutoHint }}</span></span><span class="{{ v.aiAutoToggleClass }}"></span></button>
+            <div class="sw-ai-actions"><button class="sw-btn sw-btn-outline" onclick="{{ H.regenerateRecommendations }}" disabled="{{ v.aiGenerateDisabled }}">{{ L.aiRegenerate }}</button></div>
+            <p class="sw-hint">{{ L.aiCostHint }}</p>
+            <p class="sw-hint">{{ L.aiPrivacyHint }}</p>
+            <sc-if value="{{ v.aiStatusText }}"><p class="sw-ai-status" role="status">{{ v.aiStatusText }}</p></sc-if>
+            <button class="sw-btn-text" onclick="{{ H.clearAISettings }}">{{ L.aiClear }}</button>
+          </div>
+
           <div class="sw-sec">
             <span class="sw-label">{{ L.cacheSection }}</span>
             <p class="sw-note">{{ v.netStatusText }}</p>
@@ -1016,12 +1123,46 @@ const STRINGS = {
   listSep: ['、', ', '],
   songs: [n => `${n} 首`, enSongs],
 
+
+  recommended: ['猜你喜欢', 'For you'],
+  nextBatch: ['换一批', 'Refresh picks'],
+  changingBatch: ['正在换一批…', 'Refreshing picks…'],
+  notInterested: ['不感兴趣', 'Not interested'],
+  unlike: ['取消喜欢', 'Unlike'],
+  recommendationLoading: ['正在找一些你可能喜欢的歌…', 'Finding songs you might like…'],
+  recommendationEmpty: ['暂时没有可用推荐', 'No recommendations available yet'],
+  retry: ['重试', 'Try again'],
+  selectSource: ['至少选择一个音源', 'Select at least one source'],
+  aiRecommendation: ['AI 推荐', 'AI recommendations'],
+  aiEnable: ['启用 AI 推荐', 'Enable AI recommendations'],
+  aiFallbackHint: ['关闭后仍可使用基础推荐', 'Basic recommendations work when this is off'],
+  aiBaseUrl: ['API 地址', 'API base URL'],
+  aiKey: ['API Key', 'API key'],
+  aiModel: ['模型名称', 'Model name'],
+  aiModelPlaceholder: ['填写模型 ID', 'Enter the model ID'],
+  aiSave: ['保存设置', 'Save settings'],
+  aiTest: ['测试连接', 'Test connection'],
+  aiAuto: ['自动补充推荐', 'Refill recommendations automatically'],
+  aiAutoHint: ['推荐不足时补充，每天最多一次', 'Refill when needed, at most once every 24 hours'],
+  aiRegenerate: ['重新生成推荐', 'Generate new recommendations'],
+  aiCostHint: ['测试连接和生成推荐会调用模型，可能产生费用；换一批使用已有推荐。', 'Testing and generating call your model and may cost money. Refreshing picks uses existing recommendations.'],
+  aiPrivacyHint: ['Key 仅保存在此设备，不进入歌单导出。启用后会向所配模型服务发送少量偏好摘要；网页版请求经 Listening 服务器临时转发。', 'Your key is saved on this device and excluded from playlist exports. Enabling AI sends a short taste summary to your model service. Web requests pass through the Listening server without being stored.'],
+  aiClear: ['清除 AI 配置', 'Clear AI configuration'],
+  aiShowKey: ['显示', 'Show'],
+  aiHideKey: ['隐藏', 'Hide'],
+  aiSaved: ['设置已保存', 'Settings saved'],
+  aiConnected: ['连接正常', 'Connection successful'],
+  aiTesting: ['正在测试连接…', 'Testing connection…'],
+  aiGenerating: ['正在生成并核验推荐，当前推荐仍可播放…', 'Generating and checking songs. Current recommendations remain available…'],
+  aiStorageFailed: ['设置保存失败，请检查本机存储空间', 'Could not save settings. Check device storage.'],
+  aiErrors: [{AI_CONFIG:'请填写有效的 API Key 和模型名称',AI_ENDPOINT:'请填写公开的 HTTPS API 地址（默认 443 端口）',AI_AUTH:'Key 无效或没有模型访问权限，已保留可用推荐',AI_RATE_LIMIT:'模型服务暂时限流，已保留可用推荐',AI_TIMEOUT:'模型请求超时，已保留可用推荐',AI_BAD_RESPONSE:'模型返回的歌曲列表无法识别，使用可用推荐',AI_NO_MATCH:'未找到匹配的真实歌曲，使用基础推荐',AI_UNAVAILABLE:'AI 暂不可用，使用已有或基础推荐'}, {AI_CONFIG:'Enter a valid API key and model name',AI_ENDPOINT:'Enter a public HTTPS API URL using the default port 443',AI_AUTH:'Invalid key or model access denied. Available picks are kept.',AI_RATE_LIMIT:'Model rate limit reached. Available picks are kept.',AI_TIMEOUT:'Model request timed out. Available picks are kept.',AI_BAD_RESPONSE:'The model returned an invalid song list. Available picks are kept.',AI_NO_MATCH:'No matching songs found. Using basic recommendations.',AI_UNAVAILABLE:'AI is unavailable. Using existing or basic recommendations.'}],
+
   // 顶栏、搜索页
   navPages: ['页面', 'Pages'],
   search: ['搜索', 'Search'],
   playlists: ['歌单', 'Playlists'],
   settings: ['设置', 'Settings'],
-  searchPlaceholder: ['歌名、歌手', 'Song or artist'],
+  searchPlaceholder: ['搜索歌名、歌手', 'Search songs or artists'],
   searchAria: ['搜索歌名、歌手', 'Search songs or artists'],
   clearSearch: ['清空搜索', 'Clear search'],
   clear: ['清空', 'Clear'],
@@ -2299,9 +2440,19 @@ const ADAPTIVE_ATTACK_TC = 0.6;          // 音量突然变响时的收敛时间
 const ADAPTIVE_RELEASE_TC = 3.0;         // 音量变安静时回升的时间常数（秒）：调高要慢，避免"呼吸"感
 const SILENCE_RMS_FLOOR = Math.pow(10, -50 / 20); // 低于此 RMS（约 -50dBFS）视为静音，冻结增益不调整
 
+
+function loadAIConfiguration() {
+  let saved;
+  try { saved = JSON.parse(localStorage.getItem(ListeningAPI.AI_CONFIG_KEY) || '{}'); } catch (e) {}
+  return ListeningAPI.normalizeAIConfig(saved || {});
+}
+
 class Component extends DCLogic {
   state = (() => {
+    const aiConfig = loadAIConfiguration();
     const base = {
+      searchMode: false, recommendations: [], recommendationKind: 'basic', recommendationLoading: true,
+      aiConfig, aiDraft: { ...aiConfig }, aiShowKey: false, aiBusy: false, aiTesting: false, aiError: '', aiStatus: '',
       theme: loadTheme(), lang: currentLang, searchQuery: '', appliedQuery: '', hasSearched: false, isSearching: false, viewingPlaylistId: null,
       // 当前页：顶栏三个图标 search（搜索）/ library（歌单，viewingPlaylistId 有值时是歌单详情）/ settings（设置）。
       // 不存盘，每次打开都从搜索页开始
@@ -2309,7 +2460,7 @@ class Component extends DCLogic {
       // 右上角 ⋮ 菜单：'player'（播放页：分享 / 下载）、'playlist'（歌单详情：导出 / 删除）或 null
       openMenu: null,
       searchResults: [],
-      // 搜索联想 / 历史：suggestions = 逐字联想的曲目（只查网易云）；searchFocused 跟随输入框真实焦点；
+      // 搜索联想 / 历史：suggestions 来自当前勾选的音源；searchFocused 跟随输入框真实焦点；
       // suggestDismissed = 主动收起下拉（Esc / 已发起搜索），输入或重新聚焦时复位；两者分开，避免
       // 搜索后输入框仍有焦点却再也弹不出联想。suggestActiveIdx = 键盘高亮行（-1 无）；searchHistory 存 localStorage
       suggestions: [], searchFocused: false, suggestDismissed: false, suggestActiveIdx: -1,
@@ -2379,6 +2530,7 @@ class Component extends DCLogic {
   })();
 
   componentWillUnmount() {
+    this._recommendationsDisposed = true;
     if (this._audio) {
       this._audio.removeEventListener('timeupdate', this._onTimeUpdate);
       this._audio.removeEventListener('ended', this._onEnded);
@@ -2393,6 +2545,11 @@ class Component extends DCLogic {
       this._audio.removeEventListener('loadedmetadata', this._onMeta);
       this._audio.removeEventListener('durationchange', this._onMeta);
     }
+    this.finishListening();
+    this._recommendationEngine?.cancel();
+    this._aiTestController?.abort();
+    this._searchController?.abort();
+    window.removeEventListener('pagehide', this._onRecommendationPageHide);
     this.stopHLS();
     if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
     clearInterval(this._progressSaveTimer);
@@ -2434,7 +2591,7 @@ class Component extends DCLogic {
   ensureQueued(trackId) {
     const s = this.state;
     if (s.queue.find(t => t.id === trackId)) return;
-    const track = s.searchResults.find(t => t.id === trackId);
+    const track = s.searchResults.find(t => t.id === trackId) || s.recommendations.find(t => t.id === trackId);
     if (track) this.patch(s2 => ({ queue: [...s2.queue, track] }));
   }
 
@@ -2461,13 +2618,14 @@ class Component extends DCLogic {
     }, 0);
     this.syncThemeChrome();
     this.syncLangChrome();
+    this.initRecommendations();
     // 诊断记录：前后台切换、页面被系统冻结 / 恢复、网络断开 / 恢复——后台切歌卡住时拿这些时间点对照
-    this._onDiagVisibility = () => diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' });
+    this._onDiagVisibility = () => { diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' }); this.flushListening(); if (document.visibilityState === 'visible') void this._recommendationEngine?.start(); };
     this._onDiagFreeze = () => diagLog('页面被冻结', { 在播: this.state.playing ? '是' : '否' });
     this._onDiagResume = () => diagLog('页面恢复');
     // 同一对监听顺便维护 state.online：断网后挑歌只在已缓存里挑（见 isOfflineMode）
-    this._onDiagOnline = () => { diagLog('网络恢复'); this.patch({ online: true }); };
-    this._onDiagOffline = () => { diagLog('网络断开'); this.patch({ online: false }); };
+    this._onDiagOnline = () => { diagLog('网络恢复'); this.patch({ online: true }); setTimeout(() => this._recommendationEngine?.start(), 0); };
+    this._onDiagOffline = () => { diagLog('网络断开'); this.patch({ online: false }); this._recommendationEngine?.cancel(); setTimeout(() => this._recommendationEngine?.emit(), 0); };
     document.addEventListener('visibilitychange', this._onDiagVisibility);
     document.addEventListener('freeze', this._onDiagFreeze);
     document.addEventListener('resume', this._onDiagResume);
@@ -2839,6 +2997,7 @@ class Component extends DCLogic {
     if (s.page === 'library' && s.viewingPlaylistId) { this.backFromPlaylist(); return; }
     // 歌单页、设置页按返回先回到搜索页（起始页），在搜索页再按才切到后台
     if (s.page !== 'search') { this.setPage('search'); return; }
+    if (s.searchMode || s.hasSearched || s.searchFocused) { this.cancelSearch(); return; }
     nativeCall('App', 'minimizeApp').catch(() => {});
   }
 
@@ -2981,6 +3140,7 @@ class Component extends DCLogic {
     this._onTimeUpdate = () => {
       const t = a.currentTime;
       if (!isFinite(t)) return;
+      this.observeListening(a);
       // 拖动进度条圆球时不要让这里的真实播放进度覆盖拖动中的预览位置
       if (!this.state.seeking) this.setState({ currentTime: t });
       this.syncMediaSessionPosition();
@@ -3014,17 +3174,17 @@ class Component extends DCLogic {
         }
       }
     };
-    this._onEnded = () => { this.syncMediaSessionPosition(true); this.handleTrackEnd(); };
+    this._onEnded = () => { this.finishListening(); this.syncMediaSessionPosition(true); this.handleTrackEnd(); };
     this._onPlay = () => {
       this.setState({ playing: true });
       mediaSessionBridge.setPlaybackState('playing');
       this._mediaBuffering = a.readyState < 3;
       this.syncMediaSessionPosition(true);
     };
-    this._onPlaying = () => { this._mediaBuffering = false; this.syncMediaSessionPosition(true); };
+    this._onPlaying = () => { this._mediaBuffering = false; if (this._listenSession) this._listenSession.position = a.currentTime; this.syncMediaSessionPosition(true); };
     this._onWaiting = () => { this._mediaBuffering = true; this.syncMediaSessionPosition(true); };
-    this._onSeeking = () => this.syncMediaSessionPosition(true);
-    this._onSeeked = () => { this._mediaBuffering = a.readyState < 3; this.syncMediaSessionPosition(true); };
+    this._onSeeking = () => { if (this._listenSession) this._listenSession.position = null; this.syncMediaSessionPosition(true); };
+    this._onSeeked = () => { if (this._listenSession) this._listenSession.position = a.currentTime; this._mediaBuffering = a.readyState < 3; this.syncMediaSessionPosition(true); };
     this._onRateChange = () => this.syncMediaSessionPosition(true);
     this._onPause = () => {
       // 自然播完时浏览器会先触发一次 pause、再触发 ended——这一步的 paused=true 只是流程自带的步骤，
@@ -3033,6 +3193,7 @@ class Component extends DCLogic {
       // 通知、降低后台执行优先级，导致后台连续自动切歌失败。真正的暂停（用户点暂停按钮，或系统通知栏
       // 点暂停）此时 a.ended 一定是 false，不受影响。
       if (a.ended) return;
+      this.flushListening();
       this.setState({ playing: false });
       mediaSessionBridge.setPlaybackState('paused');
       this.syncMediaSessionPosition(true);
@@ -3348,6 +3509,7 @@ class Component extends DCLogic {
     }));
     if (restored.length) this.persist();
     this.backfillCachedCovers(records);
+    setTimeout(() => this._recommendationEngine?.emit(), 0);
   }
 
   // 已缓存、封面却没存下来的歌（QQ 封面以前是 http 地址，APK 里原生下载被拦）：APK 里联网时在后台一首
@@ -3453,6 +3615,8 @@ class Component extends DCLogic {
     const next = !this.state.offlineOnly;
     saveOfflineOnly(next);
     this.patch({ offlineOnly: next });
+    this._recommendationEngine?.cancel();
+    setTimeout(() => next ? this._recommendationEngine?.emit() : this._recommendationEngine?.start(), 0);
     this.showToast(next ? tr('offlineOnlyOn') : tr('offlineOnlyOff'));
   }
 
@@ -3618,7 +3782,7 @@ class Component extends DCLogic {
     this.scheduleSuggest(val);
   }
 
-  // 逐字联想：防抖 250ms 后只查网易云（最快、免代理）。空串直接清空，不发请求。
+  // 逐字联想：防抖 250ms 后查询当前勾选的音源。空串直接清空，不发请求。
   scheduleSuggest(val) {
     clearTimeout(this._suggestTimer);
     const q = (val || '').trim();
@@ -3632,7 +3796,9 @@ class Component extends DCLogic {
     // 请求序号守卫：快速改词时，慢返回的旧请求结果直接丢弃，不覆盖最新联想
     this._suggestSeq = (this._suggestSeq || 0) + 1;
     const seq = this._suggestSeq;
-    API.searchAll({ keyword: q, sources: ['netease'], limit: 6 }).then(tracks => {
+    const sources = SEARCH_SOURCES.filter(k => this.state.sources[k]);
+    if (!sources.length) { this.patch({ suggestions: [], suggestActiveIdx: -1 }); return; }
+    API.searchAll({ keyword: q, sources, limit: 6 }).then(tracks => {
       if (seq !== this._suggestSeq) return;                 // 已有更新的请求发出，丢弃
       if (this.state.searchQuery.trim() !== q) return;      // 输入框内容已变，丢弃
       this.patch({ suggestions: (tracks || []).slice(0, 6), suggestActiveIdx: -1 });
@@ -3678,7 +3844,7 @@ class Component extends DCLogic {
     }
   }
 
-  focusSearch() { this.patch({ searchFocused: true, suggestDismissed: false, suggestActiveIdx: -1 }); }
+  focusSearch() { this.patch({ searchMode: true, searchFocused: true, suggestDismissed: false, suggestActiveIdx: -1 }); }
   // 延迟关闭：让下拉项的 onmousedown 先完成（否则 blur 先触发会把下拉收掉、点击丢失）
   blurSearch() {
     clearTimeout(this._blurTimer);
@@ -3721,7 +3887,9 @@ class Component extends DCLogic {
   // 清空搜索框（×）：清词、清联想，焦点回到输入框（空词 + 有历史时下拉转为显示历史）
   clearSearch() {
     clearTimeout(this._suggestTimer);
-    this.patch({ searchQuery: '', suggestions: [], suggestActiveIdx: -1, suggestDismissed: false, searchFocused: true });
+    this._searchSeq = (this._searchSeq || 0) + 1; this._searchController?.abort();
+    this._suggestSeq = (this._suggestSeq || 0) + 1;
+    this.patch({ searchMode: true, hasSearched: false, isSearching: false, appliedQuery: '', searchResults: [], searchQuery: '', suggestions: [], suggestActiveIdx: -1, suggestDismissed: false, searchFocused: true });
     const el = document.querySelector('.dc-search-input');
     if (el) el.focus();
   }
@@ -3729,6 +3897,9 @@ class Component extends DCLogic {
   doSearch() {
     const q = this.state.searchQuery.trim();
     if (!q) return;
+    if (!SEARCH_SOURCES.some(k => this.state.sources[k])) { this.showToast(tr('selectSource')); return; }
+    this.patch({ searchMode: true });
+    document.querySelector('.dc-search-input')?.blur();
     const API = window.ListeningAPI;
     if (!API) { this.showToast(tr('apiNotLoaded')); return; }
     clearTimeout(this._suggestTimer);
@@ -3736,6 +3907,7 @@ class Component extends DCLogic {
     // 请求序号守卫：先搜 A 再快速搜 B 时，慢返回的 A 不会覆盖 B 的结果
     this._searchSeq = (this._searchSeq || 0) + 1;
     const seq = this._searchSeq;
+    this._searchController?.abort(); this._searchController = new AbortController();
     // 断网时联网搜索必然失败，直接在本地曲库里搜
     if (!navigator.onLine) { this.showLocalSearch(q, seq, 'offline'); return; }
     this.patch({ page: 'search', appliedQuery: q, hasSearched: true, isSearching: true, localSearch: false, searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
@@ -3744,7 +3916,7 @@ class Component extends DCLogic {
     // state.sources 里残留了已下掉的源（部分回退 / 手改 / 以后改成持久化）也注不进搜索；
     // 顺带把交错排列的优先顺序固定成这份显式数组，不再依赖对象 key 的插入顺序
     const sources = SEARCH_SOURCES.filter(k => this.state.sources[k]);
-    API.searchAll({ keyword: q, sources, limit: 10 }).then(tracks => {
+    API.searchAll({ keyword: q, sources, limit: 10, signal: this._searchController.signal }).then(tracks => {
       if (seq !== this._searchSeq) return;   // 已有更新的搜索发出，丢弃这次的结果
       // 给每个 track 分配内部 id
       tracks.forEach(t => normalizeTrack(t));
@@ -3767,7 +3939,12 @@ class Component extends DCLogic {
       this.showToast(tr('searchFailed'));
     });
   }
-  toggleSource(key) { this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] } })); }
+  toggleSource(key) {
+    if (this.state.sources[key] && SEARCH_SOURCES.filter(k => this.state.sources[k]).length === 1) { this.showToast(tr('selectSource')); return; }
+    this._suggestSeq = (this._suggestSeq || 0) + 1;
+    this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] }, suggestions: [], suggestActiveIdx: -1 }));
+    if (this.state.searchQuery.trim()) this.scheduleSuggest(this.state.searchQuery);
+  }
 
   // 简易 snackbar：连续调用会重置消失计时（而不是排队），跟原生 App 的 toast 行为一致——
   // 后一条提示总是完整展示 2.6s，不会被前一条的计时器提前打断
@@ -3788,6 +3965,7 @@ class Component extends DCLogic {
     if (!isLiked) likedOrder.unshift(id);
     this.patch({ liked, likedOrder });
     this.persist();
+    setTimeout(() => this._recommendationEngine?.emit(), 0);
     this.showToast(isLiked ? tr('unliked') : tr('likedToast'));
   }
 
@@ -4101,6 +4279,175 @@ class Component extends DCLogic {
   closeMobileNowPlaying() { this.patch({ mobileNowPlayingExpanded: false, openMenu: null }); }
   cycleMode() { this.patch(s => ({ playMode: (s.playMode + 1) % 3 })); this.persist(); }
 
+  initRecommendations() {
+    const API = window.ListeningAPI;
+    let storage;
+    try { storage = localStorage; } catch (e) {}
+    this._recommendationEngine = new API.RecommendationEngine({
+      storage, search: options => API.searchAll(options), playlist: (id, options) => API.fetchNeteasePlaylist(id, options),
+      requestAI: (config, options) => this.requestAIRecommendations(config, options),
+      config: () => this.state.aiConfig,
+      context: () => {
+        const s = this.state;
+        const playlistIds = new Set(s.playlists.flatMap(p => p.trackIds || []));
+        return {queue:s.queue,liked:likedIdsOrdered(s).map(id=>s.queue.find(t=>t.id===id)).filter(Boolean),
+          playlisted:s.queue.filter(t=>playlistIds.has(t.id)),offline:this.isOfflineMode(s),isCached:t=>this.isTrackCached(t)};
+      },
+      onChange: snapshot => {
+        if (this._recommendationsDisposed) return;
+        const existing = new Map([...this.state.recommendations,...this.state.queue].map(t=>[API.trackIdentity(t),t]));
+        const tracks = snapshot.tracks.map(raw => {
+          const old = existing.get(API.trackIdentity(raw));
+          if (old) { if (!old.cover && raw.cover) old.cover = raw.cover; return old; }
+          return normalizeTrack({...raw,id:undefined});
+        });
+        this.patch({recommendations:tracks,recommendationKind:snapshot.kind,recommendationLoading:snapshot.loading,recommendationRefreshing:snapshot.refreshing,aiBusy:snapshot.aiBusy,
+          ...(snapshot.aiBusy || snapshot.error ? {aiError:snapshot.error} : {})});
+      },
+    });
+    this._onRecommendationPageHide = () => this.flushListening();
+    window.addEventListener('pagehide', this._onRecommendationPageHide);
+    void this._recommendationEngine.start();
+    Promise.resolve().then(()=>this._startupCacheRead).then(()=>this._recommendationEngine?.emit());
+  }
+
+  cancelSearch() {
+    clearTimeout(this._suggestTimer); clearTimeout(this._blurTimer);
+    this._searchSeq = (this._searchSeq || 0) + 1; this._suggestSeq = (this._suggestSeq || 0) + 1;
+    this._searchController?.abort();
+    this.patch({searchMode:false,hasSearched:false,isSearching:false,searchQuery:'',appliedQuery:'',searchResults:[],suggestions:[],searchFocused:false,suggestDismissed:true,suggestActiveIdx:-1,openMenu:null});
+    document.querySelector('.dc-search-input')?.blur();
+  }
+
+  playAllRecommendations() {
+    const s = this.state, tracks = s.recommendations;
+    const first = tracks.find(t => this.isPlayable(t));
+    if (!first) return;
+    const present = new Set(s.queue.map(t=>t.id));
+    this.patch({queue:[...s.queue,...tracks.filter(t=>!present.has(t.id))],playOrder:tracks.map(t=>t.id)});
+    this.startTrack(first);
+  }
+
+  setAIDraft(key, value) {
+    this._aiTestController?.abort(); this._aiTestController = null;
+    this.patch(s=>({aiDraft:{...s.aiDraft,[key]:value},aiTesting:false,aiError:'',aiStatus:''}));
+  }
+
+  saveAISettings() {
+    const API = window.ListeningAPI;
+    let config;
+    try {
+      config = API.normalizeAIConfig(this.state.aiDraft);
+      if (config.enabled) config = API.validateAIConfig(config);
+    } catch (error) { this.patch({aiError:error.message,aiStatus:''}); return; }
+    const old = this.state.aiConfig;
+    config.revision = config.baseUrl === old.baseUrl && config.model === old.model && config.apiKey === old.apiKey
+      ? old.revision : (globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2));
+    try { localStorage.setItem(API.AI_CONFIG_KEY,JSON.stringify(config)); }
+    catch (error) { this.showToast(tr('aiStorageFailed')); return; }
+    this._aiTestController?.abort();this._aiTestController=null;
+    this.patch({aiConfig:config,aiDraft:{...config},aiError:'',aiStatus:'saved',aiTesting:false,aiShowKey:false});
+    setTimeout(()=>this._recommendationEngine?.configChanged(),0);
+  }
+
+  clearAISettings() {
+    const API = window.ListeningAPI;
+    try { localStorage.removeItem(API.AI_CONFIG_KEY); }
+    catch (error) { this.showToast(tr('aiStorageFailed')); return; }
+    this._aiTestController?.abort();this._aiTestController=null;
+    const config=API.normalizeAIConfig();
+    this.patch({aiConfig:config,aiDraft:{...config},aiError:'',aiStatus:'',aiShowKey:false,aiTesting:false});
+    setTimeout(()=>this._recommendationEngine?.configChanged(),0);
+  }
+
+  async testAIConnection() {
+    if (this.state.aiTesting) return;
+    let config;
+    try {config=ListeningAPI.validateAIConfig(this.state.aiDraft);}
+    catch (error) {this.patch({aiError:error.message,aiStatus:''});return;}
+    const controller=new AbortController();this._aiTestController=controller;
+    const timer=setTimeout(()=>controller.abort(),45000);
+    this.patch({aiTesting:true,aiError:'',aiStatus:''});
+    try {
+      await this.requestAIRecommendations(config,{mode:'test',signal:controller.signal});
+      if(this._aiTestController===controller && !controller.signal.aborted) this.patch({aiStatus:'connected'});
+    } catch (error) {
+      if(this._aiTestController===controller) this.patch({aiError:controller.signal.aborted?'AI_TIMEOUT':error.message});
+    } finally {
+      clearTimeout(timer);
+      if(this._aiTestController===controller) {this._aiTestController=null;this.patch({aiTesting:false});}
+    }
+  }
+
+  async requestAIRecommendations(value, {mode, profile, signal}) {
+    const API=window.ListeningAPI,config=API.validateAIConfig(value);
+    let status,data;
+    try {
+      if(signal?.aborted) throw new Error('AI_TIMEOUT');
+      if(nativeHas('CapacitorHttp')) {
+        let onAbort;
+        const nativeRequest=nativeCall('CapacitorHttp','request',{
+          url:API.aiEndpoint(config.baseUrl).toString(),method:'POST',responseType:'json',disableRedirects:true,
+          headers:{Authorization:'Bearer '+config.apiKey,'Content-Type':'application/json',Accept:'application/json'},
+          data:API.buildAIRequest({model:config.model,mode,profile}),connectTimeout:15000,readTimeout:45000,
+        });
+        const aborted=new Promise((_,reject)=>{onAbort=()=>reject(new Error('AI_TIMEOUT'));signal?.addEventListener('abort',onAbort,{once:true});});
+        let result;
+        try {result=await Promise.race([nativeRequest,aborted]);} finally {signal?.removeEventListener('abort',onAbort);}
+        status=result.status;data=typeof result.data==='string'?JSON.parse(result.data):result.data;
+        if(status<200 || status>=300) throw new Error(API.aiHTTPError(status));
+        return API.parseAIResponse(data,mode);
+      }
+      const response=await fetch((window.LISTENING_PROXY_BASE||'')+'/recommendations/ai',{
+        method:'POST',signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+config.apiKey},
+        body:JSON.stringify({baseUrl:config.baseUrl,model:config.model,mode,profile}),
+      });
+      status=response.status;
+      try {data=await response.json();} catch (error) {throw new Error('AI_UNAVAILABLE');}
+      if(!response.ok) throw new Error(Object.prototype.hasOwnProperty.call(tr('aiErrors'),data?.error)?data.error:API.aiHTTPError(status));
+      if(mode==='test' && data?.ok===true) return data;
+      if(mode==='recommend' && Array.isArray(data?.songs) && data.songs.length) return data;
+      throw new Error('AI_BAD_RESPONSE');
+    } catch (error) {
+      if(signal?.aborted) throw new Error('AI_TIMEOUT');
+      throw new Error(Object.prototype.hasOwnProperty.call(tr('aiErrors'),error?.message)?error.message:'AI_UNAVAILABLE');
+    }
+  }
+
+  observeListening(audio) {
+    const track=this.state.queue.find(t=>t.id===this.state.currentId);
+    if(!track || !isFinite(audio.currentTime)) return;
+    let session=this._listenSession;
+    if(!session || session.id!==track.id) {
+      this.finishListening();
+      session=this._listenSession={id:track.id,track,seconds:0,flushed:0,counted:false,position:audio.currentTime};
+    }
+    if(!audio.paused && !audio.seeking && !this._mediaBuffering && session.position!=null) {
+      const delta=audio.currentTime-session.position;
+      if(delta>0 && delta<=5) session.seconds+=delta/(audio.playbackRate||1);
+    }
+    session.position=audio.currentTime;
+    const threshold=isFinite(audio.duration)&&audio.duration>0?Math.max(5,Math.min(30,audio.duration*.5)):30;
+    if(!session.counted && session.seconds>=threshold) this.flushListening({play:true});
+    else if(session.seconds-session.flushed>=15) this.flushListening();
+  }
+
+  flushListening({play=false,skip=false}={}) {
+    const session=this._listenSession;
+    if(!session) return;
+    const seconds=session.seconds-session.flushed;
+    if(seconds>0 || play || skip) this._recommendationEngine?.recordListening(session.track,seconds,{play:play&&!session.counted,skip});
+    session.flushed=session.seconds;
+    if(play) session.counted=true;
+  }
+
+  finishListening({skip=false}={}) {
+    const session=this._listenSession;
+    if(!session) return;
+    this.flushListening({skip:skip&&!session.counted&&session.seconds>=5&&session.seconds<30});
+    this._listenSession=null;
+  }
+
   // ==== Real audio playback ====
 
   // 只负责“开始播放这首曲目”，不改动 playOrder——stepTrack/handleTrackEnd 在 playOrder 里原地
@@ -4108,6 +4455,7 @@ class Component extends DCLogic {
   startTrack(track, resumeAt = 0) {
     if (!track) return;
     const auto = this._diagAutoAdvance;
+    this.finishListening({ skip: !auto });
     this._diagAutoAdvance = false;
     this._diagTrackStartAt = Date.now();
     diagLog('切歌', { 方式: auto ? '自动' : '手动', 来源: track.source, 歌: (track.title || '').slice(0, 20) });
@@ -4566,7 +4914,7 @@ class Component extends DCLogic {
   // 不打乱队列顺序；不在队列里才插到最前面——跟 startTrack 的区别是这个会按需要改 playOrder
   playTrackAt(id) {
     const s = this.state;
-    const track = s.searchResults.find(t => t.id === id) || s.queue.find(t => t.id === id);
+    const track = s.searchResults.find(t => t.id === id) || s.recommendations.find(t => t.id === id) || s.queue.find(t => t.id === id);
     if (!track) return;
     // 离线挑歌模式下点没缓存的歌：提示一下就行，别去加载（断网时加载必然失败，还会触发重试和跳歌）
     if (!this.isPlayable(track)) {
@@ -4729,6 +5077,8 @@ class Component extends DCLogic {
 
     // 当前页：顶栏三个图标。歌单页里有 viewingPlaylistId（而且这个歌单还在）时是歌单详情，否则是歌单列表
     const isSearchPage = s.page === 'search';
+    const isSearchMode = isSearchPage && (s.searchMode || s.hasSearched || s.searchFocused);
+    const isRecommendationHome = isSearchPage && !isSearchMode;
     const isLibraryPage = s.page === 'library';
     const isSettingsPage = s.page === 'settings';
     const viewCtx = (isLibraryPage && s.viewingPlaylistId) ? this.playlistContext(s.viewingPlaylistId, s) : null;
@@ -4773,13 +5123,11 @@ class Component extends DCLogic {
       return { key, label: sourceLabel(key), checked, cls: checked ? 'sw-check is-on' : 'sw-check', onClick: () => this.toggleSource(key) };
     });
 
-    // 搜索联想 / 历史：输入框有字时下拉展示网易云联想曲目；没字时是搜索历史。还没搜过的时候，点进输入框（框里没字）
-    // 才把历史列在页面上（「最近搜索」），平时不显示；这时就不再弹同一份历史的下拉，键盘上下键照样能选，
-    // 高亮落在页面上的那一行。已经搜过、页面上有结果时，历史照旧以下拉的形式出现
+    // 联想放在音源筛选下面。搜索状态的空输入展示历史；收起键盘保留搜索状态，取消才回推荐首页。
     const suggestIsHistory = !s.searchQuery.trim();
     const suggestData = suggestIsHistory ? s.searchHistory : s.suggestions;
-    const showRecents = isSearchPage && !s.hasSearched && s.searchFocused && !s.suggestDismissed && suggestIsHistory && s.searchHistory.length > 0;
-    const showSuggest = isSearchPage && s.searchFocused && !s.suggestDismissed && suggestData.length > 0 && !(suggestIsHistory && showRecents);
+    const showRecents = isSearchMode && !s.hasSearched && suggestIsHistory && s.searchHistory.length > 0;
+    const showSuggest = isSearchMode && s.searchFocused && !s.suggestDismissed && suggestData.length > 0 && !(suggestIsHistory && showRecents);
     const suggestRender = suggestIsHistory
       ? s.searchHistory.map((kw, i) => ({
           key: 'h' + i, title: kw, subtitle: '', hasSub: false, icon: 'history',
@@ -4873,6 +5221,13 @@ class Component extends DCLogic {
     const mediaIsCover = !mediaIsQueue && !mediaIsLyrics;
     const playerMenuOpen = s.openMenu === 'player' && !!matchedTrack;
     const playlistMenuOpen = s.openMenu === 'playlist' && isPlaylistView;
+    const recommendationsRender = s.recommendations.map(t => ({...t, coverStyle: coverStyle(t), coverInitial: coverInitial(t),
+      onPlay: () => this.playTrackAt(t.id), onMore: (e) => { e.stopPropagation(); this.toggleMenu('rec:' + t.id); },
+    }));
+    const recommendationMenuTrack = s.recommendations.find(t => s.openMenu === 'rec:' + t.id);
+    const aiStatusText = s.aiTesting ? tr('aiTesting') : s.aiBusy ? tr('aiGenerating') : s.aiError
+      ? (tr('aiErrors')[s.aiError] || tr('aiErrors').AI_UNAVAILABLE) : s.aiStatus === 'connected' ? tr('aiConnected') : s.aiStatus === 'saved' ? tr('aiSaved') : '';
+
 
     return {
       // 模板里的固定文字：{{ L.键名 }}，当前语言的那一份（见 STRINGS）
@@ -4883,6 +5238,16 @@ class Component extends DCLogic {
         navSearchClass: 'sw-nav-btn' + (isSearchPage ? ' is-active' : ''),
         navLibraryClass: 'sw-nav-btn' + (isLibraryPage ? ' is-active' : ''),
         navSettingsClass: 'sw-nav-btn' + (isSettingsPage ? ' is-active' : ''),
+        isSearchMode, isRecommendationHome, recommendationsRender,
+        recommendationIsAI: s.recommendationKind === 'ai', recommendationLoading: s.recommendationLoading,
+        recommendationRefreshing: s.recommendationLoading || s.recommendationRefreshing,
+        nextBatchLabel: tr(s.recommendationRefreshing ? 'changingBatch' : 'nextBatch'),
+        recommendationEmpty: !s.recommendations.length, showRecommendationEmpty: !s.recommendationLoading && !s.recommendations.length,
+        recommendationMenuOpen: !!recommendationMenuTrack, recommendationLikeLabel: tr(recommendationMenuTrack && s.liked[recommendationMenuTrack.id] ? 'unlike' : 'like'),
+        aiDraft: s.aiDraft, aiTesting: s.aiTesting, aiStatusText, aiKeyType: s.aiShowKey ? 'text' : 'password',
+        aiKeyToggleLabel: tr(s.aiShowKey ? 'aiHideKey' : 'aiShowKey'),
+        aiEnableToggleClass: 'sw-toggle' + (s.aiDraft.enabled ? ' is-on' : ''), aiAutoToggleClass: 'sw-toggle' + (s.aiDraft.auto ? ' is-on' : ''),
+        aiGenerateDisabled: !s.aiConfig.enabled || s.aiBusy || this.isOfflineMode(s),
         page: s.page, isSearchPage, isLibraryPage, isSettingsPage, isLibraryRoot, isPlaylistView,
         track,
         currentTimeStr: fmtTime(s.currentTime), durationStr: fmtTime(duration), progressPct, volume: s.volume,
@@ -4986,6 +5351,18 @@ class Component extends DCLogic {
         clearAudioCache: () => this.clearAudioCache(),
         toggleCarLyrics: () => this.toggleCarLyrics(),
         copyDiagLog: () => this.copyDiagLog(),
+        cancelSearch: () => this.cancelSearch(),
+        playAllRecommendations: () => this.playAllRecommendations(), nextRecommendationBatch: () => this._recommendationEngine?.next(),
+        retryRecommendations: () => this._recommendationEngine?.refreshBasic(true),
+        likeRecommendation: () => { if (recommendationMenuTrack) this.toggleLike(recommendationMenuTrack.id); this.closeMenu(); },
+        addRecommendation: () => { if (recommendationMenuTrack) this.openAddModal(recommendationMenuTrack.id); this.closeMenu(); },
+        dismissRecommendation: () => { this.closeMenu(); if (recommendationMenuTrack) this._recommendationEngine?.dismiss(recommendationMenuTrack); },
+        toggleAIEnabled: () => this.patch(s2 => ({aiDraft:{...s2.aiDraft,enabled:!s2.aiDraft.enabled}})),
+        toggleAIAuto: () => this.patch(s2 => ({aiDraft:{...s2.aiDraft,auto:!s2.aiDraft.auto}})),
+        setAIBaseUrl: (e) => this.setAIDraft('baseUrl',e.target.value), setAIKey: (e) => this.setAIDraft('apiKey',e.target.value), setAIModel: (e) => this.setAIDraft('model',e.target.value),
+        toggleAIKeyVisibility: () => this.patch(s2 => ({aiShowKey:!s2.aiShowKey})),
+        saveAISettings: () => this.saveAISettings(), testAIConnection: () => this.testAIConnection(), clearAISettings: () => this.clearAISettings(),
+        regenerateRecommendations: () => this._recommendationEngine?.generate(),
         doSearch: () => this.doSearch(),
         setSearchQuery: (e) => this.setSearchQuery(e),
         searchKeyDown: (e) => this.searchKeyDown(e),
