@@ -240,6 +240,7 @@ await ListeningAPI.searchAll({ keyword: 'lofi', sources: ['soundcloud'] });
 
 - 改了 `src/api/*` 之后记得跑 `npm run build` 重新生成 `examples/api-bundle.js`——浏览器端用的是这个打包产物，不是 ES module 源码，源码改了不重新构建不会生效
 - 推荐逻辑在 `src/api/recommendations.mjs`，网页端 AI 转发在 `server/ai-recommendations.mjs`；后者需要随 `server.mjs` 一起部署。APK 使用现有原生 HTTP 直接调用用户配置的模型服务。推荐缓存、收听统计和 AI 配置独立存储，不改变已有歌单格式。
+- QQ 推荐、搜索和曲目列表会按显示需要补封面/专辑，查询队列在 `src/api/metadata.mjs`。`fetchQQMetadata(track, {signal})` 只返回展示资料，不修改曲目或下载音频；播放准备使用 `fetchQQDetails`。下一首音频预加载和手动缓存继续保留，详见 [推荐说明](docs/recommendations.md#qq-展示资料)。
 - 手机上遇到切歌卡住：打开「设置」页点「复制切歌诊断记录」，把复制出来的文字贴到 issue 里。记录只存在本机 localStorage（最近 200 条），不上传：每次切歌是自动还是手动、音源走的本地缓存 / 已有链接 / 现场要链接、隔多久出声、播放失败后是重试 / 跳过 / 停止、12 秒看门狗实际晚了多少（晚很多说明页面在后台被系统冻住了）、前后台切换、页面冻结 / 恢复、网络断开 / 恢复
 - 想动手机端状态栏 / 通知栏沉浸之前，**先看 [`docs/mobile-status-bar.md`](docs/mobile-status-bar.md)**——纯 PWA 做不到沉浸，状态栏颜色也不受页面控制，里面记了两条已经真机验证过走不通的路，以及 APK 里是怎么做到的
 - 页面别再引用外网的脚本 / 样式 / 字体：放进 `examples/vendor/`（`node scripts/vendor-assets.mjs` 负责下载和校验）。APK 打包时 `mobile/scripts/build-www.mjs` 发现外链会直接报错，不然 APK 断网就是白屏

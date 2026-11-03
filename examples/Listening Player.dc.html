@@ -691,7 +691,7 @@ label.sw-field-label { display: block; }
             <sc-for list="{{ v.recommendationsRender }}" as="t">
               <div class="sw-rec-featured">
                 <button class="sw-rec-card-cover" onclick="{{ t.onPlay }}" aria-label="{{ t.title }}">
-                  <div class="sw-cover sw-rec-art" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
+                  <div class="sw-cover sw-rec-art" data-metadata-id="{{ t.id }}" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
                 </button>
                 <div class="sw-rec-card-meta">
                   <button class="sw-rec-card-text" onclick="{{ t.onPlay }}">
@@ -852,7 +852,7 @@ label.sw-field-label { display: block; }
             <sc-for list="{{ v.tracksRender }}" as="t" hint-placeholder-count="8">
               <div class="{{ t.rowClass }}" onclick="{{ t.onPlay }}" style="opacity:{{ t.rowOpacity }};">
                 <span class="sw-idx"><sc-if value="{{ t.isCurrent }}"><span class="ms">graphic_eq</span></sc-if><sc-if value="{{ t.notCurrent }}">{{ t.indexLabel }}</sc-if></span>
-                <div class="sw-cover" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
+                <div class="sw-cover" data-metadata-id="{{ t.id }}" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
                 <div class="sw-row-main">
                   <div class="sw-t">{{ t.title }}</div>
                   <div class="sw-m"><span class="sw-a">{{ t.artistDisplay }}</span><span>·</span><span class="sw-src">{{ t.sourceLabel }}</span><sc-if value="{{ t.isCached }}"><span class="ms" title="{{ L.cachedOffline }}">download_done</span></sc-if></div>
@@ -919,7 +919,7 @@ label.sw-field-label { display: block; }
               <div class="{{ item.rowClass }}" draggable="true" onDragStart="{{ item.onDragStart }}" onDragOver="{{ item.onDragOver }}" onDrop="{{ item.onDrop }}" onDragEnd="{{ H.dragEnd }}" onclick="{{ item.onClick }}" style="opacity:{{ item.rowOpacity }};">
                 <span class="sw-idx"><sc-if value="{{ item.isCurrent }}"><span class="ms">graphic_eq</span></sc-if><sc-if value="{{ item.notCurrent }}">{{ item.indexLabel }}</sc-if></span>
                 <span class="ms dc-queue-drag-handle" title="{{ L.dragToReorder }}">drag_indicator</span>
-                <div class="sw-cover" style="{{ item.coverStyle }}">{{ item.coverInitial }}</div>
+                <div class="sw-cover" data-metadata-id="{{ item.id }}" style="{{ item.coverStyle }}">{{ item.coverInitial }}</div>
                 <div class="sw-row-main">
                   <div class="sw-t">{{ item.title }}</div>
                   <div class="sw-m"><span class="sw-a">{{ item.artistDisplay }}</span><span>·</span><span class="sw-src">{{ item.sourceLabel }}</span><sc-if value="{{ item.isCached }}"><span class="ms" title="{{ L.cachedOffline }}">download_done</span></sc-if></div>
@@ -2531,6 +2531,11 @@ class Component extends DCLogic {
 
   componentWillUnmount() {
     this._recommendationsDisposed = true;
+    this._metadataLoader?.dispose();
+    clearTimeout(this._metadataTimer);
+    document.removeEventListener('scroll', this._onMetadataView, true);
+    document.removeEventListener('transitionend', this._onMetadataView, true);
+    window.removeEventListener('resize', this._onMetadataView);
     if (this._audio) {
       this._audio.removeEventListener('timeupdate', this._onTimeUpdate);
       this._audio.removeEventListener('ended', this._onEnded);
@@ -2618,6 +2623,7 @@ class Component extends DCLogic {
     }, 0);
     this.syncThemeChrome();
     this.syncLangChrome();
+    this.initTrackMetadata();
     this.initRecommendations();
     // 诊断记录：前后台切换、页面被系统冻结 / 恢复、网络断开 / 恢复——后台切歌卡住时拿这些时间点对照
     this._onDiagVisibility = () => { diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' }); this.flushListening(); if (document.visibilityState === 'visible') void this._recommendationEngine?.start(); };
@@ -2661,6 +2667,14 @@ class Component extends DCLogic {
 
   componentDidUpdate() {
     const s = this.state;
+    // 音频进度频繁更新，不随每一帧扫描列表；列表/视图变化、滚动和窗口变化时才检查可见歌曲。
+    const metadataInputs = [s.page, s.searchMode, s.hasSearched, s.recommendations, s.searchResults, s.queue,
+      s.playOrder, s.currentId, s.viewingPlaylistId, s.rightPanel, s.mediaView, s.mobileNowPlayingExpanded,
+      s.online, s.offlineOnly, s.cacheRev];
+    if (!this._metadataInputs || metadataInputs.some((value, i) => value !== this._metadataInputs[i])) {
+      this._metadataInputs = metadataInputs;
+      this.scheduleTrackMetadata();
+    }
     // 宽屏歌词栏一直摆着歌词：刚打开 App、或者暂停着换了当前曲目时还没放过，歌词得自己去补
     // （在放的时候 loadAndPlay 会带上歌词，不用管）
     if ((s.lyricsCol || (mediaSessionBridge.native && s.carBluetoothLyrics)) && !s.playing && s.currentId != null && s.currentId !== this._lyricsShownFor) {
@@ -2669,6 +2683,80 @@ class Component extends DCLogic {
     }
     this.syncMiniPlayer();
     if (IS_NATIVE) { this.syncWidget(); this.syncCarLyrics(); }
+  }
+
+  initTrackMetadata() {
+    const API = window.ListeningAPI;
+    this._metadataLoader = new API.TrackMetadataLoader({
+      fetchMetadata: (track, options) => API.fetchQQMetadata(track, options),
+      onMetadata: (key, value) => this.applyTrackMetadata(key, value),
+    });
+    this._onMetadataView = event => {
+      if (event.type !== 'transitionend' || event.target.matches('.dc-nowplaying')) this.scheduleTrackMetadata();
+    };
+    document.addEventListener('scroll', this._onMetadataView, true);
+    document.addEventListener('transitionend', this._onMetadataView, true);
+    window.addEventListener('resize', this._onMetadataView);
+    this.scheduleTrackMetadata();
+  }
+
+  scheduleTrackMetadata() {
+    if (this._recommendationsDisposed || this._metadataTimer != null) return;
+    this._metadataTimer = setTimeout(() => {
+      this._metadataTimer = null;
+      if (!this._metadataLoader || this._recommendationsDisposed) return;
+      const s = this.state;
+      const all = [...s.queue, ...s.searchResults, ...s.recommendations];
+      const tracks = new Map(all.map(t => [String(t.id), t]));
+      const current = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]);
+      const visible = current ? [current] : [];
+      for (const element of document.querySelectorAll('[data-metadata-id]')) {
+        const rect = element.getBoundingClientRect();
+        // 只补屏幕内及即将滚入屏幕的项目，大歌单不会在打开时整单查询。
+        if (!rect.width || !rect.height || rect.bottom < -100 || rect.top > innerHeight + 100 || rect.right < 0 || rect.left > innerWidth) continue;
+        const track = tracks.get(element.dataset.metadataId);
+        if (track) visible.push(track);
+      }
+      // 刷新后内存查询缓存为空，仍可复用曲库/旧推荐里已经保存的展示资料。
+      const known = new Map();
+      for (const track of all) {
+        const key = window.ListeningAPI.metadataKey(track);
+        if (!key) continue;
+        const value = known.get(key) || {};
+        for (const field of ['cover', 'album', 'pageUrl', 'lrc']) if (!value[field] && track[field]) value[field] = track[field];
+        known.set(key, value);
+      }
+      for (const key of new Set(visible.map(window.ListeningAPI.metadataKey).filter(Boolean))) this.applyTrackMetadata(key, known.get(key));
+      this._metadataLoader.update(visible, { online: !this.isOfflineMode(s) });
+    }, 40);
+  }
+
+  applyTrackMetadata(key, value) {
+    if (this._recommendationsDisposed || !value) return;
+    const s = this.state, API = window.ListeningAPI;
+    const changed = new Set();
+    for (const track of new Set([...s.queue, ...s.searchResults, ...s.recommendations])) {
+      if (API.metadataKey(track) !== key) continue;
+      // 名字和歌手是推荐去重/不感兴趣的标识；补资料不改变它们，也不写入可能过期的播放链接。
+      for (const field of ['cover', 'album', 'pageUrl', 'lrc']) {
+        if (!track[field] && value[field]) { track[field] = value[field]; changed.add(track); }
+      }
+    }
+    if (!changed.size) return;
+    const track = changed.values().next().value;
+    this._recommendationEngine?.updateMetadata(track);
+    const libraryTrack = s.queue.find(t => changed.has(t));
+    if (libraryTrack) {
+      this.persist();
+      if (this.isTrackCached(libraryTrack)) this.syncCacheMeta(libraryTrack).then(() => this.scheduleCacheRefresh());
+    }
+    this.patch({ queue: [...s.queue], searchResults: [...s.searchResults], recommendations: [...s.recommendations] });
+    const current = s.queue.find(t => t.id === s.currentId) || s.queue.find(t => t.id === s.playOrder[0]);
+    if (current && changed.has(current)) {
+      mediaSessionBridge.setMetadata(current);
+      this.syncCarLyrics();
+      if (current.id === s.currentId && current.lrc && s.lyricsTrackId !== current.id) this.parseAndSetLyrics(current.lrc, current.id);
+    }
   }
 
   // ==== 迷你播放器：Document Picture-in-Picture 开一个浮在所有窗口最上面的小窗口（只有电脑上的 Chrome / Edge 有） ====
@@ -3715,7 +3803,7 @@ class Component extends DCLogic {
   // 曲目信息后到时（歌词、真实时长、QQ 详情里的专辑和封面）补写进缓存的元数据，
   // 断网时「已缓存」列表和歌词页就是完整的。没缓存的歌不用管，下载完成时会整份写一次
   syncCacheMeta(track) {
-    if (this.isTrackCached(track)) putCachedMeta(audioCacheKey(track), trackCacheMeta(track));
+    if (this.isTrackCached(track)) return putCachedMeta(audioCacheKey(track), trackCacheMeta(track));
   }
 
   // 本地曲库里按歌名 / 歌手 / 专辑找（不区分大小写）。同一首歌（缓存 key 相同）只出一次，已缓存的排前面

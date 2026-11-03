@@ -23,6 +23,7 @@ var ListeningAPI = (() => {
     AI_CONFIG_KEY: () => AI_CONFIG_KEY,
     RECOMMENDATION_KEY: () => RECOMMENDATION_KEY,
     RecommendationEngine: () => RecommendationEngine,
+    TrackMetadataLoader: () => TrackMetadataLoader,
     aiConfigTag: () => aiConfigTag,
     aiEndpoint: () => aiEndpoint,
     aiHTTPError: () => aiHTTPError,
@@ -31,7 +32,9 @@ var ListeningAPI = (() => {
     fetchNeteaseDetails: () => fetchNeteaseDetails,
     fetchNeteasePlaylist: () => fetchNeteasePlaylist,
     fetchQQDetails: () => fetchQQDetails,
+    fetchQQMetadata: () => fetchQQMetadata,
     fetchSoundCloudDetails: () => fetchSoundCloudDetails,
+    metadataKey: () => metadataKey,
     normalizeAIConfig: () => normalizeAIConfig,
     officialSongUrl: () => officialSongUrl,
     parseAIResponse: () => parseAIResponse,
@@ -193,6 +196,59 @@ var ListeningAPI = (() => {
 
   // src/api/qq.js
   var SEARCH_URL = "https://tang.api.s01s.cn/music_open_api.php";
+  var detailRequests = /* @__PURE__ */ new Map();
+  function requestQQDetails(track, { signal } = {}) {
+    if (signal?.aborted) return Promise.reject(signal.reason);
+    const mid = String(track.qqId || track.songMid || track.songid || "").trim();
+    if (!mid) return Promise.reject(new Error("qq detail error (missing mid)"));
+    let job = detailRequests.get(mid);
+    if (!job) {
+      const msg = (track.qqSearchKey || track.keyword || "").trim() || `${track.title || ""} ${track.artist || ""}`.trim();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1e4);
+      job = { controller, users: 0 };
+      job.promise = (async () => {
+        const res = await fetch(`${SEARCH_URL}?msg=${encodeURIComponent(msg)}&type=json&mid=${encodeURIComponent(mid)}`, { signal: controller.signal });
+        if (!res.ok) throw new Error("qq detail error (HTTP " + res.status + ")");
+        const data = await res.json();
+        if (String(data?.song_mid || "") !== mid) throw new Error("qq detail error (mismatched mid)");
+        return data;
+      })().finally(() => {
+        clearTimeout(timer);
+        if (detailRequests.get(mid) === job) detailRequests.delete(mid);
+      });
+      detailRequests.set(mid, job);
+    }
+    job.users++;
+    return new Promise((resolve, reject) => {
+      let finished = false;
+      const finish = (callback, value) => {
+        if (finished) return;
+        finished = true;
+        signal?.removeEventListener("abort", onAbort);
+        if (--job.users === 0) {
+          if (detailRequests.get(mid) === job) detailRequests.delete(mid);
+          job.controller.abort();
+        }
+        callback(value);
+      };
+      const onAbort = () => finish(reject, signal.reason);
+      signal?.addEventListener("abort", onAbort, { once: true });
+      job.promise.then((value) => finish(resolve, value), (error) => finish(reject, error));
+    });
+  }
+  function displayMetadata(data) {
+    const pic = data.album_pic || data.singer_pic;
+    return {
+      cover: typeof pic === "string" ? pic.replace(/^http:\/\//i, "https://") : null,
+      album: data.album_name || data.album_title || "",
+      pageUrl: data.song_h5_url || "",
+      lrc: data.song_lyric || data.lyric || null
+    };
+  }
+  async function fetchQQMetadata(track, options) {
+    return displayMetadata(await requestQQDetails(track, options));
+  }
   async function searchQQ(kw, limit = 10, { signal } = {}) {
     const url = `${SEARCH_URL}?msg=${encodeURIComponent(kw)}&type=json`;
     const results = [];
@@ -244,23 +300,14 @@ var ListeningAPI = (() => {
     if (d.song_play_url) return { url: d.song_play_url, tag: null, label: null, text: null };
     return { url: null, tag: null, label: null, text: null };
   }
-  async function fetchQQDetails(track) {
-    const msg = (track.qqSearchKey || track.keyword || "").trim() || ((track.title || "") + " " + (track.artist || "")).trim();
-    const mid = (track.qqId || track.songMid || track.songid || "").toString().trim();
-    if (!mid) return track;
-    const url = `${SEARCH_URL}?msg=${encodeURIComponent(msg)}&type=json&mid=${encodeURIComponent(mid)}`;
+  async function fetchQQDetails(track, options) {
     try {
-      const res = await fetch(url);
-      const d = await res.json();
-      if (!d || typeof d !== "object" || !d.song_mid) {
-        throw new Error("qq detail error (invalid response)");
-      }
+      const d = await requestQQDetails(track, options);
       track.title = d.song_title || d.song_name || track.title;
       track.artist = d.singer_name || track.artist;
-      track.album = d.album_name || d.album_title || track.album || "";
-      const pic = d.album_pic || d.singer_pic;
-      track.cover = pic ? pic.replace(/^http:\/\//, "https://") : track.cover;
-      track.pageUrl = d.song_h5_url || track.pageUrl;
+      for (const [key, value] of Object.entries(displayMetadata(d))) {
+        if (value) track[key] = value;
+      }
       const best = pickBestPlayUrl(d);
       if (best.url) track.audioUrl = best.url.replace(/^http:\/\//, "https://");
       track.lrc = d.song_lyric || d.lyric || track.lrc;
@@ -484,6 +531,69 @@ var ListeningAPI = (() => {
     }
   }
 
+  // src/api/metadata.mjs
+  var metadataKey = (track) => track?.source === "qq" ? String(track.qqId || track.songMid || track.songid || "") : "";
+  var needsMetadata = (track) => !!metadataKey(track) && (!track.cover || !track.album);
+  var TrackMetadataLoader = class {
+    constructor({ fetchMetadata, onMetadata, now = Date.now, timeout = 8e3 }) {
+      Object.assign(this, { fetchMetadata, onMetadata, now, timeout });
+      this.targets = /* @__PURE__ */ new Map();
+      this.jobs = /* @__PURE__ */ new Map();
+      this.cache = /* @__PURE__ */ new Map();
+    }
+    update(tracks, { online = true } = {}) {
+      this.targets = new Map((online ? tracks : []).filter(needsMetadata).map((track) => [metadataKey(track), track]));
+      for (const [key, job] of this.jobs) {
+        if (!this.targets.has(key)) job.controller.abort();
+      }
+      for (const [key, track] of this.targets) {
+        const cached = this.cache.get(key);
+        if (cached?.value && cached.until > this.now()) this.onMetadata(key, cached.value);
+        if (!needsMetadata(track)) this.targets.delete(key);
+      }
+      this.pump();
+    }
+    pump() {
+      for (const [key, track] of this.targets) {
+        if (this.jobs.size >= 2) break;
+        if (this.jobs.has(key) || !needsMetadata(track) || this.cache.get(key)?.until > this.now()) continue;
+        const controller = new AbortController();
+        const job = { controller, timedOut: false };
+        this.jobs.set(key, job);
+        const timer = setTimeout(() => {
+          job.timedOut = true;
+          controller.abort();
+        }, this.timeout);
+        const aborted = new Promise((_, reject) => {
+          controller.signal.addEventListener("abort", () => reject(new Error("metadata query aborted")), { once: true });
+        });
+        Promise.race([Promise.resolve().then(() => this.fetchMetadata(track, { signal: controller.signal })), aborted]).then((value) => {
+          if (controller.signal.aborted || !this.targets.has(key)) return;
+          this.remember(key, { value, until: this.now() + 6 * 36e5 });
+          this.onMetadata(key, value);
+        }).catch(() => {
+          if (this.targets.has(key) && (!controller.signal.aborted || job.timedOut)) {
+            this.remember(key, { until: this.now() + 6e5 });
+          }
+        }).finally(() => {
+          clearTimeout(timer);
+          if (this.jobs.get(key) === job) this.jobs.delete(key);
+          this.pump();
+        });
+      }
+    }
+    remember(key, value) {
+      this.cache.delete(key);
+      this.cache.set(key, value);
+      if (this.cache.size > 200) this.cache.delete(this.cache.keys().next().value);
+    }
+    dispose() {
+      this.targets.clear();
+      for (const job of this.jobs.values()) job.controller.abort();
+      this.cache.clear();
+    }
+  };
+
   // src/api/share.js
   var URL_TEMPLATES = {
     // 服务端渲染的移动分享页。PC 端那个 /song?id= 是 hash 路由 SPA，
@@ -644,8 +754,8 @@ var ListeningAPI = (() => {
   }
   var storedTrack = (track) => {
     const out = {};
-    for (const key of ["uid", "source", "songid", "songMid", "qqId", "qqSearchKey", "keyword", "title", "artist", "album", "cover", "lrcUrl"]) {
-      if (typeof track[key] === "string") out[key] = track[key].slice(0, key === "cover" || key === "lrcUrl" ? 2048 : 200);
+    for (const key of ["uid", "source", "songid", "songMid", "qqId", "qqSearchKey", "keyword", "title", "artist", "album", "cover", "pageUrl", "lrcUrl"]) {
+      if (typeof track[key] === "string") out[key] = track[key].slice(0, ["cover", "pageUrl", "lrcUrl"].includes(key) ? 2048 : 200);
     }
     return out;
   };
@@ -684,6 +794,21 @@ var ListeningAPI = (() => {
         this.storage?.setItem(RECOMMENDATION_KEY, JSON.stringify(this.store));
       } catch {
       }
+    }
+    updateMetadata(track) {
+      let changed = false;
+      for (const pool of [this.store.basic, this.store.ai]) {
+        for (const item of pool.tracks) {
+          if (trackIdentity(item) !== trackIdentity(track)) continue;
+          for (const key of ["cover", "album", "pageUrl"]) {
+            if (!item[key] && track[key]) {
+              item[key] = storedTrack(track)[key];
+              changed = true;
+            }
+          }
+        }
+      }
+      if (changed) this.persist();
     }
     cancel() {
       this.epoch++;

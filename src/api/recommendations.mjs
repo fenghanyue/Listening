@@ -111,8 +111,8 @@ export function aiHTTPError(status) {
 const storedTrack = track => {
   const out = {};
   // Keep the metadata needed by existing source adapters, never a whole mutable track or an audio URL.
-  for (const key of ['uid','source','songid','songMid','qqId','qqSearchKey','keyword','title','artist','album','cover','lrcUrl']) {
-    if (typeof track[key] === 'string') out[key] = track[key].slice(0, key === 'cover' || key === 'lrcUrl' ? 2048 : 200);
+  for (const key of ['uid','source','songid','songMid','qqId','qqSearchKey','keyword','title','artist','album','cover','pageUrl','lrcUrl']) {
+    if (typeof track[key] === 'string') out[key] = track[key].slice(0, ['cover','pageUrl','lrcUrl'].includes(key) ? 2048 : 200);
   }
   return out;
 };
@@ -139,6 +139,18 @@ export class RecommendationEngine {
   }
 
   persist() { try { this.storage?.setItem(RECOMMENDATION_KEY, JSON.stringify(this.store)); } catch { /* A full storage must not break playback. */ } }
+  updateMetadata(track) {
+    let changed = false;
+    for (const pool of [this.store.basic, this.store.ai]) {
+      for (const item of pool.tracks) {
+        if (trackIdentity(item) !== trackIdentity(track)) continue;
+        for (const key of ['cover', 'album', 'pageUrl']) {
+          if (!item[key] && track[key]) { item[key] = storedTrack(track)[key]; changed = true; }
+        }
+      }
+    }
+    if (changed) this.persist();
+  }
   cancel() {
     this.epoch++;
     if(this.basicBusy && !this.store.basic.tracks.length) this.store.basic.lastAttempt=0;
