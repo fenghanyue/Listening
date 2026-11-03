@@ -21,6 +21,7 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
   （`LISTENING_PROXY_BASE`）。改了要等合并到 main、Render 部署后才生效。
 - **根目录 `package.json` 保持零依赖**（Render 部署用），安卓相关依赖只放 `mobile/package.json`。
 - **猜你喜欢 / AI 推荐**：引擎在 `src/api/recommendations.mjs`，网页专用 POST 转发在 `server/ai-recommendations.mjs`。推荐数据键 `listening-recommendations-v1` 与 AI 配置键 `listening-ai-config-v1` 必须和歌单存档、导出、诊断分开；推荐缓存不保存 Key。换一批不能调用模型，自动生成最多每 24 小时一次。网页转发只允许公开 HTTPS 目的地，保留 DNS 地址校验、IP 固定、TLS 校验、大小/时间限制与错误脱敏；APK 用现有 `CapacitorHttp`，不要打开接管全部 fetch 的开关。详见 [docs/recommendations.md](docs/recommendations.md)。
+- **QQ 展示资料**：`src/api/metadata.mjs` 管理限并发、去重和取消，主页面只提交当前显示的条目。`fetchQQMetadata` 不修改 `audioUrl/detailsLoaded`；补资料须同步同曲目的其他副本及原有推荐/曲库缓存，推荐缓存不存音频链接/歌词。下一首音频预加载和主动缓存继续工作。相关回归为 `metadata`、`metadata-ui`。
 - **界面上的字（中文 / English）**：都在页面的 `STRINGS` 表里，每条是 `[中文, English]` 一对，新加的字两种语言都要写；
   模板里写 `{{ L.键名 }}`，代码里写 `tr('键名', 参数…)`（不叫 `t`：页面里到处拿 `t` 当曲目变量）。歌名、歌手、专辑、歌词、
   用户起的歌单名不翻；内置「喜欢的音乐」存的还是中文名，显示走 `playlistLabel`；切歌诊断记录（`diagLog`）一直是中文。
@@ -74,8 +75,8 @@ GitHub Actions 打包发布）。两者的关系、APK 的原理和取舍见 [do
 - Playwright 模拟不了真手机上的键盘、WebView 和状态栏。这类改动先推分支出预览版，让用户在手机上试。
 - 迷你播放器（电脑 Chrome / Edge 的小窗）：测它不能用 Playwright 拦请求，一拦小窗的样式就加载不出来；拖动、记位置
   这些要在有窗口管理器的真窗口里试。浏览器的限制和试法见 [docs/mini-player.md](docs/mini-player.md)。
-- 不联网的测试会被页面自己的两处联网绊倒：宽屏歌词栏开着时，暂停换了当前曲目会去补歌词；真放音频时会预取下一首。
-  测试里把 `ensureLyricsForCurrent` / `prefetchTrack` 换成空函数（layout、miniplayer 就是这么做的）。
+- 不联网的测试要控制页面的后台查询：宽屏歌词栏会补歌词，播放临近结尾会预取下一首，可见 QQ 歌曲会补展示资料。
+  专项测试之外可替换 `ensureLyricsForCurrent` / `prefetchTrack`；layout 在组件挂载前让 `fetchQQMetadata` 返回空资料，补图和音频边界由 `metadata-ui` 验证。
 - 联网的几组时好时坏：native 的两项导出检查要在 90 秒内下完一整首歌；第三方搜索接口有时对所有关键词都返回空数组。
   失败了先用 curl 直接调一下接口，再判断是不是代码的问题。
 

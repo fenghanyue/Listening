@@ -6,11 +6,16 @@
 // 英文界面（设置页的「语言」选 English）五种尺寸再各走一遍（-en）：英文一般比中文长，看有没有字伸出去；
 // 这一遍的歌名、歌手、歌词、歌单名也都换成英文的，界面上再出现一个中文字就是漏翻了
 import { BASE, OUT, launchBrowser, logicDriver, createChecker, seedRecommendationCache } from './lib.mjs';
+import fs from 'node:fs/promises';
 
 const { check, finish } = createChecker();
 const browser = await launchBrowser();
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+// 启动首页也会补 QQ 资料，在组件挂载前替换查询，保持每屏固定样本和不联网的约束。
+// 实际补图、取消和播放边界由 metadata-ui 验证。
+const layoutAPI = await fs.readFile(new URL('../examples/api-bundle.js', import.meta.url), 'utf8')
+  + '\nListeningAPI = {...ListeningAPI, fetchQQMetadata: async () => ({})};';
 const T = (id, title, artist, album, source, hasCover, duration) => ({
   id, songid: String(9000 + id), title, artist, album, source, duration,
   cover: hasCover ? `https://p3.music.126.net/layout-test/${id}.jpg?param=300y300` : null,
@@ -276,6 +281,7 @@ for (const vp of VIEWPORTS) {
       const req = route.request();
       const u = new URL(req.url());
       const local = u.origin === new URL(BASE).origin;
+      if (local && u.pathname === '/api-bundle.js') return route.fulfill({status:200,contentType:'application/javascript',body:layoutAPI});
       if (local && !/^\/(proxy|stream|sc-client-id)/.test(u.pathname)) return route.continue();
       if (req.resourceType() === 'image') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       external.push(req.url());

@@ -107,7 +107,8 @@ export async function ensureTrackDetails(track) {
  * 检出所有 API 源
  */
 export { searchNetease, fetchNeteaseDetails, fetchNeteasePlaylist, resolveNeteaseShortLink } from './netease.js';
-export { searchQQ, fetchQQDetails } from './qq.js';
+export { searchQQ, fetchQQDetails, fetchQQMetadata } from './qq.js';
+export { TrackMetadataLoader, metadataKey } from './metadata.mjs';
 export { searchSoundCloud, fetchSoundCloudDetails, resolveSoundCloudCacheUrl } from './soundcloud.js';
 export { officialSongUrl, shareText } from './share.js';
 export { RecommendationEngine, RECOMMENDATION_KEY, AI_CONFIG_KEY, normalizeAIConfig, validateAIConfig, aiEndpoint, aiConfigTag, buildAIRequest, parseAIResponse, aiHTTPError, recommendationKey, trackIdentity } from './recommendations.mjs';
