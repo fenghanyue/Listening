@@ -267,10 +267,13 @@ if ('serviceWorker' in navigator) {
     .sw-row-main { min-width: 0; }
     .sw-t { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .is-current .sw-t { font-weight: 700; }
+    .sw-title-line { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+    .sw-title-line .sw-t { flex: 0 1 auto; min-width: 0; }
+    .sw-source-logo { display: block; width: 16px; height: 16px; flex: 0 0 16px; }
+    .sw-cached-mark { width: 16px; font-size: 16px; line-height: 1; flex: 0 0 16px; color: var(--ink-2); }
     .sw-m { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
     .sw-a { overflow: hidden; text-overflow: ellipsis; }
-    .sw-src { flex-shrink: 0; }
-    .sw-m .ms { font-size: 14px; }
+    .sw-src { flex-shrink: 0; font-size: 12.5px; color: var(--ink-2); }
     .sw-acts { display: flex; margin-right: -12px; }
     .sw-empty { padding: 40px 0; }
     .sw-empty-title { font-size: 20px; font-weight: 700; line-height: 1.3; }
@@ -486,7 +489,7 @@ if ('serviceWorker' in navigator) {
       .sw-volume .sw-bar-hit { flex: 1; margin: 0; }
       .sw-volume .sw-bar-fill { background: var(--ink); }
       .sw-footer { display: flex; flex-shrink: 0; height: 32px; align-items: center; padding: 0 24px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-2); }
-      /* 搜索结果排成表格：歌名一栏，歌手和来源一栏 */
+      /* 搜索结果排成表格：来源 logo、歌名和缓存标记一栏，歌手 / 专辑一栏 */
       .sw-main .sw-row { grid-template-columns: 32px 48px minmax(0, 1.6fr) minmax(0, 1fr) auto; min-height: 64px; }
       .sw-main .sw-row-main { display: contents; }
       .sw-main .sw-row .sw-m { margin-top: 0; font-size: 13px; }
@@ -854,8 +857,13 @@ label.sw-field-label { display: block; }
                 <span class="sw-idx"><sc-if value="{{ t.isCurrent }}"><span class="ms">graphic_eq</span></sc-if><sc-if value="{{ t.notCurrent }}">{{ t.indexLabel }}</sc-if></span>
                 <div class="sw-cover" data-metadata-id="{{ t.id }}" style="{{ t.coverStyle }}">{{ t.coverInitial }}</div>
                 <div class="sw-row-main">
-                  <div class="sw-t">{{ t.title }}</div>
-                  <div class="sw-m"><span class="sw-a">{{ t.artistDisplay }}</span><span>·</span><span class="sw-src">{{ t.sourceLabel }}</span><sc-if value="{{ t.isCached }}"><span class="ms" title="{{ L.cachedOffline }}">download_done</span></sc-if></div>
+                  <div class="sw-title-line">
+                    <sc-if value="{{ t.sourceLogo }}"><img class="sw-source-logo" src="{{ t.sourceLogo }}" alt="{{ t.sourceLabel }}" title="{{ t.sourceLabel }}"></sc-if>
+                    <sc-if value="{{ !t.sourceLogo }}"><span class="sw-src">{{ t.sourceLabel }}</span></sc-if>
+                    <div class="sw-t">{{ t.title }}</div>
+                    <sc-if value="{{ t.isCached }}"><span class="ms sw-cached-mark" title="{{ L.cachedOffline }}" role="img" aria-label="{{ L.cachedOffline }}">download_done</span></sc-if>
+                  </div>
+                  <div class="sw-m"><span class="sw-a">{{ t.artistDisplay }}</span></div>
                 </div>
                 <div class="sw-acts">
                   <button class="sw-icon-btn" onclick="{{ t.onAdd }}" aria-label="{{ t.primaryActionLabel }}" title="{{ t.primaryActionLabel }}"><span class="ms">{{ t.primaryActionIcon }}</span></button>
@@ -921,8 +929,13 @@ label.sw-field-label { display: block; }
                 <span class="ms dc-queue-drag-handle" title="{{ L.dragToReorder }}">drag_indicator</span>
                 <div class="sw-cover" data-metadata-id="{{ item.id }}" style="{{ item.coverStyle }}">{{ item.coverInitial }}</div>
                 <div class="sw-row-main">
-                  <div class="sw-t">{{ item.title }}</div>
-                  <div class="sw-m"><span class="sw-a">{{ item.artistDisplay }}</span><span>·</span><span class="sw-src">{{ item.sourceLabel }}</span><sc-if value="{{ item.isCached }}"><span class="ms" title="{{ L.cachedOffline }}">download_done</span></sc-if></div>
+                  <div class="sw-title-line">
+                    <sc-if value="{{ item.sourceLogo }}"><img class="sw-source-logo" src="{{ item.sourceLogo }}" alt="{{ item.sourceLabel }}" title="{{ item.sourceLabel }}"></sc-if>
+                    <sc-if value="{{ !item.sourceLogo }}"><span class="sw-src">{{ item.sourceLabel }}</span></sc-if>
+                    <div class="sw-t">{{ item.title }}</div>
+                    <sc-if value="{{ item.isCached }}"><span class="ms sw-cached-mark" title="{{ L.cachedOffline }}" role="img" aria-label="{{ L.cachedOffline }}">download_done</span></sc-if>
+                  </div>
+                  <div class="sw-m"><span class="sw-a">{{ item.artistDisplay }}</span></div>
                 </div>
                 <span class="sw-qdur">{{ item.durationStr }}</span>
                 <div class="sw-qbtns">
@@ -1410,6 +1423,9 @@ function langView(lang) {
   return _langViews[lang];
 }
 
+// 平台官网 favicon 的本地 PNG 副本，随页面打包，离线时也能显示：
+// https://s1.music.126.net/style/favicon.ico?v20180823 / https://y.qq.com/favicon.ico
+const SOURCE_LOGOS = { netease: './icons/netease-music.png', qq: './icons/qq-music.png' };
 function sourceLabel(source) { return tr('sourceNames')[source] || source; }
 function playModeLabel(mode) { return tr('playModes')[mode] || ''; }
 
@@ -5146,7 +5162,7 @@ class Component extends DCLogic {
       return {
         ...t, index: i + 1, indexLabel: pad2(i + 1), isCurrent, notCurrent: !isCurrent,
         coverStyle: coverStyle(t), coverInitial: coverInitial(t),
-        sourceLabel: sourceLabel(t.source), durationStr: t.duration ? fmtTime(t.duration) : '',
+        sourceLogo: SOURCE_LOGOS[t.source] || '', sourceLabel: sourceLabel(t.source), durationStr: t.duration ? fmtTime(t.duration) : '',
         artistDisplay: fmtArtistAlbum(t),
         isCached: cached,
         rowClass: 'sw-qrow sw-press' + (isCurrent ? ' is-current' : ''),
@@ -5194,7 +5210,7 @@ class Component extends DCLogic {
         isCached: cached,
         rowOpacity: offlineMode && !cached ? '0.45' : '1',
         rowClass: 'sw-row sw-press dc-result-row' + (isCurrent ? ' is-current' : ''),
-        coverStyle: coverStyle(t), coverInitial: coverInitial(t), sourceLabel: sourceLabel(t.source),
+        coverStyle: coverStyle(t), coverInitial: coverInitial(t), sourceLogo: SOURCE_LOGOS[t.source] || '', sourceLabel: sourceLabel(t.source),
         artistDisplay: fmtArtistAlbum(t),
         likeBtnClass: liked ? 'sw-icon-btn is-liked' : 'sw-icon-btn',
         primaryActionIcon: isCachedView ? 'delete' : (isPlaylistView ? 'playlist_remove' : 'playlist_add'),
