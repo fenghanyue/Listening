@@ -2301,7 +2301,7 @@ function formatDiagLog(list) {
     const d = new Date(e.t);
     const { t, ev, bg, off, ...rest } = e;
     const fields = Object.entries(rest).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${v}`).join(' ');
-    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)} ${bg ? '后台' : '前台'}${off ? ' 断网' : ''} ${ev}${fields ? ' ' + fields : ''}`;
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)} ${bg ? '后台' : '前台'}${off ? ' 浏览器报离线' : ''} ${ev}${fields ? ' ' + fields : ''}`;
   });
   return [`# 听音乐 切歌诊断记录（${list.length} 条）`, `# ${navigator.userAgent}`, ...lines].join('\n');
 }
@@ -2504,7 +2504,7 @@ class Component extends DCLogic {
       playlists: [
         { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
       ],
-      // 离线相关（运行时状态，都不进歌单库存档）：online 跟着浏览器的 online/offline 事件走；
+      // 离线相关（运行时状态，都不进歌单库存档）：网页版在浏览器报离线时，用同站请求复核 online；
       // offlineOnly / cacheCapMB 是设置页里的两个设置，各自存自己的 localStorage key；
       // cacheRev / cachedCount / cachedBytes 在已缓存索引重读后更新（索引本身在 this._cachedKeys 等实例字段上）；
       // batchCache 是「缓存全部」的进度 { pid, done, total, failed }；localSearch 标记当前搜索结果来自本地曲库
@@ -2545,6 +2545,9 @@ class Component extends DCLogic {
 
   componentWillUnmount() {
     this._recommendationsDisposed = true;
+    this._networkProbe?.controller.abort();
+    this._networkProbe = null;
+    clearInterval(this._networkRetryTimer);
     this._metadataLoader?.dispose();
     clearTimeout(this._metadataTimer);
     document.removeEventListener('scroll', this._onMetadataView, true);
@@ -2580,8 +2583,7 @@ class Component extends DCLogic {
     document.removeEventListener('visibilitychange', this._onDiagVisibility);
     document.removeEventListener('freeze', this._onDiagFreeze);
     document.removeEventListener('resume', this._onDiagResume);
-    window.removeEventListener('online', this._onDiagOnline);
-    window.removeEventListener('offline', this._onDiagOffline);
+    for (const event of ['online', 'offline', 'focus', 'pageshow']) window.removeEventListener(event, this._onNetworkCheck);
     window.removeEventListener('listening:cache-changed', this._onCacheChanged);
     clearTimeout(this._cacheRefreshTimer);
     if (this._batch) this._batch.cancelled = true;
@@ -2601,6 +2603,51 @@ class Component extends DCLogic {
   }
 
   patch(p) { this.setState(s => (typeof p === 'function' ? p(s) : p)); }
+
+  updateOnlineStatus(online, basis = '浏览器状态') {
+    if (this._recommendationsDisposed || online === this.state.online) return false;
+    diagLog(online ? '网络恢复' : '网络断开', { 依据: basis });
+    this.setState({ online }, () => {
+      // 快速断开又恢复时，过期回调不能重启已取消的联网任务。
+      if (this._recommendationsDisposed || this.state.online !== online) return;
+      if (online) void this._recommendationEngine?.start();
+      else this._recommendationEngine?.emit();
+    });
+    if (!online) this._recommendationEngine?.cancel();
+    return true;
+  }
+
+  async syncOnlineStatus() {
+    if (this._recommendationsDisposed) return false;
+    const browserOnline = navigator.onLine !== false;
+    // APK 的同站文件打在安装包里，不能用它们证明联网；继续使用原有浏览器状态。
+    if (IS_NATIVE || browserOnline) {
+      this._networkProbe?.controller.abort();
+      this._networkProbe = null;
+      return this.updateOnlineStatus(browserOnline);
+    }
+    if (this._networkProbe) return this._networkProbe.promise;
+    const probe = { controller: new AbortController() };
+    this._networkProbe = probe;
+    const timer = setTimeout(() => probe.controller.abort(), 5000);
+    probe.promise = (async () => {
+      let reachable = false;
+      try {
+        // HEAD 不下载正文；禁用缓存并加时间戳。sw.js 只接管图片，不会用缓存应答这次检查。
+        // HTTP 4xx/5xx 同样证明网络可达，不能把服务器错误当作断网。
+        await fetch('./manifest.json?online-check=' + Date.now(), {
+          method: 'HEAD', cache: 'no-store', signal: probe.controller.signal,
+        });
+        reachable = true;
+      } catch (e) { /* 失败或超时维持离线限制 */ }
+      finally { clearTimeout(timer); }
+      if (this._recommendationsDisposed || this._networkProbe !== probe) return false;
+      this._networkProbe = null;
+      const browserOnlineNow = navigator.onLine !== false;
+      return this.updateOnlineStatus(browserOnlineNow || reachable, browserOnlineNow ? '浏览器状态' : '本站请求');
+    })();
+    return probe.promise;
+  }
 
   persist() { savePersistedLibrary(this.state); }
 
@@ -2640,17 +2687,30 @@ class Component extends DCLogic {
     this.initTrackMetadata();
     this.initRecommendations();
     // 诊断记录：前后台切换、页面被系统冻结 / 恢复、网络断开 / 恢复——后台切歌卡住时拿这些时间点对照
-    this._onDiagVisibility = () => { diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' }); this.flushListening(); if (document.visibilityState === 'visible') void this._recommendationEngine?.start(); };
+    this._onDiagVisibility = () => {
+      const visible = document.visibilityState === 'visible';
+      diagLog(visible ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' });
+      this.flushListening();
+      if (visible) void this.syncOnlineStatus().then(changed => {
+        if (!changed && !this._recommendationsDisposed) void this._recommendationEngine?.start();
+      });
+    };
     this._onDiagFreeze = () => diagLog('页面被冻结', { 在播: this.state.playing ? '是' : '否' });
-    this._onDiagResume = () => diagLog('页面恢复');
-    // 同一对监听顺便维护 state.online：断网后挑歌只在已缓存里挑（见 isOfflineMode）
-    this._onDiagOnline = () => { diagLog('网络恢复'); this.patch({ online: true }); setTimeout(() => this._recommendationEngine?.start(), 0); };
-    this._onDiagOffline = () => { diagLog('网络断开'); this.patch({ online: false }); this._recommendationEngine?.cancel(); setTimeout(() => this._recommendationEngine?.emit(), 0); };
+    this._onDiagResume = () => { diagLog('页面恢复'); void this.syncOnlineStatus(); };
+    // 睡眠、冻结或历史返回期间可能漏掉网络通知；恢复时复核网络，不沿用旧值。
+    this._onNetworkCheck = event => {
+      if (event.type === 'offline' && navigator.onLine === false) this.updateOnlineStatus(false);
+      void this.syncOnlineStatus();
+    };
     document.addEventListener('visibilitychange', this._onDiagVisibility);
     document.addEventListener('freeze', this._onDiagFreeze);
     document.addEventListener('resume', this._onDiagResume);
-    window.addEventListener('online', this._onDiagOnline);
-    window.addEventListener('offline', this._onDiagOffline);
+    for (const event of ['online', 'offline', 'focus', 'pageshow']) window.addEventListener(event, this._onNetworkCheck);
+    void this.syncOnlineStatus(); // 补上状态初始化到监听注册之间可能发生的网络变化
+    if (!IS_NATIVE) this._networkRetryTimer = setInterval(() => {
+      // 浏览器标志一直为 false 时，也要能发现真正的断开和恢复；后台不额外探测。
+      if (document.visibilityState === 'visible' && navigator.onLine === false) void this.syncOnlineStatus();
+    }, 30000);
     // 已缓存索引：启动时读一遍；之后缓存有增删（写入 / 淘汰 / 删除 / 清空 / 补了封面都会广播这个事件）就重读
     this._onCacheChanged = () => this.scheduleCacheRefresh();
     window.addEventListener('listening:cache-changed', this._onCacheChanged);
@@ -3129,7 +3189,7 @@ class Component extends DCLogic {
         if (Date.now() - Number(localStorage.getItem(UPDATE_CHECK_STORAGE_KEY) || 0) < 20 * 3600 * 1000) return;
       } catch (e) { /* 读不到就照常检查 */ }
     }
-    if (!navigator.onLine) { if (manual) this.showToast(tr('updateOffline')); return; }
+    if (!this.state.online) { if (manual) this.showToast(tr('updateOffline')); return; }
     try {
       const r = await fetch(LATEST_RELEASE_API, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -3618,7 +3678,7 @@ class Component extends DCLogic {
   // 一首补存，补到了刷新一次列表。每首每次启动只试一次，失败了不反复请求。网页版不补——QQ 封面服务器
   // 不发 CORS 头，网页读不到图片字节，补也补不到
   backfillCachedCovers(records) {
-    if (!IS_NATIVE || this._coverBackfilling || !navigator.onLine) return;
+    if (!IS_NATIVE || this._coverBackfilling || !this.state.online) return;
     const tried = this._coverBackfillTried || (this._coverBackfillTried = new Set());
     const todo = records.filter(r => r.meta && r.meta.cover && !r.coverBlob && !tried.has(r.id));
     if (!todo.length) return;
@@ -3627,7 +3687,7 @@ class Component extends DCLogic {
       let added = 0;
       try {
         for (const r of todo) {
-          if (!navigator.onLine) break; // 没试的留到下次联网
+          if (!this.state.online) break; // 没试的留到下次联网
           tried.add(r.id);
           const blob = await fetchCoverBlob(r.meta.cover);
           // 下载期间这首的缓存可能被删了（淘汰 / 手动删），音频不在就别写一条没主的元数据
@@ -3764,7 +3824,7 @@ class Component extends DCLogic {
       return true;
     });
     if (!todo.length) { this.showToast(tr('allCached')); return; }
-    if (!navigator.onLine) { this.showToast(tr('cacheWhenOnline')); return; }
+    if (!this.state.online) { this.showToast(tr('cacheWhenOnline')); return; }
     const API = window.ListeningAPI;
     if (!API) { this.showToast(tr('apiNotLoaded')); return; }
     const conn = navigator.connection;
@@ -4011,7 +4071,7 @@ class Component extends DCLogic {
     const seq = this._searchSeq;
     this._searchController?.abort(); this._searchController = new AbortController();
     // 断网时联网搜索必然失败，直接在本地曲库里搜
-    if (!navigator.onLine) { this.showLocalSearch(q, seq, 'offline'); return; }
+    if (!this.state.online) { this.showLocalSearch(q, seq, 'offline'); return; }
     this.patch({ page: 'search', appliedQuery: q, hasSearched: true, isSearching: true, localSearch: false, searchResults: [], suggestDismissed: true, suggestActiveIdx: -1, suggestions: [] });
     this.showToast(tr('searchingFor', q));
     // 从 SEARCH_SOURCES 而不是 state.sources 的 key 出发：让可搜索源只有这一个卡口，即使
@@ -4654,7 +4714,7 @@ class Component extends DCLogic {
   async prefetchTrack(track) {
     if (!track || track.id === this._prefetchedForId) return;
     // 断网时预取注定失败，白白触发一串请求超时；不记 _prefetchedForId，联网后这首还能再预取
-    if (!navigator.onLine) return;
+    if (!this.state.online) return;
     this._prefetchedForId = track.id;
     const API = window.ListeningAPI;
     if (!API) return;
