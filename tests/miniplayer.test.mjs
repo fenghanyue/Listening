@@ -1,5 +1,5 @@
 // 迷你播放器（不联网）：电脑上的 Chrome / Edge 点音量那一排的按钮，播放器单独弹成一个浮在所有窗口最上面的小窗
-// （Document Picture-in-Picture）。420×100，不放歌词；一排六个键都管用、跟着主页面的状态走；播放队列弹在播放器上面，
+// （Document Picture-in-Picture）。420×100，不放歌词；一排六个键都管用、跟着主页面的状态走；播放队列弹在播放器下面，
 // 每行能上移 / 下移 / 移出；跟着主题换黑白、跟着界面语言换中英文；「回到网页」关掉小窗。startTrack 换成只记一笔的假函数。
 // 注意两点：
 // - 不能用 page.route / ctx.route 拦请求：Playwright 一拦，搬到小窗里的样式表就加载不出来（图标变成一串英文）。
@@ -141,8 +141,8 @@ check('one row of six buttons: mode, previous, play, next, queue, back to page a
   acts === 'mode,prev,play,next,list,back' && oneRow && v.metaButtons === 0 && Math.abs(v.ctrls[5].r - v.row.r) <= 0.5, { acts, oneRow, meta: v.metaButtons });
 check('cover and the right-hand side fit the 100px player: cover 68px, buttons inside', v.coverBox.w === 68 && v.coverBox.h === 68
   && v.coverBox.y === 16 && v.ctrls.every(c => c.b <= 100 - 16 + 0.5) && v.row.r <= 420, { cover: v.coverBox, row: v.row });
-check('the queue button is a list with an upward arrow (list_arrow flipped upside down)',
-  v.listIcon[0] === 'list_arrow' && v.listIcon[1] === 'matrix(1, 0, 0, -1, 0, 0)', v.listIcon);
+check('the queue button is a list with a downward arrow (list_arrow without flipping)',
+  v.listIcon[0] === 'list_arrow' && v.listIcon[1] === 'none', v.listIcon);
 check('icons draw as icons (the icon font loaded in the small window) and none is hidden', v.wideIcons.length === 0 && v.hiddenIcons.length === 0, [...v.wideIcons, ...v.hiddenIcons]);
 check('every button has a screen-reader label', v.unlabeled.length === 0, v.unlabeled);
 check('player is 420×100 at the top-left', v.body.x === 0 && v.body.y === 0 && v.body.w === 420 && v.body.h === 100 && v.player.y === 0 && v.player.h === 100, v.body);
@@ -242,7 +242,7 @@ await wait(150);
 st = await L(`return { audio: document.getElementById('player-audio').currentTime, state: logic.state.currentTime };`);
 check('clicking the progress line seeks (a quarter of the way → 7.5s of 30s)', Math.abs(st.audio - 7.5) < 0.3 && Math.abs(st.state - 7.5) < 0.3, st);
 
-// ---- 播放队列：弹在整个播放器上面，每行上移 / 下移 / 移出，点一行放那首 ----
+// ---- 播放队列：弹在整个播放器下面，每行上移 / 下移 / 移出，点一行放那首 ----
 await seed();
 await wait(100);
 await mp.click('[data-act="list"]');
@@ -253,8 +253,9 @@ await mp.setViewportSize({ width: 420, height: 420 }); // 真窗口里 fitMiniPl
 await wait(150);
 v = await view(mp);
 await shot(mp, 'queue');
-check('once the window is 420 tall: queue on top (320px, as tall as before), player at the bottom',
-  v.listBox.y === 0 && v.listBox.h === 320 && v.player.y === 320 && v.player.b === 420, { list: v.listBox, player: v.player });
+check('once the window is 420 tall: player stays at the top, queue opens below it (320px)',
+  v.player.y === 0 && v.player.h === 100 && v.listBox.y === v.player.b && v.listBox.h === 320 && v.listBox.b === 420,
+  { list: v.listBox, player: v.player });
 check('queue lists the play order with the current song marked',
   v.count === '4 首' && JSON.stringify(v.rows.map(r => r.id)) === '[1,2,3,4]' && v.rows.filter(r => r.cur).map(r => r.id).join() === '2'
   && v.rows[0].up && !v.rows[0].down && v.rows[3].down && !v.rows[3].up, v.rows);
