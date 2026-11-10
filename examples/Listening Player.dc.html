@@ -2504,7 +2504,7 @@ class Component extends DCLogic {
       playlists: [
         { id: 'liked', name: '喜欢的音乐', builtin: true, glyph: 'favorite', iconFill: 1, tileBg: 'linear-gradient(135deg,#ff8a80,#ff5c8a)' },
       ],
-      // 离线相关（运行时状态，都不进歌单库存档）：online 跟着浏览器的 online/offline 事件走；
+      // 离线相关（运行时状态，都不进歌单库存档）：online 在网络通知和页面恢复时重新读取浏览器状态；
       // offlineOnly / cacheCapMB 是设置页里的两个设置，各自存自己的 localStorage key；
       // cacheRev / cachedCount / cachedBytes 在已缓存索引重读后更新（索引本身在 this._cachedKeys 等实例字段上）；
       // batchCache 是「缓存全部」的进度 { pid, done, total, failed }；localSearch 标记当前搜索结果来自本地曲库
@@ -2580,8 +2580,7 @@ class Component extends DCLogic {
     document.removeEventListener('visibilitychange', this._onDiagVisibility);
     document.removeEventListener('freeze', this._onDiagFreeze);
     document.removeEventListener('resume', this._onDiagResume);
-    window.removeEventListener('online', this._onDiagOnline);
-    window.removeEventListener('offline', this._onDiagOffline);
+    for (const event of ['online', 'offline', 'focus', 'pageshow']) window.removeEventListener(event, this._onNetworkCheck);
     window.removeEventListener('listening:cache-changed', this._onCacheChanged);
     clearTimeout(this._cacheRefreshTimer);
     if (this._batch) this._batch.cancelled = true;
@@ -2601,6 +2600,20 @@ class Component extends DCLogic {
   }
 
   patch(p) { this.setState(s => (typeof p === 'function' ? p(s) : p)); }
+
+  syncOnlineStatus() {
+    const online = navigator.onLine !== false;
+    if (online === this.state.online) return false;
+    diagLog(online ? '网络恢复' : '网络断开');
+    this.setState({ online }, () => {
+      // 快速断开又恢复时，过期回调不能重启已取消的联网任务。
+      if (this._recommendationsDisposed || this.state.online !== online) return;
+      if (online) void this._recommendationEngine?.start();
+      else this._recommendationEngine?.emit();
+    });
+    if (!online) this._recommendationEngine?.cancel();
+    return true;
+  }
 
   persist() { savePersistedLibrary(this.state); }
 
@@ -2640,17 +2653,21 @@ class Component extends DCLogic {
     this.initTrackMetadata();
     this.initRecommendations();
     // 诊断记录：前后台切换、页面被系统冻结 / 恢复、网络断开 / 恢复——后台切歌卡住时拿这些时间点对照
-    this._onDiagVisibility = () => { diagLog(document.visibilityState === 'visible' ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' }); this.flushListening(); if (document.visibilityState === 'visible') void this._recommendationEngine?.start(); };
+    this._onDiagVisibility = () => {
+      const visible = document.visibilityState === 'visible';
+      diagLog(visible ? '回到前台' : '切到后台', { 在播: this.state.playing ? '是' : '否' });
+      this.flushListening();
+      if (visible && !this.syncOnlineStatus()) void this._recommendationEngine?.start();
+    };
     this._onDiagFreeze = () => diagLog('页面被冻结', { 在播: this.state.playing ? '是' : '否' });
-    this._onDiagResume = () => diagLog('页面恢复');
-    // 同一对监听顺便维护 state.online：断网后挑歌只在已缓存里挑（见 isOfflineMode）
-    this._onDiagOnline = () => { diagLog('网络恢复'); this.patch({ online: true }); setTimeout(() => this._recommendationEngine?.start(), 0); };
-    this._onDiagOffline = () => { diagLog('网络断开'); this.patch({ online: false }); this._recommendationEngine?.cancel(); setTimeout(() => this._recommendationEngine?.emit(), 0); };
+    this._onDiagResume = () => { diagLog('页面恢复'); this.syncOnlineStatus(); };
+    // 睡眠、冻结或历史返回期间可能漏掉网络通知；恢复时重读当前状态，不沿用旧值。
+    this._onNetworkCheck = () => this.syncOnlineStatus();
     document.addEventListener('visibilitychange', this._onDiagVisibility);
     document.addEventListener('freeze', this._onDiagFreeze);
     document.addEventListener('resume', this._onDiagResume);
-    window.addEventListener('online', this._onDiagOnline);
-    window.addEventListener('offline', this._onDiagOffline);
+    for (const event of ['online', 'offline', 'focus', 'pageshow']) window.addEventListener(event, this._onNetworkCheck);
+    this.syncOnlineStatus(); // 补上状态初始化到监听注册之间可能发生的网络变化
     // 已缓存索引：启动时读一遍；之后缓存有增删（写入 / 淘汰 / 删除 / 清空 / 补了封面都会广播这个事件）就重读
     this._onCacheChanged = () => this.scheduleCacheRefresh();
     window.addEventListener('listening:cache-changed', this._onCacheChanged);
