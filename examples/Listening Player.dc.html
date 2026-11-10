@@ -517,7 +517,7 @@ if ('serviceWorker' in navigator) {
        不跟着窗口变（只有队列的高度跟着窗口，最多 420）；用户把窗口拖大了，内容照旧贴在左上角，在小窗里点一下就缩回
        这个尺寸（见 fitMiniPlayer）。小窗只能按住 Chrome 画的标题栏拖，网页挪不了它，app-region: drag 在这里也不管用。
        播放器那一块：左边封面；右边歌名 + 歌手 — 专辑一行、一排六个键（播放模式、上一首、播放、下一首、播放队列、
-       回到网页）；这一块最上沿一道进度细线。不放歌词：放了窗口得高出一截。弹出的播放队列在整个播放器上面 ---------- */
+       回到网页）；这一块最上沿一道进度细线。不放歌词：放了窗口得高出一截。弹出的播放队列在整个播放器下面 ---------- */
     .sw-mp { width: 420px; height: 100px; margin: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); color: var(--ink); }
     /* 弹出播放队列：跟着窗口高度走，最多 420。点下去那一刻窗口还没加高，队列先是 0 高、播放器不动，窗口加高了队列才露出来 */
     .sw-mp.is-list { height: clamp(100px, 100vh, 420px); }
@@ -536,16 +536,14 @@ if ('serviceWorker' in navigator) {
     .sw-mp-ctrls .sw-mp-skip .ms { font-size: 28px; font-variation-settings: 'FILL' 1; }
     .sw-mp-ctrls .sw-mp-play { width: 40px; height: 40px; background: var(--red); color: var(--on-red); }
     .sw-mp-ctrls .sw-mp-play .ms { font-size: 28px; font-variation-settings: 'FILL' 1; }
-    /* 「播放队列」：list_arrow 本来是箭头朝下的列表，上下翻过来成了「↑≡」——队列是从播放器上面弹出来的 */
-    .sw-mp-ctrls [data-act="list"] .ms { transform: scaleY(-1); }
     /* 「回到网页」：一排的最右边，比别的键淡一点 */
     .sw-mp-ctrls .sw-mp-back { color: var(--ink-2); }
     /* 进度：播放器那一块最上沿一道 3px 的线（跟手机底部的迷你播放条一样），点哪儿跳到哪儿；下面垫一块透明的热区 */
     .sw-mp-bar { position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--rule); cursor: pointer; z-index: 1; }
     .sw-mp-bar::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 14px; }
     .sw-mp-fill { height: 100%; width: 0; background: var(--red); }
-    /* 播放队列：在整个播放器上面，跟主播放器的「队列」同一个样子；每行 上移 / 下移 / 移出队列 */
-    /* 上下的留白放在里面（标题行、列表底下）：放在 .sw-mp-list 自己身上，窗口还没加高、队列是 0 高时这 16px 也压不扁，会把播放器往下挤 */
+    /* 播放队列：在整个播放器下面，跟主播放器的「队列」同一个样子；每行 上移 / 下移 / 移出队列 */
+    /* 上下的留白放在里面（标题行、列表底下），让窗口还没加高时队列可以完全缩到 0 高 */
     .sw-mp-list { display: none; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px; animation: swFade .15s ease; }
     .sw-mp.is-list .sw-mp-list { display: block; }
     .sw-mp-list .sw-head-rule { margin-top: 4px; }
@@ -2810,8 +2808,7 @@ class Component extends DCLogic {
     }
     doc.body.className = 'sw-mp';
     // 字（标签页标题、「播放队列」、按钮的读屏名字）不写在这里，由 syncMiniPlayer 按当前语言填：切换语言时跟着换
-    doc.body.innerHTML = '<div class="sw-mp-list dc-scrollbar"><div class="sw-head-rule"><span class="sw-label sw-mp-list-t"></span><span class="sw-mp-count"></span></div><div class="sw-mp-rows"></div></div>'
-      + '<div class="sw-mp-player"><div class="sw-mp-bar" data-act="seek"><div class="sw-mp-fill"></div></div>'
+    doc.body.innerHTML = '<div class="sw-mp-player"><div class="sw-mp-bar" data-act="seek"><div class="sw-mp-fill"></div></div>'
       + '<div class="sw-mp-cover"></div>'
       + '<div class="sw-mp-main"><div class="sw-mp-meta"><span class="sw-mp-t"></span><span class="sw-mp-a"></span></div>'
       + '<div class="sw-mp-ctrls">'
@@ -2821,7 +2818,8 @@ class Component extends DCLogic {
       + '<button data-act="next" class="sw-mp-skip"><span class="ms">skip_next</span></button>'
       + '<button data-act="list"><span class="ms">list_arrow</span></button>'
       + '<button data-act="back" class="sw-mp-back"><span class="ms">open_in_full</span></button>'
-      + '</div></div></div>';
+      + '</div></div></div>'
+      + '<div class="sw-mp-list dc-scrollbar"><div class="sw-head-rule"><span class="sw-label sw-mp-list-t"></span><span class="sw-mp-count"></span></div><div class="sw-mp-rows"></div></div>';
     doc.addEventListener('click', (e) => {
       const el = e.target.closest && e.target.closest('[data-act]');
       const act = el && !el.disabled ? el.getAttribute('data-act') : null;
@@ -2876,9 +2874,9 @@ class Component extends DCLogic {
     this._mpCenterPending = false;
   }
 
-  // 播放队列弹出来：窗口临时加高到 MINI_PLAYER_LIST_H，队列在整个播放器上面；再点一下收起、缩回去。
-  // 网页只能改小窗的大小、挪不了位置：小窗下面放不下时 Chrome 会把加高的窗口往上推，看起来就是往上弹出；
-  // 下面放得下就往下长，播放器跟着往下挪。收起时窗口从下往上缩，会停在被推上去的地方
+  // 播放队列弹出来：窗口临时加高到 MINI_PLAYER_LIST_H，队列在整个播放器下面；再点一下收起、缩回去。
+  // 网页只能改小窗的大小、挪不了位置：下面放不下时 Chrome 会把整个窗口往上推，列表仍在播放器下方。
+  // 收起时窗口从下往上缩，会停在被推上去的地方
   toggleMiniPlayerList() {
     const win = this._mpWin;
     if (!win) return;
