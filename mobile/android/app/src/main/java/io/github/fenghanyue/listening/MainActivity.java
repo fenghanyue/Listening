@@ -1,11 +1,18 @@
 package io.github.fenghanyue.listening;
 
+import android.Manifest;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.WebView;
 import androidx.activity.EdgeToEdge;
 import androidx.activity.SystemBarStyle;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -26,8 +33,16 @@ import java.util.Locale;
  */
 public class MainActivity extends BridgeActivity {
 
+    private static final String PERM_PREFS = "app_permissions";
+    private static final String KEY_NOTIF_PROMPTED = "post_notifications_prompted";
+
     private Insets lastBars = Insets.NONE;
     private boolean lastImeVisible = false;
+
+    private final ActivityResultLauncher<String> notificationPermissionLauncher = registerForActivityResult(
+        new ActivityResultContracts.RequestPermission(),
+        ignored -> {}
+    );
 
     // 键盘收起后再等这么久，确认它还没重新弹出来，才告诉页面：防止弹出过程中系统偶尔先报一次「收起」
     private static final long IME_HIDDEN_CONFIRM_MS = 250;
@@ -39,6 +54,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         registerPlugin(AppShellPlugin.class);
         super.onCreate(savedInstanceState);
+        requestNotificationPermissionIfNeeded();
 
         // Android 15 起系统强制 edge-to-edge，更早的版本要自己打开。状态栏和导航栏都设成透明、配深色图标——
         // App 默认是白底主题、启动时 WebView 底色也是白底（capacitor.config.json 的 backgroundColor），
@@ -77,6 +93,22 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         );
+    }
+
+    /** Android 13 起首次启动且未授权时弹一次系统通知权限框，避免媒体播放通知被系统默认拦掉，之后不再反复打扰 */
+    private void requestNotificationPermissionIfNeeded() {
+        boolean granted =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        SharedPreferences prefs = getSharedPreferences(PERM_PREFS, MODE_PRIVATE);
+        boolean alreadyPrompted = prefs.getBoolean(KEY_NOTIF_PROMPTED, false);
+        if (!shouldRequestNotificationPermission(Build.VERSION.SDK_INT, granted, alreadyPrompted)) return;
+        prefs.edit().putBoolean(KEY_NOTIF_PROMPTED, true).apply();
+        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS);
+    }
+
+    static boolean shouldRequestNotificationPermission(int sdkInt, boolean granted, boolean alreadyPrompted) {
+        return sdkInt >= Build.VERSION_CODES.TIRAMISU && !granted && !alreadyPrompted;
     }
 
     // 往页面里派发一个不带数据的事件（window 上），页面自己 addEventListener 接
