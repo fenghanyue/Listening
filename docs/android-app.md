@@ -151,6 +151,7 @@ App 里提示更新，把这个代价降到最低。
 **媒体通知用 `@capgo/capacitor-media-session`，绕开了它两个坑：**
 
 - 它的清单里缺 `FOREGROUND_SERVICE_MEDIA_PLAYBACK` 权限，Android 14 起一播放就崩——App 清单里补上了。
+- 它的清单也没声明 `POST_NOTIFICATIONS`：Android 13 起（`targetSdk ≥ 33`）不声明且不申请时，部分国产系统（如 vivo OriginOS）会默认拦掉媒体通知。App 清单补上了 `POST_NOTIFICATIONS` 与 `android:appCategory="audio"`，并在 `MainActivity` 首次启动且未授权时弹一次系统通知权限框。
 - 它下载 http 封面是在所有原生插件共用的线程里同步下、不设超时，弱网时会把状态栏、返回键等别的原生调用全堵住——
   页面只给它传 `data:` 图片：本地缓存的封面优先，没有就用 Capacitor 自带的原生 HTTP（8 秒超时）现拉，
   再没有就用 App 图标（它取不到新封面时会沿用上一首的，所以必须总给一张）。

@@ -3,6 +3,7 @@
 
     <application
         android:allowBackup="true"
+        android:appCategory="audio"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -60,6 +61,9 @@
          必须同时声明下面两条，插件自己的清单里只写了第一条，缺第二条一开始播放就会崩 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Android 13 起（targetSdk >= 33）必须声明并向用户申请通知权限；不申请的话，部分国产系统
+         （如 vivo OriginOS）会默认拦掉媒体播放通知，连带着通知栏卡片和原子随身听都看不到 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- 后台提示条上的「去设置」直接弹系统的"允许在后台运行"对话框（见 AppShellPlugin.openBatterySettings） -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>
