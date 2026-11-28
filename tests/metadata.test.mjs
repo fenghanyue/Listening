@@ -6,7 +6,7 @@ import { createChecker } from './lib.mjs';
 
 const {check, finish} = createChecker();
 const song = id => ({source:'qq',qqId:String(id),songid:String(id),title:'Song '+id,artist:'Artist',cover:null,album:'',audioUrl:null,detailsLoaded:false});
-const response = (id, suffix = '') => ({song_mid:String(id),song_title:'Song '+id,singer_name:'Artist',album_name:'Album',album_pic:'http://covers.example/'+id+'.jpg',song_h5_url:'https://y.qq.com/'+id,song_lyric:'[00:00.00]Line',song_play_url:'http://audio.example/'+id+suffix+'.mp3'});
+const response = (id, suffix = '') => ({code:200,data:{mid:String(id),song:'Song '+id,singer:'Artist',album:'Album',cover:'http://covers.example/'+id+'.jpg',link:'https://y.qq.com/'+id,lrc:'[00:00.00]Line',kbps:'320kbps',url:'http://audio.example/'+id+suffix+'.mp3'}});
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const originalFetch = globalThis.fetch;
 try {
@@ -23,7 +23,7 @@ try {
   const [display, full] = await Promise.all([metadata, playing]);
   check('display and playback share one in-flight QQ query', requests.length===1&&!!display.cover&&!!full.audioUrl);
   check('display metadata leaves the input and playback fields untouched', JSON.stringify(track)===snapshot&&!('audioUrl' in display)&&!('detailsLoaded' in display)&&display.cover.startsWith('https://'));
-  check('detail lookup makes no audio request', requests.every(r=>r.url.startsWith('https://tang.api.s01s.cn/')));
+  check('detail lookup makes no audio request', requests.every(r=>r.url.startsWith('https://api.vkeys.cn/')));
   const next = fetchQQDetails(track); release(response('shared','-fresh')); await next;
   check('playback obtains a fresh link after an earlier display query',requests.length===2&&track.audioUrl.endsWith('-fresh.mp3'));
 

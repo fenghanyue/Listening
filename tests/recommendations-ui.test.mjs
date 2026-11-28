@@ -17,9 +17,12 @@ async function routeRequests(route) {
     const list=type==='playlist'?items:items.filter(t=>(t.name+' '+t.artist).toLowerCase().includes(keyword.toLowerCase()));
     return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(list)});
   }
-  if(url.hostname==='tang.api.s01s.cn') {
-    musicRequests.push({type:'qq',keyword:url.searchParams.get('msg')});
-    return route.fulfill({status:200,contentType:'application/json',body:'[]'});
+  if(url.hostname==='api.vkeys.cn' && url.pathname==='/v2/music/tencent') {
+    musicRequests.push({type:'qq',keyword:url.searchParams.get('word')});
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({code:200,data:[]})});
+  }
+  if(url.hostname==='api.xunhuisi.store') {
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({code:200,data:[]})});
   }
   if(url.origin===new URL(BASE).origin && url.pathname==='/recommendations/ai') {
     const body=route.request().postDataJSON();aiRequests.push(body);

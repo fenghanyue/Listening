@@ -16,20 +16,27 @@ let homeGate=new Promise(resolve=>releaseHome=resolve);
 
 async function routeRequest(route) {
   const u=new URL(route.request().url());
-  if(u.hostname==='tang.api.s01s.cn') {
-    const mid=u.searchParams.get('mid'),keyword=u.searchParams.get('msg');
-    if(!mid) {
+  if(u.hostname==='api.vkeys.cn') {
+    const mid=u.searchParams.get('mid'),keyword=u.searchParams.get('word');
+    if(u.pathname==='/v2/music/tencent' && keyword && !mid) {
       counts.searches.push(keyword);
       const ids=keyword==='late A'?['lateA']:keyword==='late B'?['lateB']:['rec0','search1'];
-      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(ids.map(id=>({song_mid:id,song_title:'Song '+id,singer_name:'Artist'})))});
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({code:200,data:ids.map(id=>({mid:id,song:'Song '+id,singer:'Artist'}))})});
+    }
+    if(u.pathname==='/v2/music/tencent/lyric') {
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({code:200,data:{lrc:'[00:00.00]Line '+mid}})});
     }
     counts.details.push(mid);
     if(homeGate) await homeGate;
     if(mid==='lateA') await new Promise(resolve=>releaseLate=resolve);
     await new Promise(resolve=>setTimeout(resolve,15));
-    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({song_mid:mid,song_title:'Song '+mid,singer_name:'Artist',album_name:'Album '+mid,
-      album_pic:'http://covers.example/'+mid+'.png',song_h5_url:'https://y.qq.com/song/'+mid,song_lyric:'[00:00.00]Line '+mid,
-      song_play_url:'https://audio.example/'+mid+'-'+counts.details.filter(id=>id===mid).length+'.wav'})}).catch(()=>{});
+    const n=counts.details.filter(id=>id===mid).length;
+    if(u.pathname==='/music/tencent/song/link') {
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({code:0,data:{songMID:mid,kbps:'320kbps',link:'https://y.qq.com/song/'+mid,url:'https://audio.example/'+mid+'-'+n+'.wav'}})}).catch(()=>{});
+    }
+    return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({code:200,data:{mid,song:'Song '+mid,singer:'Artist',album:'Album '+mid,
+      cover:'http://covers.example/'+mid+'.png',link:'https://y.qq.com/song/'+mid,lrc:'[00:00.00]Line '+mid,
+      kbps:'320kbps',url:'https://audio.example/'+mid+'-'+n+'.wav'}})}).catch(()=>{});
   }
   if(u.hostname==='covers.example') {counts.images.push(u.href);return route.fulfill({status:200,contentType:'image/png',body:PNG});}
   if(u.hostname==='audio.example') {counts.audio.push(u.href);return route.fulfill({status:200,contentType:'audio/wav',body:audio});}
