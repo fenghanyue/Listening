@@ -19,40 +19,60 @@ import { searchSoundCloud, fetchSoundCloudDetails } from './soundcloud.js';
  * @param {number} [options.limit=10] - 每源取多少首
  * @returns {Promise<Array>} 按源交错排列的 track 数组
  */
-export async function searchAll({ keyword, sources = ['netease', 'qq'], limit = 10, signal } = {}) {
+export async function searchAll({ keyword, sources = ['netease', 'qq'], limit = 10, signal, timeout, onPartial } = {}) {
   if (!keyword) throw new Error('keyword is required');
 
+  const order = [];
+  const grouped = {};
+  const failed = new Set();
+  const pending = new Set();
   const tasks = [];
+
+  const emitPartial = () => {
+    if (typeof onPartial !== 'function' || signal?.aborted) return;
+    onPartial({
+      tracks: interleave(grouped, order),
+      failedSources: [...failed],
+      pendingSources: [...pending],
+    });
+  };
+
+  const runSource = (source, fn) => {
+    order.push(source);
+    grouped[source] = [];
+    pending.add(source);
+    const onError = () => failed.add(source);
+    tasks.push(
+      Promise.resolve()
+        .then(() => fn(onError))
+        .then(tracks => {
+          grouped[source] = Array.isArray(tracks) ? tracks : [];
+        })
+        .catch(() => {
+          failed.add(source);
+          grouped[source] = [];
+        })
+        .finally(() => {
+          pending.delete(source);
+          emitPartial();
+        })
+    );
+  };
 
   // 网易云
   if (sources.includes('netease')) {
-    tasks.push(
-      searchNetease(keyword, 1, limit, {signal}).then(tracks => ({ source: 'netease', tracks }))
-    );
+    runSource('netease', onError => searchNetease(keyword, 1, limit, { signal, timeout, onError }));
   }
   // QQ
   if (sources.includes('qq')) {
-    tasks.push(
-      searchQQ(keyword, limit, {signal}).then(tracks => ({ source: 'qq', tracks }))
-    );
+    runSource('qq', onError => searchQQ(keyword, limit, { signal, timeout, onError }));
   }
   // SoundCloud：不在默认源里，只有调用方显式点名才走到这里
   if (sources.includes('soundcloud')) {
-    tasks.push(
-      searchSoundCloud(keyword, limit).then(tracks => ({ source: 'soundcloud', tracks }))
-    );
+    runSource('soundcloud', () => searchSoundCloud(keyword, limit));
   }
 
-  const results = await Promise.all(tasks);
-
-  // 按优先级顺序交错排列
-  const grouped = {};
-  const order = [];
-  for (const r of results) {
-    grouped[r.source] = r.tracks;
-    order.push(r.source);
-  }
-
+  await Promise.all(tasks);
   return interleave(grouped, order);
 }
 

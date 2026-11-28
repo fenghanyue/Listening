@@ -61,9 +61,62 @@ var ListeningAPI = (() => {
     const ext = extMatch ? extMatch[1] : "";
     return ["flac", "wav", "ape", "alac", "aiff"].includes(ext);
   }
+  async function withTimeoutSignal(signal, timeout, fn) {
+    if (signal?.aborted) {
+      const err = new Error("Aborted");
+      err.name = "AbortError";
+      throw err;
+    }
+    const controller = new AbortController();
+    let timedOut = false;
+    let timer = null;
+    let onControllerAbort;
+    const aborted = new Promise((_, reject) => {
+      onControllerAbort = () => {
+        const err = new Error(timedOut ? `Request timeout (${timeout}ms)` : "Aborted");
+        err.name = timedOut ? "TimeoutError" : "AbortError";
+        if (timedOut) err.timedOut = true;
+        reject(err);
+      };
+      controller.signal.addEventListener("abort", onControllerAbort, { once: true });
+    });
+    const onAbort = () => controller.abort();
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (timeout > 0) timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeout);
+    let task;
+    try {
+      task = Promise.resolve(fn(controller.signal));
+    } catch (e) {
+      task = Promise.reject(e);
+    }
+    task.catch(() => {
+    });
+    aborted.catch(() => {
+    });
+    try {
+      return await Promise.race([task, aborted]);
+    } finally {
+      if (timer) clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      controller.signal.removeEventListener("abort", onControllerAbort);
+    }
+  }
 
   // src/api/netease.js
   var BASE_URL = "https://api.qijieya.cn/meting/";
+  var INJAHOW_URL = "https://api.injahow.cn/meting/";
+  var VKEYS_NETEASE_URL = "https://api.vkeys.cn/v2/music/netease";
+  var YUTANG_NETEASE_URL = "https://api.yutangxiaowu.cn/api/music/Song_V1";
+  var SEARCH_TIMEOUT = 5e3;
+  var PLAYLIST_TIMEOUT = 8e3;
+  var DETAIL_TIMEOUT = 6e3;
+  function httpsUrl(url) {
+    if (typeof url !== "string" || !url.trim()) return null;
+    return url.trim().replace(/^http:\/\//i, "https://");
+  }
   async function fetchNeteaseAlbum(songid) {
     const target = `https://interface3.music.163.com/api/v3/song/detail?c=${encodeURIComponent(JSON.stringify([{ id: Number(songid) }]))}`;
     try {
@@ -95,7 +148,7 @@ var ListeningAPI = (() => {
       title: it.name || "",
       artist: it.artist || "",
       album: "",
-      cover: it.pic || null,
+      cover: httpsUrl(it.pic),
       audioUrl: null,
       lrc: null,
       lrcUrl: it.lrc || null,
@@ -104,17 +157,107 @@ var ListeningAPI = (() => {
       qualityLabel: null
     };
   }
-  async function searchNetease(kw, page = 1, num = 10, { signal } = {}) {
+  function mapVkeysNeteaseItem(it, idx, keyword) {
+    const songId = String(it?.id || "").trim();
+    if (!songId) return null;
+    return {
+      uid: `netease-${songId}`,
+      source: "netease",
+      displayIndex: idx + 1,
+      keyword: keyword || "",
+      songid: songId,
+      title: it.song || it.name || "",
+      artist: it.singer || "",
+      album: it.album || "",
+      cover: httpsUrl(it.cover),
+      audioUrl: null,
+      lrc: null,
+      lrcUrl: null,
+      detailsLoaded: false,
+      quality: null,
+      qualityLabel: null
+    };
+  }
+  function mapCloudSearchItem(it, idx, keyword) {
+    const songId = String(it?.id || `${keyword || "ne"}-${idx + 1}`);
+    const artists2 = Array.isArray(it?.ar) ? it.ar.map((a) => a?.name).filter(Boolean).join("/") : Array.isArray(it?.artists) ? it.artists.map((a) => a?.name).filter(Boolean).join("/") : "";
+    const pic = it?.al?.picUrl || it?.album?.picUrl || null;
+    return {
+      uid: `netease-${songId}`,
+      source: "netease",
+      displayIndex: idx + 1,
+      keyword: keyword || "",
+      songid: songId,
+      title: it?.name || "",
+      artist: artists2,
+      album: it?.al?.name || it?.album?.name || "",
+      cover: httpsUrl(pic),
+      audioUrl: null,
+      lrc: null,
+      lrcUrl: null,
+      detailsLoaded: false,
+      quality: null,
+      qualityLabel: null
+    };
+  }
+  async function searchNetease(kw, page = 1, num = 10, { signal, timeout = SEARCH_TIMEOUT, onError } = {}) {
     const requestLimit = Math.max(1, page) * Math.max(1, num);
-    const url = `${BASE_URL}?type=search&id=${encodeURIComponent(kw)}&limit=${encodeURIComponent(requestLimit)}&server=netease`;
     const results = [];
+    let primaryErr = null;
+    let vkeysErr = null;
     try {
-      const res = await fetch(url, { signal });
-      const json = await res.json();
-      if (!Array.isArray(json)) return results;
-      json.forEach((it, idx) => results.push(mapMetingItem(it, idx, kw)));
+      const url = `${BASE_URL}?type=search&id=${encodeURIComponent(kw)}&limit=${encodeURIComponent(requestLimit)}&server=netease`;
+      const json = await withTimeoutSignal(signal, timeout, async (reqSignal) => {
+        const res = await fetch(url, { signal: reqSignal });
+        if (!res.ok) throw new Error(`netease search error (HTTP ${res.status})`);
+        return res.json();
+      });
+      if (Array.isArray(json) && json.length > 0) {
+        json.forEach((it, idx) => results.push(mapMetingItem(it, idx, kw)));
+        return results;
+      }
     } catch (e) {
-      if (!signal?.aborted) console.error("netease search error:", e);
+      primaryErr = e;
+      if (!signal?.aborted) console.error("netease search error (qijieya):", e);
+    }
+    if (signal?.aborted) return results;
+    try {
+      const vkeysUrl = `${VKEYS_NETEASE_URL}?word=${encodeURIComponent(kw)}&num=${encodeURIComponent(requestLimit)}`;
+      const json = await withTimeoutSignal(signal, timeout, async (reqSignal) => {
+        const res = await fetch(vkeysUrl, { signal: reqSignal });
+        if (!res.ok) throw new Error(`netease vkeys search error (HTTP ${res.status})`);
+        return res.json();
+      });
+      if (json?.code != null && json.code !== 200) throw new Error(`netease vkeys search error (code ${json.code})`);
+      const list = Array.isArray(json?.data) ? json.data : [];
+      list.slice(0, requestLimit).forEach((it, idx) => {
+        const mapped = mapVkeysNeteaseItem(it, idx, kw);
+        if (mapped) results.push(mapped);
+      });
+      if (results.length > 0) return results;
+    } catch (e) {
+      vkeysErr = e;
+      if (!signal?.aborted) console.error("netease fallback search error (vkeys):", e);
+    }
+    if (signal?.aborted) return results;
+    const target = `https://music.163.com/api/cloudsearch/pc?s=${encodeURIComponent(kw)}&type=1&limit=${encodeURIComponent(requestLimit)}&offset=0`;
+    const proxyUrl = `${proxyBase()}/proxy?url=${encodeURIComponent(target)}`;
+    try {
+      const json = await withTimeoutSignal(signal, timeout, async (reqSignal) => {
+        const res = await fetch(proxyUrl, { signal: reqSignal });
+        if (!res.ok) throw new Error(`netease proxy search error (HTTP ${res.status})`);
+        return res.json();
+      });
+      const songs = json?.result?.songs;
+      if (Array.isArray(songs) && songs.length > 0) {
+        songs.slice(0, requestLimit).forEach((it, idx) => results.push(mapCloudSearchItem(it, idx, kw)));
+        return results;
+      }
+    } catch (e) {
+      if (!signal?.aborted) {
+        console.error("netease fallback search error (proxy):", e);
+        if (primaryErr && vkeysErr) onError?.(e);
+      }
     }
     return results;
   }
@@ -134,25 +277,86 @@ var ListeningAPI = (() => {
     }
     return /music\.163\.com/.test(url) ? url : "";
   }
-  async function fetchNeteasePlaylist(playlistId, { signal } = {}) {
+  async function fetchNeteasePlaylist(playlistId, { signal, timeout = PLAYLIST_TIMEOUT } = {}) {
     const id = String(playlistId || "").trim();
     const results = [];
     if (!/^\d+$/.test(id)) return results;
-    const url = `${BASE_URL}?type=playlist&id=${encodeURIComponent(id)}&server=netease`;
-    try {
-      const res = await fetch(url, { signal });
-      const json = await res.json();
-      if (!Array.isArray(json)) return results;
-      json.forEach((it, idx) => results.push(mapMetingItem(it, idx, "")));
-    } catch (e) {
-      if (!signal?.aborted) console.error("netease playlist fetch error:", e);
+    for (const base of [BASE_URL, INJAHOW_URL]) {
+      if (signal?.aborted) return results;
+      const url = `${base}?type=playlist&id=${encodeURIComponent(id)}&server=netease`;
+      try {
+        const json = await withTimeoutSignal(signal, timeout, async (reqSignal) => {
+          const res = await fetch(url, { signal: reqSignal });
+          if (!res.ok) throw new Error(`netease playlist error (HTTP ${res.status})`);
+          return res.json();
+        });
+        if (Array.isArray(json) && json.length > 0) {
+          json.forEach((it, idx) => results.push(mapMetingItem(it, idx, "")));
+          return results;
+        }
+      } catch (e) {
+        if (!signal?.aborted) console.error("netease playlist fetch error:", e);
+      }
     }
     return results;
   }
+  async function fetchLyricFromUrl(url) {
+    try {
+      const text2 = await withTimeoutSignal(null, DETAIL_TIMEOUT, async (reqSignal) => {
+        const lr = await fetch(url, { signal: reqSignal });
+        if (!lr.ok) return null;
+        const contentType = (lr.headers.get("content-type") || "").toLowerCase();
+        if (contentType.includes("json")) {
+          const lj = await lr.json();
+          return (typeof lj === "string" ? lj : null) || lj?.lrc || lj?.lyric || lj?.data?.lrc || lj?.data?.lyric || (typeof lj?.data === "string" ? lj.data : null) || null;
+        }
+        return lr.text();
+      });
+      return typeof text2 === "string" && text2.trim() ? text2 : null;
+    } catch (e) {
+      console.warn("netease lyric fetch failed:", e);
+      return null;
+    }
+  }
+  async function fetchYutangNeteaseDetail(songid) {
+    try {
+      const json = await withTimeoutSignal(null, DETAIL_TIMEOUT, async (reqSignal) => {
+        const res = await fetch(`${YUTANG_NETEASE_URL}?url=${encodeURIComponent(songid)}&level=exhigh&type=json`, { signal: reqSignal });
+        if (!res.ok) return null;
+        return res.json();
+      });
+      if (json?.status !== 200 || !json?.url) return null;
+      return {
+        audioUrl: httpsUrl(json.url),
+        album: json.al_name || "",
+        lrc: json.lyric || null
+      };
+    } catch (e) {
+      console.warn("netease fallback detail failed (yutang):", e);
+      return null;
+    }
+  }
   async function fetchNeteaseDetails(track) {
+    const step = Number(track._neteaseProviderStep) || 0;
     if (track.songid) {
       if (!track.audioUrl) {
-        track.audioUrl = `${BASE_URL}?server=netease&type=url&id=${encodeURIComponent(track.songid)}`;
+        if (step === 0) {
+          track.audioUrl = `${BASE_URL}?server=netease&type=url&id=${encodeURIComponent(track.songid)}`;
+          track._neteaseProviderStep = 1;
+        } else if (step === 1) {
+          const alt = await fetchYutangNeteaseDetail(track.songid);
+          if (alt?.audioUrl) {
+            track.audioUrl = alt.audioUrl;
+            if (!track.album && alt.album) track.album = alt.album;
+            if (!track.lrc && alt.lrc) track.lrc = alt.lrc;
+          } else {
+            track.audioUrl = `${INJAHOW_URL}?server=netease&type=url&id=${encodeURIComponent(track.songid)}`;
+          }
+          track._neteaseProviderStep = 2;
+        } else {
+          track.audioUrl = `${INJAHOW_URL}?server=netease&type=url&id=${encodeURIComponent(track.songid)}`;
+          track._neteaseProviderStep = 0;
+        }
       }
       if (!track.lrcUrl) {
         track.lrcUrl = `${BASE_URL}?server=netease&type=lrc&id=${encodeURIComponent(track.songid)}`;
@@ -168,19 +372,19 @@ var ListeningAPI = (() => {
       }
     }
     const jobs = [];
-    if (!track.lrc && track.lrcUrl) {
+    if (!track.lrc && (track.lrcUrl || track.songid)) {
       jobs.push((async () => {
-        try {
-          const lr = await fetch(track.lrcUrl);
-          const contentType = (lr.headers.get("content-type") || "").toLowerCase();
-          if (contentType.includes("json")) {
-            const lj = await lr.json();
-            track.lrc = (typeof lj === "string" ? lj : null) || lj?.lrc || lj?.lyric || lj?.data?.lrc || lj?.data?.lyric || (typeof lj?.data === "string" ? lj.data : null) || null;
-          } else {
-            track.lrc = await lr.text();
+        const candidates = [
+          track.lrcUrl,
+          track.songid ? `${VKEYS_NETEASE_URL}/lyric?id=${encodeURIComponent(track.songid)}` : null,
+          track.songid ? `${INJAHOW_URL}?server=netease&type=lrc&id=${encodeURIComponent(track.songid)}` : null
+        ].filter(Boolean);
+        for (const lrcUrl of candidates) {
+          const lrc = await fetchLyricFromUrl(lrcUrl);
+          if (lrc) {
+            track.lrc = lrc;
+            break;
           }
-        } catch (e) {
-          console.warn("netease lyric fetch failed:", e);
         }
       })());
     }
@@ -195,24 +399,163 @@ var ListeningAPI = (() => {
   }
 
   // src/api/qq.js
-  var SEARCH_URL = "https://tang.api.s01s.cn/music_open_api.php";
+  var VKEYS_BASE = "https://api.vkeys.cn";
+  var XUNHUISI_URL = "https://api.xunhuisi.store/API/QQMusic/Song.php";
+  var SEARCH_TIMEOUT2 = 5e3;
+  var DETAIL_TIMEOUT2 = 6e3;
   var detailRequests = /* @__PURE__ */ new Map();
+  function httpsUrl2(url) {
+    if (typeof url !== "string" || !url.trim()) return null;
+    return url.trim().replace(/^http:\/\//i, "https://");
+  }
+  function normalizeQQCover(pic) {
+    const url = httpsUrl2(pic);
+    if (!url) return null;
+    return url.replace(/^https:\/\/y\.qq\.com\/music\/photo_new\//i, "https://y.gtimg.cn/music/photo_new/");
+  }
+  function parseAlbumFromLrc(lrc) {
+    if (typeof lrc !== "string") return "";
+    const m = lrc.match(/^\[al:([^\]]+)\]/m);
+    return m ? m[1].trim() : "";
+  }
+  function extractMidFromLink(link) {
+    if (typeof link !== "string") return "";
+    const m = link.match(/songDetail\/([A-Za-z0-9]+)/) || link.match(/[?&]songmid=([A-Za-z0-9]+)/);
+    return m ? m[1] : "";
+  }
+  function isTrialQQAudio(url, qualityText = "", kbps = "") {
+    if (!url) return true;
+    if (/\/RS02/i.test(url)) return true;
+    if (/试听/.test(String(qualityText || ""))) return true;
+    const num = parseInt(String(kbps || ""), 10);
+    if (num > 0 && num <= 48) return true;
+    return false;
+  }
+  function classifyQQQuality(url, qualityText = "", kbps = "") {
+    const kbpsText = String(kbps || "").trim();
+    const qText = String(qualityText || "").trim();
+    if (isLosslessExtension(url) || /无损|母带|flac/i.test(qText)) {
+      return { tag: "lossless", label: "LOSSLESS", text: kbpsText || qText || "LOSSLESS" };
+    }
+    const num = parseInt(kbpsText, 10) || parseInt((qText.match(/(\d+)\s*kbps/i) || [])[1], 10) || 0;
+    if (num >= 256 || /高品|hq|320/i.test(qText)) {
+      return { tag: "hq", label: "HQ", text: kbpsText || qText || "HQ" };
+    }
+    if (num >= 128 || /标准|std/i.test(qText)) {
+      return { tag: "standard", label: "STD", text: kbpsText || qText || "STD" };
+    }
+    return { tag: null, label: null, text: kbpsText || qText || null };
+  }
+  async function fetchVkeysMeta(mid, signal) {
+    const json = await withTimeoutSignal(signal, DETAIL_TIMEOUT2, async (reqSignal) => {
+      const res = await fetch(`${VKEYS_BASE}/v2/music/tencent?mid=${encodeURIComponent(mid)}`, { signal: reqSignal });
+      if (!res.ok) throw new Error("qq detail error (HTTP " + res.status + ")");
+      return res.json();
+    });
+    const data = json?.data && !Array.isArray(json.data) ? json.data : null;
+    if (json?.code !== 200 || !data) throw new Error("qq detail error (vkeys code " + json?.code + ")");
+    const gotMid = String(data.mid || data.song_mid || "").trim();
+    if (gotMid !== mid) throw new Error("qq detail error (mismatched mid)");
+    const audioUrl = isTrialQQAudio(data.url, data.quality, data.kbps) ? null : httpsUrl2(data.url);
+    return {
+      mid,
+      title: data.song || data.song_title || "",
+      artist: data.singer || data.singer_name || "",
+      album: data.album || data.album_name || "",
+      cover: normalizeQQCover(data.cover || data.album_pic || data.singer_pic),
+      pageUrl: data.link || data.song_h5_url || "",
+      lrc: data.lrc || data.song_lyric || data.lyric || null,
+      audioUrl,
+      qualityText: data.quality || "",
+      kbps: data.kbps || "",
+      pay: data.pay || null,
+      provider: "vkeys"
+    };
+  }
+  async function fetchXunhuisiDetail(mid, signal) {
+    const json = await withTimeoutSignal(signal, DETAIL_TIMEOUT2, async (reqSignal) => {
+      const res = await fetch(`${XUNHUISI_URL}?mid=${encodeURIComponent(mid)}&type=json`, { signal: reqSignal });
+      if (!res.ok) throw new Error("qq fallback detail error (HTTP " + res.status + ")");
+      return res.json();
+    });
+    if (json?.code !== 200) throw new Error("qq fallback detail error (code " + json?.code + ")");
+    const gotMid = String(json.mid || json.song_mid || extractMidFromLink(json.link) || "").trim();
+    if (gotMid && gotMid !== mid) throw new Error("qq detail error (mismatched mid)");
+    const lrc = json.lyric || json.lrc || null;
+    const audioUrl = isTrialQQAudio(json.music_url, json.quality) ? null : httpsUrl2(json.music_url);
+    return {
+      mid,
+      title: json.title || json.name || "",
+      artist: json.singer || "",
+      album: json.album || parseAlbumFromLrc(lrc),
+      cover: normalizeQQCover(json.cover),
+      pageUrl: json.link || "",
+      lrc,
+      audioUrl,
+      qualityText: json.quality || "",
+      kbps: "",
+      pay: null,
+      provider: "xunhuisi"
+    };
+  }
+  async function fetchVkeysPlayUrl(mid, signal) {
+    for (const quality of [10, 8]) {
+      let json;
+      try {
+        json = await withTimeoutSignal(signal, DETAIL_TIMEOUT2, async (reqSignal) => {
+          const res = await fetch(`${VKEYS_BASE}/music/tencent/song/link?mid=${encodeURIComponent(mid)}&quality=${quality}`, { signal: reqSignal });
+          if (!res.ok) throw new Error("qq link error (HTTP " + res.status + ")");
+          return res.json();
+        });
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        return null;
+      }
+      const data = json?.data;
+      if (json?.code === 0 && data) {
+        const gotMid = String(data.songMID || data.mid || "").trim();
+        if (gotMid && gotMid !== mid) throw new Error("qq detail error (mismatched mid)");
+        if (!isTrialQQAudio(data.url, data.quality, data.kbps)) {
+          return {
+            audioUrl: httpsUrl2(data.url),
+            kbps: data.kbps || "",
+            qualityText: data.quality || "",
+            pageUrl: data.link || ""
+          };
+        }
+      }
+      if (json?.code === 11e4) return null;
+    }
+    return null;
+  }
+  async function fetchVkeysLyric(mid, signal) {
+    try {
+      const json = await withTimeoutSignal(signal, SEARCH_TIMEOUT2, async (reqSignal) => {
+        const res = await fetch(`${VKEYS_BASE}/v2/music/tencent/lyric?mid=${encodeURIComponent(mid)}`, { signal: reqSignal });
+        if (!res.ok) return null;
+        return res.json();
+      });
+      return json?.data?.lrc || null;
+    } catch (e) {
+      return null;
+    }
+  }
   function requestQQDetails(track, { signal } = {}) {
     if (signal?.aborted) return Promise.reject(signal.reason);
     const mid = String(track.qqId || track.songMid || track.songid || "").trim();
     if (!mid) return Promise.reject(new Error("qq detail error (missing mid)"));
     let job = detailRequests.get(mid);
     if (!job) {
-      const msg = (track.qqSearchKey || track.keyword || "").trim() || `${track.title || ""} ${track.artist || ""}`.trim();
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 1e4);
+      const timer = setTimeout(() => controller.abort(), 12e3);
       job = { controller, users: 0 };
       job.promise = (async () => {
-        const res = await fetch(`${SEARCH_URL}?msg=${encodeURIComponent(msg)}&type=json&mid=${encodeURIComponent(mid)}`, { signal: controller.signal });
-        if (!res.ok) throw new Error("qq detail error (HTTP " + res.status + ")");
-        const data = await res.json();
-        if (String(data?.song_mid || "") !== mid) throw new Error("qq detail error (mismatched mid)");
-        return data;
+        try {
+          return await fetchVkeysMeta(mid, controller.signal);
+        } catch (e) {
+          if (controller.signal.aborted || /mismatched mid/.test(e?.message || "")) throw e;
+          return await fetchXunhuisiDetail(mid, controller.signal);
+        }
       })().finally(() => {
         clearTimeout(timer);
         if (detailRequests.get(mid) === job) detailRequests.delete(mid);
@@ -238,89 +581,147 @@ var ListeningAPI = (() => {
     });
   }
   function displayMetadata(data) {
-    const pic = data.album_pic || data.singer_pic;
     return {
-      cover: typeof pic === "string" ? pic.replace(/^http:\/\//i, "https://") : null,
-      album: data.album_name || data.album_title || "",
-      pageUrl: data.song_h5_url || "",
-      lrc: data.song_lyric || data.lyric || null
+      cover: normalizeQQCover(data.cover),
+      album: data.album || "",
+      pageUrl: data.pageUrl || "",
+      lrc: data.lrc || null
     };
   }
   async function fetchQQMetadata(track, options) {
     return displayMetadata(await requestQQDetails(track, options));
   }
-  async function searchQQ(kw, limit = 10, { signal } = {}) {
-    const url = `${SEARCH_URL}?msg=${encodeURIComponent(kw)}&type=json`;
+  function mapQQSearchItem(it, idx, kw) {
+    const mid = String(it?.mid || it?.song_mid || "").trim();
+    if (!mid) return null;
+    return {
+      uid: `qq-${mid}`,
+      source: "qq",
+      displayIndex: idx + 1,
+      keyword: kw,
+      qqSearchKey: kw,
+      qqIndex: idx + 1,
+      qqId: mid,
+      songid: mid,
+      songMid: mid,
+      title: it.song || it.name || it.song_title || "",
+      artist: it.singer || it.singer_name || "",
+      album: it.album || it.album_name || "",
+      cover: normalizeQQCover(it.cover || it.album_pic),
+      audioUrl: null,
+      lrc: null,
+      lrcUrl: null,
+      detailsLoaded: false,
+      quality: null,
+      qualityLabel: null,
+      qqQualityText: it.quality || it.pay || null,
+      pay: it.pay || null
+    };
+  }
+  async function searchQQ(kw, limit = 10, { signal, timeout = SEARCH_TIMEOUT2, onError } = {}) {
     const results = [];
+    let primaryErr = null;
     try {
-      const res = await fetch(url, { signal });
-      const json = await res.json();
+      const url = `${VKEYS_BASE}/v2/music/tencent?word=${encodeURIComponent(kw)}&num=${encodeURIComponent(limit)}`;
+      const json = await withTimeoutSignal(signal, timeout, async (reqSignal) => {
+        const res = await fetch(url, { signal: reqSignal });
+        if (!res.ok) throw new Error("qq search error (HTTP " + res.status + ")");
+        return res.json();
+      });
+      if (json?.code != null && json.code !== 200) throw new Error("qq search error (vkeys code " + json.code + ")");
       const data = Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
-      if (!Array.isArray(data) || data.length === 0) return results;
-      const list = data.slice(0, limit);
-      list.forEach((it, idx) => {
-        const mid = it.song_mid;
-        if (!mid) return;
-        results.push({
-          uid: `qq-${mid}`,
-          source: "qq",
-          displayIndex: idx + 1,
-          keyword: kw,
-          qqSearchKey: kw,
-          qqIndex: idx + 1,
-          qqId: mid,
-          songid: mid,
-          songMid: mid,
-          title: it.song_title || "",
-          artist: it.singer_name || "",
-          album: "",
-          cover: null,
-          audioUrl: null,
-          lrc: null,
-          lrcUrl: null,
-          detailsLoaded: false,
-          quality: null,
-          qualityLabel: null,
-          qqQualityText: it.pay || null,
-          pay: it.pay || null
-        });
+      data.slice(0, limit).forEach((it, idx) => {
+        const mapped = mapQQSearchItem(it, idx, kw);
+        if (mapped) results.push(mapped);
+      });
+      if (results.length > 0) return results;
+    } catch (e) {
+      primaryErr = e;
+      if (!signal?.aborted) console.error("qq search error (vkeys):", e);
+    }
+    if (signal?.aborted) return results;
+    try {
+      const url = `${XUNHUISI_URL}?name=${encodeURIComponent(kw)}&type=json`;
+      const json = await withTimeoutSignal(signal, timeout, async (reqSignal) => {
+        const res = await fetch(url, { signal: reqSignal });
+        if (!res.ok) throw new Error("qq fallback search error (HTTP " + res.status + ")");
+        return res.json();
+      });
+      if (json?.code != null && json.code !== 200) throw new Error("qq fallback search error (code " + json.code + ")");
+      const data = Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+      data.slice(0, limit).forEach((it, idx) => {
+        const mapped = mapQQSearchItem(it, idx, kw);
+        if (mapped) results.push(mapped);
       });
     } catch (e) {
-      if (!signal?.aborted) console.error("qq search error:", e);
+      if (!signal?.aborted) {
+        console.error("qq search error (xunhuisi):", e);
+        if (primaryErr) onError?.(e);
+      }
     }
     return results;
   }
-  function pickBestPlayUrl(d) {
-    if (d.song_play_url_sq) return { url: d.song_play_url_sq, tag: "lossless", label: "LOSSLESS", text: `SQ ${d.kbps_sq || ""}`.trim() };
-    if (d.song_play_url_pq) return { url: d.song_play_url_pq, tag: "lossless", label: "LOSSLESS", text: `PQ ${d.kbps_pq || ""}`.trim() };
-    if (d.song_play_url_accom) return { url: d.song_play_url_accom, tag: "hq", label: "HQ", text: `ACCOM ${d.kbps_accom || ""}`.trim() };
-    if (d.song_play_url_hq) return { url: d.song_play_url_hq, tag: "hq", label: "HQ", text: `HQ ${d.kbps_hq || ""}`.trim() };
-    if (d.song_play_url_standard) return { url: d.song_play_url_standard, tag: "standard", label: "STD", text: `STD ${d.kbps_standard || ""}`.trim() };
-    if (d.song_play_url_fq) return { url: d.song_play_url_fq, tag: "low", label: "LOW", text: `FQ ${d.kbps_fq || ""}`.trim() };
-    if (d.song_play_url) return { url: d.song_play_url, tag: null, label: null, text: null };
-    return { url: null, tag: null, label: null, text: null };
+  function applyDetailMetadata(track, d) {
+    if (!d) return;
+    if (d.title) track.title = d.title;
+    if (d.artist) track.artist = d.artist;
+    for (const [key, value] of Object.entries(displayMetadata(d))) {
+      if (value) track[key] = value;
+    }
   }
   async function fetchQQDetails(track, options) {
+    const mid = String(track.qqId || track.songMid || track.songid || "").trim();
+    if (!mid) return track;
+    const signal = options?.signal;
     try {
-      const d = await requestQQDetails(track, options);
-      track.title = d.song_title || d.song_name || track.title;
-      track.artist = d.singer_name || track.artist;
-      for (const [key, value] of Object.entries(displayMetadata(d))) {
-        if (value) track[key] = value;
+      let meta = null;
+      if (!track.cover || !track.album || !track.pageUrl || detailRequests.has(mid)) {
+        try {
+          meta = await requestQQDetails(track, options);
+          applyDetailMetadata(track, meta);
+        } catch (e) {
+          if (signal?.aborted || /mismatched mid/.test(e?.message || "")) throw e;
+        }
       }
-      const best = pickBestPlayUrl(d);
-      if (best.url) track.audioUrl = best.url.replace(/^http:\/\//, "https://");
-      track.lrc = d.song_lyric || d.lyric || track.lrc;
-      track.qqQualityText = best.text || (d.vip ? `VIP:${d.vip}` : null) || track.qqQualityText;
-      if (best.tag && best.label) {
-        track.quality = best.tag;
-        track.qualityLabel = best.label;
+      let playUrl = meta?.audioUrl || null;
+      let qualityText = meta?.qualityText || "";
+      let kbps = meta?.kbps || "";
+      if (!playUrl) {
+        const [vkeysPlay, vkeysLrc] = await Promise.all([
+          fetchVkeysPlayUrl(mid, signal),
+          !track.lrc ? fetchVkeysLyric(mid, signal) : Promise.resolve(null)
+        ]);
+        if (vkeysLrc && !track.lrc) track.lrc = vkeysLrc;
+        if (vkeysPlay?.audioUrl) {
+          playUrl = vkeysPlay.audioUrl;
+          qualityText = vkeysPlay.qualityText || qualityText;
+          kbps = vkeysPlay.kbps || kbps;
+          if (vkeysPlay.pageUrl && !track.pageUrl) track.pageUrl = vkeysPlay.pageUrl;
+        }
       }
-      if (track.audioUrl && isLosslessExtension(track.audioUrl)) {
-        track.quality = "lossless";
-        track.qualityLabel = "LOSSLESS";
+      if (!playUrl && meta?.provider !== "xunhuisi" && !signal?.aborted) {
+        const fallback = await fetchXunhuisiDetail(mid, signal);
+        applyDetailMetadata(track, fallback);
+        if (fallback.audioUrl) {
+          playUrl = fallback.audioUrl;
+          qualityText = fallback.qualityText || qualityText;
+          kbps = fallback.kbps || kbps;
+        }
       }
-      track.detailsLoaded = true;
+      if (!track.lrc && !signal?.aborted) {
+        const lrc = await fetchVkeysLyric(mid, signal);
+        if (lrc) track.lrc = lrc;
+      }
+      if (playUrl) {
+        track.audioUrl = playUrl;
+        const q = classifyQQQuality(playUrl, qualityText, kbps);
+        if (q.tag && q.label) {
+          track.quality = q.tag;
+          track.qualityLabel = q.label;
+        }
+        if (q.text) track.qqQualityText = q.text;
+        track.detailsLoaded = true;
+      }
     } catch (e) {
       console.error("qq detail error:", e);
     }
@@ -1063,31 +1464,48 @@ var ListeningAPI = (() => {
   };
 
   // src/api/index.js
-  async function searchAll({ keyword, sources = ["netease", "qq"], limit = 10, signal } = {}) {
+  async function searchAll({ keyword, sources = ["netease", "qq"], limit = 10, signal, timeout, onPartial } = {}) {
     if (!keyword) throw new Error("keyword is required");
+    const order = [];
+    const grouped = {};
+    const failed = /* @__PURE__ */ new Set();
+    const pending = /* @__PURE__ */ new Set();
     const tasks = [];
-    if (sources.includes("netease")) {
+    const emitPartial = () => {
+      if (typeof onPartial !== "function" || signal?.aborted) return;
+      onPartial({
+        tracks: interleave(grouped, order),
+        failedSources: [...failed],
+        pendingSources: [...pending]
+      });
+    };
+    const runSource = (source, fn) => {
+      order.push(source);
+      grouped[source] = [];
+      pending.add(source);
+      const onError = () => failed.add(source);
       tasks.push(
-        searchNetease(keyword, 1, limit, { signal }).then((tracks) => ({ source: "netease", tracks }))
+        Promise.resolve().then(() => fn(onError)).then((tracks) => {
+          grouped[source] = Array.isArray(tracks) ? tracks : [];
+        }).catch(() => {
+          failed.add(source);
+          grouped[source] = [];
+        }).finally(() => {
+          pending.delete(source);
+          emitPartial();
+        })
       );
+    };
+    if (sources.includes("netease")) {
+      runSource("netease", (onError) => searchNetease(keyword, 1, limit, { signal, timeout, onError }));
     }
     if (sources.includes("qq")) {
-      tasks.push(
-        searchQQ(keyword, limit, { signal }).then((tracks) => ({ source: "qq", tracks }))
-      );
+      runSource("qq", (onError) => searchQQ(keyword, limit, { signal, timeout, onError }));
     }
     if (sources.includes("soundcloud")) {
-      tasks.push(
-        searchSoundCloud(keyword, limit).then((tracks) => ({ source: "soundcloud", tracks }))
-      );
+      runSource("soundcloud", () => searchSoundCloud(keyword, limit));
     }
-    const results = await Promise.all(tasks);
-    const grouped = {};
-    const order = [];
-    for (const r of results) {
-      grouped[r.source] = r.tracks;
-      order.push(r.source);
-    }
+    await Promise.all(tasks);
     return interleave(grouped, order);
   }
   function interleave(grouped, order) {

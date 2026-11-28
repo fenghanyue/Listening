@@ -1347,6 +1347,7 @@ const STRINGS = {
   searchingFor: [q => `正在搜索 "${q}" …`, q => `Searching for “${q}”…`],
   noSongsFor: [q => `没有找到「${q}」相关歌曲`, q => `No songs found for “${q}”`],
   foundFor: [(q, n, srcs) => `"${q}" 找到 ${n} 首（${srcs}）`, (q, n, srcs) => `“${q}”: ${n} ${n === 1 ? 'result' : 'results'} (${srcs})`],
+  sourceUnavailable: [srcs => `${srcs}暂时连不上`, srcs => `${srcs} temporarily unavailable`],
   searchFailed: ['搜索失败，请检查网络连接', 'Search failed. Check your connection.'],
   unliked: ['已取消喜欢', 'Removed from Liked Songs'],
   likedToast: ['已添加到喜欢的歌曲', 'Added to Liked Songs'],
@@ -2571,6 +2572,7 @@ class Component extends DCLogic {
     this._recommendationEngine?.cancel();
     this._aiTestController?.abort();
     this._searchController?.abort();
+    this._suggestController?.abort();
     window.removeEventListener('pagehide', this._onRecommendationPageHide);
     this.stopHLS();
     if (this._objectUrl) { URL.revokeObjectURL(this._objectUrl); this._objectUrl = null; }
@@ -3958,13 +3960,19 @@ class Component extends DCLogic {
     // 请求序号守卫：快速改词时，慢返回的旧请求结果直接丢弃，不覆盖最新联想
     this._suggestSeq = (this._suggestSeq || 0) + 1;
     const seq = this._suggestSeq;
+    this._suggestController?.abort();
     const sources = SEARCH_SOURCES.filter(k => this.state.sources[k]);
     if (!sources.length) { this.patch({ suggestions: [], suggestActiveIdx: -1 }); return; }
-    API.searchAll({ keyword: q, sources, limit: 6 }).then(tracks => {
+    this._suggestController = new AbortController();
+    const applySuggest = tracks => {
       if (seq !== this._suggestSeq) return;                 // 已有更新的请求发出，丢弃
       if (this.state.searchQuery.trim() !== q) return;      // 输入框内容已变，丢弃
       this.patch({ suggestions: (tracks || []).slice(0, 6), suggestActiveIdx: -1 });
-    }).catch(() => {
+    };
+    API.searchAll({
+      keyword: q, sources, limit: 6, signal: this._suggestController.signal,
+      onPartial: ({ tracks }) => { if (tracks && tracks.length) applySuggest(tracks); },
+    }).then(applySuggest).catch(() => {
       if (seq !== this._suggestSeq) return;
       this.patch({ suggestions: [] });
     });
@@ -4050,7 +4058,7 @@ class Component extends DCLogic {
   clearSearch() {
     clearTimeout(this._suggestTimer);
     this._searchSeq = (this._searchSeq || 0) + 1; this._searchController?.abort();
-    this._suggestSeq = (this._suggestSeq || 0) + 1;
+    this._suggestSeq = (this._suggestSeq || 0) + 1; this._suggestController?.abort();
     this.patch({ searchMode: true, hasSearched: false, isSearching: false, appliedQuery: '', searchResults: [], searchQuery: '', suggestions: [], suggestActiveIdx: -1, suggestDismissed: false, searchFocused: true });
     const el = document.querySelector('.dc-search-input');
     if (el) el.focus();
@@ -4065,6 +4073,7 @@ class Component extends DCLogic {
     const API = window.ListeningAPI;
     if (!API) { this.showToast(tr('apiNotLoaded')); return; }
     clearTimeout(this._suggestTimer);
+    this._suggestController?.abort();
     this.rememberSearch(q);
     // 请求序号守卫：先搜 A 再快速搜 B 时，慢返回的 A 不会覆盖 B 的结果
     this._searchSeq = (this._searchSeq || 0) + 1;
@@ -4078,21 +4087,34 @@ class Component extends DCLogic {
     // state.sources 里残留了已下掉的源（部分回退 / 手改 / 以后改成持久化）也注不进搜索；
     // 顺带把交错排列的优先顺序固定成这份显式数组，不再依赖对象 key 的插入顺序
     const sources = SEARCH_SOURCES.filter(k => this.state.sources[k]);
-    API.searchAll({ keyword: q, sources, limit: 10, signal: this._searchController.signal }).then(tracks => {
+    let failedSources = [];
+    API.searchAll({
+      keyword: q, sources, limit: 10, signal: this._searchController.signal,
+      onPartial: ({ tracks: partial, failedSources: failed, pendingSources }) => {
+        if (seq !== this._searchSeq) return;
+        failedSources = failed || [];
+        if (partial && partial.length) {
+          partial.forEach(t => normalizeTrack(t));
+          this.patch({ searchResults: partial, isSearching: (pendingSources || []).length > 0 });
+        }
+      },
+    }).then(tracks => {
       if (seq !== this._searchSeq) return;   // 已有更新的搜索发出，丢弃这次的结果
       // 给每个 track 分配内部 id
       tracks.forEach(t => normalizeTrack(t));
+      const failedLabels = failedSources.map(s => sourceLabel(s)).join(tr('listSep'));
       if (!tracks.length) {
         // 联网没搜到：可能真没有，也可能是网络半通不通 / 接口挂了（各音源出错都被吞成空结果）。
         // 本地曲库里有匹配的就先给这些，总比一句"没有找到"有用
         if (this.showLocalSearch(q, seq, 'empty')) return;
         this.patch({ searchResults: [], isSearching: false });
-        this.showToast(tr('noSongsFor', q));
+        this.showToast(failedLabels ? tr('sourceUnavailable', failedLabels) : tr('noSongsFor', q));
         return;
       }
       this.patch({ searchResults: tracks, isSearching: false });
       const srcLabels = [...new Set(tracks.map(t => sourceLabel(t.source)))].join(tr('listSep'));
-      this.showToast(tr('foundFor', q, tracks.length, srcLabels));
+      const detail = failedLabels ? `${srcLabels}${tr('listSep')}${tr('sourceUnavailable', failedLabels)}` : srcLabels;
+      this.showToast(tr('foundFor', q, tracks.length, detail));
     }).catch(e => {
       if (seq !== this._searchSeq) return;
       console.error('search error:', e);
@@ -4104,8 +4126,12 @@ class Component extends DCLogic {
   toggleSource(key) {
     if (this.state.sources[key] && SEARCH_SOURCES.filter(k => this.state.sources[k]).length === 1) { this.showToast(tr('selectSource')); return; }
     this._suggestSeq = (this._suggestSeq || 0) + 1;
-    this.patch(s => ({ sources: { ...s.sources, [key]: !s.sources[key] }, suggestions: [], suggestActiveIdx: -1 }));
-    if (this.state.searchQuery.trim()) this.scheduleSuggest(this.state.searchQuery);
+    this._suggestController?.abort();
+    const shouldResearch = (this.state.isSearching || this.state.hasSearched) && !!this.state.searchQuery.trim();
+    this.setState(s => ({ sources: { ...s.sources, [key]: !s.sources[key] }, suggestions: [], suggestActiveIdx: -1 }), () => {
+      if (shouldResearch) this.doSearch();
+      else if (this.state.searchQuery.trim()) this.scheduleSuggest(this.state.searchQuery);
+    });
   }
 
   // 简易 snackbar：连续调用会重置消失计时（而不是排队），跟原生 App 的 toast 行为一致——
@@ -4477,6 +4503,7 @@ class Component extends DCLogic {
     clearTimeout(this._suggestTimer); clearTimeout(this._blurTimer);
     this._searchSeq = (this._searchSeq || 0) + 1; this._suggestSeq = (this._suggestSeq || 0) + 1;
     this._searchController?.abort();
+    this._suggestController?.abort();
     this.patch({searchMode:false,hasSearched:false,isSearching:false,searchQuery:'',appliedQuery:'',searchResults:[],suggestions:[],searchFocused:false,suggestDismissed:true,suggestActiveIdx:-1,openMenu:null});
     document.querySelector('.dc-search-input')?.blur();
   }

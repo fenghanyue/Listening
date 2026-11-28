@@ -50,3 +50,47 @@ export function isLosslessExtension(url) {
   const ext = extMatch ? extMatch[1] : '';
   return ['flac', 'wav', 'ape', 'alac', 'aiff'].includes(ext);
 }
+
+/**
+ * 给异步请求（fetch + 解析正文）统一套上超时控制，同时响应外部 AbortSignal 取消。
+ * 用标准 AbortController + setTimeout 兼容旧版安卓 WebView，并用 Promise.race 兜底防止忽略 signal 的调用卡死。
+ */
+export async function withTimeoutSignal(signal, timeout, fn) {
+  if (signal?.aborted) {
+    const err = new Error('Aborted');
+    err.name = 'AbortError';
+    throw err;
+  }
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer = null;
+  let onControllerAbort;
+  const aborted = new Promise((_, reject) => {
+    onControllerAbort = () => {
+      const err = new Error(timedOut ? `Request timeout (${timeout}ms)` : 'Aborted');
+      err.name = timedOut ? 'TimeoutError' : 'AbortError';
+      if (timedOut) err.timedOut = true;
+      reject(err);
+    };
+    controller.signal.addEventListener('abort', onControllerAbort, { once: true });
+  });
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  if (timeout > 0) timer = setTimeout(() => { timedOut = true; controller.abort(); }, timeout);
+  let task;
+  try {
+    task = Promise.resolve(fn(controller.signal));
+  } catch (e) {
+    task = Promise.reject(e);
+  }
+  task.catch(() => {});
+  aborted.catch(() => {});
+  try {
+    return await Promise.race([task, aborted]);
+  } finally {
+    if (timer) clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+    controller.signal.removeEventListener('abort', onControllerAbort);
+  }
+}
+
